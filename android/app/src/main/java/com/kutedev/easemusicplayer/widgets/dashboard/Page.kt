@@ -23,9 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,14 +34,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.viewmodels.EditStorageVM
-import com.kutedev.easemusicplayer.viewmodels.SleepModeLeftTime
-import com.kutedev.easemusicplayer.viewmodels.SleepModeVM
 import com.kutedev.easemusicplayer.viewmodels.StoragesVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
@@ -78,64 +73,6 @@ private fun Title(title: String) {
     )
 }
 
-@Composable
-private fun SleepModeBlock(vm: SleepModeVM = hiltViewModel()) {
-    val state by vm.state.collectAsState()
-    val blockBg = if (state.enabled) {
-        MaterialTheme.colorScheme.secondary
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-    val tint = if (state.enabled) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-
-    var leftTime by remember { mutableStateOf(SleepModeLeftTime(state.expiredMs - System.currentTimeMillis())) }
-
-    LaunchedEffect(state.expiredMs, state.enabled) {
-        while (true) {
-            leftTime = SleepModeLeftTime(state.expiredMs - System.currentTimeMillis())
-
-            if (!state.enabled) {
-                break
-            }
-            kotlinx.coroutines.delay(1_000)
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(90.dp)
-            .padding(paddingX, 0.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable {
-                vm.openModal(leftTime)
-            },
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(blockBg)
-                .padding(32.dp, 24.dp),
-        ) {
-            Text(
-                text = "${leftTime.hour.toString().padStart(2, '0')}:${leftTime.minute.toString().padStart(2, '0')}",
-                fontSize = 32.sp,
-                color = tint,
-            )
-            Icon(
-                painter = painterResource(id = R.drawable.icon_timelapse),
-                contentDescription = null,
-                tint = tint,
-            )
-        }
-    }
-}
 
 @Composable
 private fun ColumnScope.DevicesBlock(
@@ -274,16 +211,7 @@ fun DashboardSubpage(
     ) {
         Box(modifier = Modifier.height(24.dp))
         QuoteBlock()
-        Box(modifier = Modifier.height(48.dp))
-        Row(
-            modifier = Modifier
-                .padding(paddingX, 4.dp)
-                .fillMaxWidth(),
-        ) {
-            Title(title = stringResource(id = R.string.dashboard_sleep_mode))
-        }
-        SleepModeBlock()
-        Box(modifier = Modifier.height(48.dp))
+        Box(modifier = Modifier.height(32.dp))
         Row(
             modifier = Modifier
                 .padding(paddingX, 4.dp)

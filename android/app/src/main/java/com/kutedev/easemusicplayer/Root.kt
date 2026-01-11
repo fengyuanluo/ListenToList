@@ -32,6 +32,7 @@ import com.kutedev.easemusicplayer.core.RouteLog
 import com.kutedev.easemusicplayer.core.RouteMusicPlayer
 import com.kutedev.easemusicplayer.core.RoutePlaylist
 import com.kutedev.easemusicplayer.core.RouteStorageBrowser
+import com.kutedev.easemusicplayer.core.RouteThemeSettings
 import com.kutedev.easemusicplayer.core.RoutesProvider
 import com.kutedev.easemusicplayer.components.ThemeBackgroundImage
 import com.kutedev.easemusicplayer.viewmodels.EditStorageVM
@@ -48,6 +49,7 @@ import com.kutedev.easemusicplayer.widgets.playlists.EditPlaylistsDialog
 import com.kutedev.easemusicplayer.widgets.playlists.PlaylistPage
 import com.kutedev.easemusicplayer.widgets.settings.DebugMorePage
 import com.kutedev.easemusicplayer.widgets.settings.LogPage
+import com.kutedev.easemusicplayer.widgets.settings.ThemeSettingsPage
 
 @Composable
 fun Root() {
@@ -156,6 +158,9 @@ fun Root() {
                                 }
                                 composable(RouteDebugMore()) {
                                     DebugMorePage()
+                                }
+                                composable(RouteThemeSettings()) {
+                                    ThemeSettingsPage()
                                 }
                             }
                         }
