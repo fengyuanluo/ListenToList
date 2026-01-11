@@ -14,6 +14,8 @@ import androidx.media3.extractor.metadata.id3.ApicFrame
 import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.DEFAULT_COVER_BASE64
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.ArgUpdateMusicCover
 import uniffi.ease_client_backend.ArgUpdateMusicDuration
@@ -118,37 +120,66 @@ fun playUtil(cx: BuildMediaContext, music: MusicAbstract, player: Player) {
     playUtil(cx, MusicOrMusicAbstract.VMusicAbstract(music), player)
 }
 
-fun syncMetadataUtil(scope: CoroutineScope, bridge: Bridge, player: Player, onUpdated: () -> Unit = {}) {
+fun syncMetadataUtil(
+    scope: CoroutineScope,
+    bridge: Bridge,
+    player: Player,
+    onUpdated: (MusicId) -> Unit = {},
+    onFinished: (() -> Unit)? = null
+): Job? {
     if (!player.isCommandAvailable(Player.COMMAND_GET_CURRENT_MEDIA_ITEM)) {
-        return
+        onFinished?.invoke()
+        return null
     }
-    if (player.duration == TIME_UNSET) {
-        return
-    }
-
     val mediaItem = player.currentMediaItem
-    if (mediaItem != null && mediaItem.mediaId.isDigitsOnly()) {
-        val id = MusicId(mediaItem.mediaId.toLong())
-        val durationMS = player.duration
-        val coverData = extractCurrentTracksCover(player)
+    if (mediaItem == null || !mediaItem.mediaId.isDigitsOnly()) {
+        onFinished?.invoke()
+        return null
+    }
 
-        scope.launch {
+    val id = MusicId(mediaItem.mediaId.toLong())
+    val expectedMediaId = mediaItem.mediaId
+    val coverData = extractCurrentTracksCover(player)
+
+    return scope.launch {
+        try {
+            var durationMS = player.duration
+            var attempt = 0
+            while (durationMS == TIME_UNSET && attempt < 10) {
+                delay(500)
+                if (player.currentMediaItem?.mediaId != expectedMediaId) {
+                    return@launch
+                }
+                durationMS = player.duration
+                attempt += 1
+            }
+            if (durationMS == TIME_UNSET) {
+                return@launch
+            }
+
             val music = bridge.run { backend -> ctGetMusic(backend, id) }
             val duration = Duration.ofMillis(durationMS)
+            var updated = false
 
             if (music?.meta?.duration != duration) {
                 bridge.runSync { backend -> ctsUpdateMusicDuration(backend, ArgUpdateMusicDuration(
                     id = id,
                     duration = duration
                 ))}
+                updated = true
             }
             if (music?.cover == null && coverData != null) {
                 bridge.runSync { backend -> ctsUpdateMusicCover(backend, ArgUpdateMusicCover(
                     id = id,
                     cover = coverData
                 )) }
+                updated = true
             }
-            onUpdated()
+            if (updated) {
+                onUpdated(id)
+            }
+        } finally {
+            onFinished?.invoke()
         }
     }
 }

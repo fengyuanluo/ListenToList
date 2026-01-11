@@ -1,8 +1,5 @@
-use std::io::SeekFrom;
-
 use ease_client_tokio::tokio_runtime;
 use futures_util::future::BoxFuture;
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 use crate::{Entry, StorageBackend, StorageBackendError, StorageBackendResult, StreamFile};
 
@@ -74,23 +71,24 @@ impl LocalBackend {
             p.to_string()
         };
 
-        let buf = {
+        let (path, total) = {
             let p = p.clone();
             tokio_runtime()
                 .spawn(async move {
-                    let mut buf: Vec<u8> = Default::default();
                     let path = tokio::fs::canonicalize(&p).await?;
-                    let mut file = tokio::fs::File::open(path).await?;
-
-                    file.seek(SeekFrom::Start(byte_offset)).await?;
-                    file.read_to_end(&mut buf).await?;
-
-                    Ok::<_, StorageBackendError>(buf)
+                    let meta = tokio::fs::metadata(&path).await?;
+                    Ok::<_, StorageBackendError>((path, meta.len() as usize))
                 })
                 .await??
         };
+        let mut path = path.to_string_lossy().to_string().replace("\\\\?\\", "");
+        if std::env::consts::OS == "android" {
+            if let Some(strip_path) = path.strip_prefix(ANDROID_PREFIX_PATH) {
+                path = strip_path.to_string();
+            }
+        }
 
-        Ok(StreamFile::new_from_bytes(buf.as_slice(), &p, 0))
+        Ok(StreamFile::new_from_file(path, total, byte_offset))
     }
 }
 

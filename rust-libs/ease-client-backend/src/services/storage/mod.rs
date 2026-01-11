@@ -12,8 +12,8 @@ use crate::{
 };
 use ease_client_schema::{DataSourceKey, StorageEntryLoc, StorageId, StorageModel, StorageType};
 use ease_remote_storage::{
-    BuildOneDriveArg, BuildWebdavArg, LocalBackend, OneDriveBackend, StorageBackend, StreamFile,
-    Webdav,
+    BuildOneDriveArg, BuildOpenListArg, BuildWebdavArg, LocalBackend, OneDriveBackend, OpenList,
+    StorageBackend, StreamFile, Webdav,
 };
 use tracing::instrument;
 
@@ -32,12 +32,17 @@ pub(crate) async fn load_storage_entry_data(
     if let Some(backend) = backend {
         tracing::trace!("start load");
         let ret = match backend.get(loc.path, 0).await {
-            Ok(data) => {
-                let data = data.bytes().await.unwrap();
-                let data = data.to_vec();
-                Ok(Some(data))
+            Ok(data) => match data.bytes().await {
+                Ok(bytes) => Ok(Some(bytes.to_vec())),
+                Err(e) => {
+                    tracing::warn!("load storage entry bytes failed: {:?}", e);
+                    Ok(None)
+                }
+            },
+            Err(e) => {
+                tracing::warn!("load storage entry failed: {:?}", e);
+                Ok(None)
             }
-            Err(_) => Ok(None),
         };
         tracing::trace!("end load");
         ret
@@ -63,7 +68,8 @@ pub fn build_storage_backend_by_arg(
     _cx: &BackendContext,
     arg: ArgUpsertStorage,
 ) -> BResult<Arc<dyn StorageBackend + Send + Sync>> {
-    let connect_timeout = Duration::from_secs(5);
+    let webdav_connect_timeout = Duration::from_secs(5);
+    let openlist_connect_timeout = Duration::from_secs(15);
 
     let ret: Arc<dyn StorageBackend + Send + Sync + 'static> = match arg.typ {
         StorageType::Local => Arc::new(LocalBackend::new()),
@@ -73,13 +79,23 @@ pub fn build_storage_backend_by_arg(
                 username: arg.username,
                 password: arg.password,
                 is_anonymous: arg.is_anonymous,
-                connect_timeout,
+                connect_timeout: webdav_connect_timeout,
             };
             Arc::new(Webdav::new(arg))
         }
         StorageType::OneDrive => {
             let arg = BuildOneDriveArg { code: arg.password };
             Arc::new(OneDriveBackend::new(arg))
+        }
+        StorageType::OpenList => {
+            let arg = BuildOpenListArg {
+                addr: arg.addr,
+                username: arg.username,
+                password: arg.password,
+                is_anonymous: arg.is_anonymous,
+                connect_timeout: openlist_connect_timeout,
+            };
+            Arc::new(OpenList::new(arg))
         }
     };
     Ok(ret)

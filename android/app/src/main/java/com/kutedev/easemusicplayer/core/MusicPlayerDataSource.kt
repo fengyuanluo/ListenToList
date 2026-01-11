@@ -12,6 +12,8 @@ import com.kutedev.easemusicplayer.singleton.Bridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import uniffi.ease_client_backend.AssetStream
@@ -22,17 +24,19 @@ import uniffi.ease_client_schema.MusicId
 import java.io.IOException
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 @OptIn(UnstableApi::class)
 class MusicPlayerDataSource(
     private val bridge: Bridge,
     private val scope: CoroutineScope
 ) : DataSource {
+    companion object {
+        private const val MAX_STREAM_RETRIES = 2
+    }
+
     private var _currentUri: Uri? = null
     private var _inputStream: PipedInputStream? = null
+    private var _outputStream: PipedOutputStream? = null
     private var _loadJob: Job? = null
 
     override fun addTransferListener(transferListener: TransferListener) {
@@ -61,25 +65,10 @@ class MusicPlayerDataSource(
         val input = PipedInputStream()
         val output = PipedOutputStream(input)
         _inputStream = input
+        _outputStream = output
 
         _loadJob = scope.launch(Dispatchers.IO) {
-            while (true) {
-
-                try {
-                    val b = assetStream.next()
-
-                    if (b == null) {
-                        break
-                    }
-                    output.write(b)
-                } catch (e: IOException) {
-                    break
-                } catch (e: Exception) {
-                    easeError("load chunk failed, $e")
-                    break
-                }
-            }
-            output.close()
+            writeStream(musicId, dataSpec.position, assetStream, output)
         }
 
         val fileSize = assetStream.size()
@@ -114,6 +103,66 @@ class MusicPlayerDataSource(
         _loadJob?.cancel()
         _loadJob = null
         _currentUri = null
+        _outputStream?.let {
+            try {
+                it.close()
+            } catch (_: IOException) {
+            }
+        }
+        _outputStream = null
+        _inputStream?.let {
+            try {
+                it.close()
+            } catch (_: IOException) {
+            }
+        }
         _inputStream = null
+    }
+
+    private suspend fun writeStream(
+        musicId: MusicId,
+        initialOffset: Long,
+        initialStream: AssetStream,
+        output: PipedOutputStream
+    ) {
+        var stream: AssetStream? = initialStream
+        var offset = initialOffset
+        var retries = 0
+
+        try {
+            while (currentCoroutineContext().isActive) {
+                val current = stream ?: break
+                try {
+                    val b = current.next()
+                    if (b == null) {
+                        break
+                    }
+                    output.write(b)
+                    offset += b.size
+                    retries = 0
+                } catch (e: IOException) {
+                    break
+                } catch (e: Exception) {
+                    if (retries >= MAX_STREAM_RETRIES) {
+                        easeError("load chunk failed after retries: $e")
+                        break
+                    }
+                    retries += 1
+                    easeError("load chunk failed, retry $retries: $e")
+                    stream = bridge.run {
+                        ctGetAssetStream(it, DataSourceKey.Music(musicId), offset.toULong())
+                    }
+                    if (stream == null) {
+                        easeError("reopen asset stream failed at offset=$offset")
+                        break
+                    }
+                }
+            }
+        } finally {
+            try {
+                output.close()
+            } catch (_: IOException) {
+            }
+        }
     }
 }

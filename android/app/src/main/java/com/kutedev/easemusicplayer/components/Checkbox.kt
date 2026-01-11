@@ -16,22 +16,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kutedev.easemusicplayer.R
 
 @Composable
 fun EaseCheckbox(
     value: Boolean,
-    onChange: (value: Boolean) -> Unit
+    onChange: (value: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 16.dp
 ) {
     val borderColor = if (value) { MaterialTheme.colorScheme.primary } else { MaterialTheme.colorScheme.onSurface }
     val bgColor = if (value) { MaterialTheme.colorScheme.primary } else { Color.Transparent }
+    val iconSize = size * 0.45f
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .border(1.dp, borderColor, RoundedCornerShape(4.dp))
             .clip(RoundedCornerShape(4.dp))
-            .size(16.dp)
+            .size(size)
             .background(bgColor)
             .clickable { onChange(!value) },
         contentAlignment = Alignment.Center
@@ -41,7 +45,7 @@ fun EaseCheckbox(
                 painter = painterResource(id = R.drawable.icon_yes),
                 tint = MaterialTheme.colorScheme.surface,
                 contentDescription = null,
-                modifier = Modifier.width(6.dp)
+                modifier = Modifier.width(iconSize)
             )
         }
     }

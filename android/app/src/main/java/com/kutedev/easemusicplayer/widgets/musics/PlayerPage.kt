@@ -160,7 +160,7 @@ private fun MusicPlayerHeader(
 }
 
 @Composable
-private fun MusicSlider(
+internal fun MusicSlider(
     currentDuration: String,
     _currentDurationMS: ULong,
     bufferDurationMS: ULong,
@@ -666,6 +666,7 @@ fun MusicPlayerPage(
     val previousMusic by playerVM.previousMusic.collectAsState()
     val nextMusic by playerVM.nextMusic.collectAsState()
     val bufferDuration by playerVM.bufferDuration.collectAsState()
+    val displayTotalDuration by playerVM.displayTotalDuration.collectAsState()
     val currentLyricIndex by playerVM.lyricIndex.collectAsState()
     val lyricLoadedState = currentMusic?.lyric?.loadedState ?: LyricLoadState.LOADING
     val lyrics = currentMusic?.lyric?.data?.lines ?: emptyList()
@@ -722,8 +723,8 @@ fun MusicPlayerPage(
                     currentDuration = formatDuration(currentDuration),
                     _currentDurationMS = toMusicDurationMs(currentDuration),
                     bufferDurationMS = bufferDuration.toMillis().toULong(),
-                    totalDuration = formatDuration(currentMusic),
-                    totalDurationMS = toMusicDurationMs(currentMusic),
+                    totalDuration = formatDuration(displayTotalDuration),
+                    totalDurationMS = toMusicDurationMs(displayTotalDuration),
                     onChangeMusicPosition = { nextMS ->
                         playerVM.seek(nextMS)
                     }

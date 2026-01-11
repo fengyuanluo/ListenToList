@@ -171,13 +171,18 @@ class EditStorageVM @Inject constructor(
         if (backup != null) {
             _form.value = backup
         } else {
+            val isAnonymous = when (typ) {
+                StorageType.OPEN_LIST -> true
+                StorageType.WEBDAV -> false
+                else -> false
+            }
             val newForm = ArgUpsertStorage(
                 id = _form.value.id,
                 addr = "",
                 alias = _form.value.alias,
                 username = "",
                 password = "",
-                isAnonymous = false,
+                isAnonymous = isAnonymous,
                 typ = typ
             )
             _form.value = newForm
@@ -187,11 +192,18 @@ class EditStorageVM @Inject constructor(
 
     private fun validate(): Boolean {
         val f = form.value
+        val useAddr = f.typ == StorageType.WEBDAV || f.typ == StorageType.OPEN_LIST
+        val useAlias = f.typ == StorageType.ONE_DRIVE
+        val needAuth = (f.typ == StorageType.WEBDAV || f.typ == StorageType.OPEN_LIST) && !f.isAnonymous
         _validated.value = Validated(
-            addrEmpty = if (f.typ == StorageType.WEBDAV) {  f.addr.isBlank() } else { false },
-            aliasEmpty = if (f.typ == StorageType.WEBDAV) { false } else { f.alias.isBlank() },
-            usernameEmpty = if (f.typ == StorageType.WEBDAV) { !f.isAnonymous && f.username.isBlank() } else { false },
-            passwordEmpty = if (f.typ == StorageType.WEBDAV) { !f.isAnonymous && f.password.isBlank() } else { f.password.isBlank() },
+            addrEmpty = if (useAddr) { f.addr.isBlank() } else { false },
+            aliasEmpty = if (useAlias) { f.alias.isBlank() } else { false },
+            usernameEmpty = if (needAuth) { f.username.isBlank() } else { false },
+            passwordEmpty = when (f.typ) {
+                StorageType.ONE_DRIVE -> f.password.isBlank()
+                StorageType.WEBDAV, StorageType.OPEN_LIST -> needAuth && f.password.isBlank()
+                else -> false
+            },
         )
         return _validated.value.valid()
     }

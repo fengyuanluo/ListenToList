@@ -47,11 +47,27 @@ import com.kutedev.easemusicplayer.viewmodels.SleepModeVM
 import com.kutedev.easemusicplayer.viewmodels.StoragesVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
+import com.kutedev.easemusicplayer.core.RouteStorageBrowser
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_schema.StorageType
+import java.time.LocalDate
 
 private val paddingX = 24.dp
 private val paddingY = 12.dp
+
+private val DailyQuotes = listOf(
+    "给每一段旋律一段安静的时间。",
+    "慢下来，世界会把细节交给你。",
+    "喜欢的歌，值得反复播放。",
+    "把心事放进歌里，轻一点。",
+    "一首歌的长度，也是一段情绪的长度。",
+)
+
+private fun pickDailyQuote(): String {
+    val day = LocalDate.now().toEpochDay()
+    val index = (day % DailyQuotes.size).toInt().coerceAtLeast(0)
+    return DailyQuotes[index]
+}
 
 @Composable
 private fun Title(title: String) {
@@ -168,8 +184,9 @@ private fun ColumnScope.DevicesBlock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        navController.navigate(RouteAddDevices(item.id.value.toString()))
-                    },
+                        navController.navigate(RouteStorageBrowser(item.id.value.toString()))
+                    }
+                    .padding(0.dp, 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val title = item.alias.ifBlank {
@@ -204,8 +221,36 @@ private fun ColumnScope.DevicesBlock(
                         )
                     }
                 }
+                Box(modifier = Modifier.weight(1f))
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Small,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_setting),
+                    onClick = {
+                        navController.navigate(RouteAddDevices(item.id.value.toString()))
+                    }
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun QuoteBlock() {
+    val quote = remember { pickDailyQuote() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(paddingX, 0.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(18.dp, 14.dp)
+    ) {
+        Text(
+            text = quote,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+        )
     }
 }
 
@@ -227,6 +272,8 @@ fun DashboardSubpage(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
+        Box(modifier = Modifier.height(24.dp))
+        QuoteBlock()
         Box(modifier = Modifier.height(48.dp))
         Row(
             modifier = Modifier

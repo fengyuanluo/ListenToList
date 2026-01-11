@@ -8,6 +8,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.C.WAKE_MODE_NETWORK
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.Player.COMMAND_PLAY_PAUSE
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
@@ -48,6 +49,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var bridge: Bridge
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var _mediaSession: MediaSession? = null
+    private var _prefetcher: PlaybackPrefetcher? = null
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -61,6 +63,10 @@ class PlaybackService : MediaSessionService() {
         val pendingIntent = PendingIntent.getActivity(this, 0, intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
+        val upstreamFactory = DataSource.Factory { MusicPlayerDataSource(bridge, serviceScope) }
+        val cacheFactory = PlaybackCache.buildCacheDataSourceFactory(context, upstreamFactory)
+        _prefetcher = PlaybackPrefetcher(cacheFactory, serviceScope)
+
         val player = ExoPlayer.Builder(context)
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -71,7 +77,8 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(WAKE_MODE_NETWORK)
-            .setMediaSourceFactory(ProgressiveMediaSource.Factory(DataSource.Factory { MusicPlayerDataSource(bridge, serviceScope) }) )
+            .setLoadControl(PlaybackLoadControl.build())
+            .setMediaSourceFactory(ProgressiveMediaSource.Factory(cacheFactory))
             .build()
         _mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(pendingIntent)
@@ -139,6 +146,20 @@ class PlaybackService : MediaSessionService() {
             })
             .build()
 
+        fun syncCurrentMetadata(player: Player) {
+            syncMetadataUtil(
+                serviceScope,
+                bridge,
+                player,
+                onUpdated = { updatedId ->
+                serviceScope.launch {
+                    val updatedMusic = bridge.run { backend -> ctGetMusic(backend, updatedId) } ?: return@launch
+                    playerRepository.updateCurrentMusic(updatedMusic)
+                }
+                }
+            )
+        }
+
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playerRepository.setIsPlaying(isPlaying)
@@ -149,10 +170,14 @@ class PlaybackService : MediaSessionService() {
                     playOnComplete()
                 } else if (playbackState == Player.STATE_READY) {
                     playerRepository.setIsLoading(false)
-                    syncMetadataUtil(serviceScope, bridge, player)
+                    syncCurrentMetadata(player)
                 } else if (playbackState == Player.STATE_BUFFERING) {
                     playerRepository.setIsLoading(true)
                 }
+            }
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                syncCurrentMetadata(player)
             }
 
             override fun onPositionDiscontinuity(
@@ -192,6 +217,8 @@ class PlaybackService : MediaSessionService() {
         _mediaSession?.player?.release()
         _mediaSession?.release()
         _mediaSession = null
+        _prefetcher?.cancel()
+        _prefetcher = null
         serviceScope.cancel()
     }
 
@@ -203,6 +230,7 @@ class PlaybackService : MediaSessionService() {
             val music = bridge.run { ctGetMusic(it, musicAbstract.meta.id) } ?: return@launch
             playerRepository.setCurrent(music, playlist)
             playUtil(BuildMediaContext(bridge = bridge, scope = serviceScope), musicAbstract, player as ExoPlayer)
+            prefetchNext()
         }
     }
 
@@ -228,5 +256,15 @@ class PlaybackService : MediaSessionService() {
         if (m != null && p != null) {
             play(m, p)
         }
+    }
+
+    private fun prefetchNext() {
+        val next = playerRepository.nextMusic.value
+        if (next == null) {
+            _prefetcher?.cancel()
+            return
+        }
+        val uri = android.net.Uri.parse("ease://data?music=${next.meta.id.value}")
+        _prefetcher?.prefetch(uri, PlaybackCachePolicy.prefetchBytesForSeconds())
     }
 }

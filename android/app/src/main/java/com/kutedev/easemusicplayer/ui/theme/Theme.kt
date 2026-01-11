@@ -10,45 +10,51 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.ColorUtils
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF2E89B0),
-    secondary = Color(0xFFC9EBFA),
-    tertiary = Pink80,
-    surfaceVariant = Color(0xFF303030)
-)
+private fun adjustLightness(color: Color, delta: Float): Color {
+    val hsl = FloatArray(3)
+    ColorUtils.colorToHSL(color.toArgb(), hsl)
+    hsl[2] = (hsl[2] + delta).coerceIn(0f, 1f)
+    return Color(ColorUtils.HSLToColor(hsl))
+}
 
-private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF2E89B0),
-    secondary = Color(0xFFC9EBFA),
-    tertiary = Pink40,
-    surfaceVariant = Color(0xFFE3E3E3)
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    */
-)
+private fun buildColorScheme(primary: Color, darkTheme: Boolean): androidx.compose.material3.ColorScheme {
+    val secondary = adjustLightness(primary, if (darkTheme) 0.15f else 0.25f)
+    val surfaceVariant = if (darkTheme) Color(0xFF303030) else Color(0xFFE3E3E3)
+    return if (darkTheme) {
+        darkColorScheme(
+            primary = primary,
+            secondary = secondary,
+            tertiary = Pink80,
+            surfaceVariant = surfaceVariant
+        )
+    } else {
+        lightColorScheme(
+            primary = primary,
+            secondary = secondary,
+            tertiary = Pink40,
+            surfaceVariant = surfaceVariant
+        )
+    }
+}
 
 @Composable
 fun EaseMusicPlayerTheme(
+    themeSettings: ThemeSettings,
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-//        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-//            val context = LocalContext.current
-//            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-//        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        //        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        //            val context = LocalContext.current
+        //            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        //        }
+        else -> buildColorScheme(themeSettings.primaryColor, darkTheme)
     }
 
     MaterialTheme(

@@ -114,6 +114,13 @@ class PlayerRepository @Inject constructor(
         _playlist.value = playlist
     }
 
+    fun updateCurrentMusic(music: Music) {
+        val current = _music.value ?: return
+        if (current.meta.id == music.meta.id) {
+            _music.value = music
+        }
+    }
+
     fun resetCurrent() {
         _music.value = null
         _playlist.value = null

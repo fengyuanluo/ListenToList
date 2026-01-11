@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.kutedev.easemusicplayer.core.BuildMediaContext
 import com.kutedev.easemusicplayer.core.MusicPlayerDataSource
+import com.kutedev.easemusicplayer.core.PlaybackCache
 import com.kutedev.easemusicplayer.core.buildMediaItem
 import com.kutedev.easemusicplayer.core.syncMetadataUtil
 import kotlinx.collections.immutable.persistentListOf
@@ -41,6 +42,7 @@ import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_schema.PlaylistId
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -103,9 +105,7 @@ class PlaylistRepository @Inject constructor(
 
     fun requestTotalDuration(context: Context, added: List<AddedMusic>) {
         for (item in added) {
-            if (!item.existed) {
-                requestTotalDuration(context, item.id)
-            }
+            requestTotalDuration(context, item.id)
         }
     }
 
@@ -150,33 +150,49 @@ class PlaylistRepository @Inject constructor(
 
         _scope.launch(Dispatchers.Main) {
             _requestSemaphore.acquire()
-
+            val released = AtomicBoolean(false)
+            var player: ExoPlayer? = null
+            val releaseOnce = {
+                if (released.compareAndSet(false, true)) {
+                    player?.release()
+                    _requestSemaphore.release()
+                }
+            }
             try {
-                val player = ExoPlayer.Builder(context)
-                    .setMediaSourceFactory(ProgressiveMediaSource.Factory(DataSource.Factory { MusicPlayerDataSource(bridge, _scope) }) )
+                player = ExoPlayer.Builder(context)
+                    .setMediaSourceFactory(
+                        ProgressiveMediaSource.Factory(
+                            PlaybackCache.buildReadOnlyCacheDataSourceFactory(
+                                context,
+                                DataSource.Factory { MusicPlayerDataSource(bridge, _scope) }
+                            )
+                        )
+                    )
                     .build()
-                player.addListener(object : Player.Listener {
+                player?.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         if (playbackState == Player.STATE_READY) {
-                            syncMetadataUtil(
+                            val job = syncMetadataUtil(
                                 scope = _scope,
                                 bridge = bridge,
-                                player = player
-                            ) {
-                                _scope.launch {
-                                    _syncedTotalDuration.emit(id)
-                                    reload()
-                                }
+                                player = player!!,
+                                onUpdated = { updatedId ->
+                                    _scope.launch {
+                                        _syncedTotalDuration.emit(updatedId)
+                                        reload()
+                                    }
+                                },
+                                onFinished = { releaseOnce() }
+                            )
+                            if (job == null) {
+                                releaseOnce()
                             }
-                            player.release()
-                            _requestSemaphore.release()
 
                         }
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        player.release()
-                        _requestSemaphore.release()
+                        releaseOnce()
                         easeError("request total duration failed: $error")
                     }
                 })
@@ -185,10 +201,11 @@ class PlaylistRepository @Inject constructor(
                     bridge = bridge,
                     scope = _scope,
                 ), musicAbstract)
-                player.setMediaItem(mediaItem)
-                player.prepare()
+                player?.setMediaItem(mediaItem)
+                player?.prepare()
             } catch (error: Exception) {
                 easeError("request total duration failed: $error")
+                releaseOnce()
             }
         }
     }

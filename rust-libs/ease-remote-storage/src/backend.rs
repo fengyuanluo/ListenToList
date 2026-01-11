@@ -1,10 +1,10 @@
-use std::{io::ErrorKind, process::Output};
+use std::io::ErrorKind;
 
 use bytes::Bytes;
 use ease_client_tokio::tokio_runtime;
 use futures_util::future::BoxFuture;
 use reqwest::StatusCode;
-use tokio::sync::oneshot::error;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 #[derive(Debug, Clone)]
 pub struct Entry {
@@ -17,6 +17,7 @@ pub struct Entry {
 enum StreamFileInner {
     Response(reqwest::Response),
     Total(bytes::Bytes),
+    FilePath(String),
 }
 
 pub struct StreamFile {
@@ -43,6 +44,8 @@ pub enum StorageBackendError {
     SerdeJsonError(#[from] serde_json::Error),
     #[error("QuickXML De Error: {0}")]
     QuickXMLDeError(#[from] quick_xml::DeError),
+    #[error("Api Error: {code} {message}")]
+    ApiError { code: i64, message: String },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -67,6 +70,9 @@ impl StorageBackendError {
         if let StorageBackendError::RequestFail(e) = self {
             return e.status() == Some(StatusCode::UNAUTHORIZED);
         }
+        if let StorageBackendError::ApiError { code, .. } = self {
+            return *code == 401 || *code == 403;
+        }
         false
     }
 
@@ -74,6 +80,7 @@ impl StorageBackendError {
         match self {
             StorageBackendError::RequestFail(e) => e.status() == Some(StatusCode::NOT_FOUND),
             StorageBackendError::TokioIO(e) => e.kind() == ErrorKind::NotFound,
+            StorageBackendError::ApiError { code, .. } => *code == 404,
             _ => false,
         }
     }
@@ -107,12 +114,27 @@ impl StreamFile {
     pub fn new_from_bytes(buf: &[u8], name: &str, byte_offset: u64) -> Self {
         let total: usize = buf.len();
         let buf = bytes::Bytes::copy_from_slice(buf);
+        let byte_offset = byte_offset.min(total as u64);
         Self {
             inner: StreamFileInner::Total(buf),
             total: Some(total),
             content_type: None,
             name: name.to_string(),
-            byte_offset: byte_offset.min(total as u64),
+            byte_offset,
+        }
+    }
+    pub fn new_from_file(path: String, total: usize, byte_offset: u64) -> Self {
+        let byte_offset = byte_offset.min(total as u64);
+        let name = std::path::Path::new(&path)
+            .file_name()
+            .map(|v| v.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+        Self {
+            inner: StreamFileInner::FilePath(path),
+            total: Some(total),
+            content_type: None,
+            name,
+            byte_offset,
         }
     }
     pub fn size(&self) -> Option<usize> {
@@ -126,7 +148,7 @@ impl StreamFile {
     }
 
     pub fn into_rx(self) -> async_channel::Receiver<StorageBackendResult<Bytes>> {
-        let (mut tx, rx) = async_channel::bounded::<StorageBackendResult<Bytes>>(10);
+        let (tx, rx) = async_channel::bounded::<StorageBackendResult<Bytes>>(10);
 
         let _ = tokio_runtime().spawn(async move {
             let f = || async {
@@ -155,6 +177,32 @@ impl StreamFile {
                             tx.send(Ok(buf)).await?;
                         }
                     }
+                    StreamFileInner::FilePath(path) => {
+                        let mut file = match tokio::fs::File::open(&path).await {
+                            Ok(file) => file,
+                            Err(e) => {
+                                let _ = tx.send(Err(StorageBackendError::TokioIO(e))).await;
+                                return Ok(());
+                            }
+                        };
+                        if let Err(e) = file.seek(std::io::SeekFrom::Start(self.byte_offset)).await
+                        {
+                            let _ = tx.send(Err(StorageBackendError::TokioIO(e))).await;
+                            return Ok(());
+                        }
+                        let mut buf = vec![0u8; 64 * 1024];
+                        loop {
+                            let read = match file.read(&mut buf).await {
+                                Ok(0) => break,
+                                Ok(read) => read,
+                                Err(e) => {
+                                    let _ = tx.send(Err(StorageBackendError::TokioIO(e))).await;
+                                    return Ok(());
+                                }
+                            };
+                            tx.send(Ok(Bytes::copy_from_slice(&buf[..read]))).await?;
+                        }
+                    }
                 }
 
                 Ok(())
@@ -180,6 +228,10 @@ impl StreamFile {
         let buf = match self.inner {
             StreamFileInner::Response(response) => response.bytes().await?,
             StreamFileInner::Total(buf) => buf,
+            StreamFileInner::FilePath(path) => {
+                let buf = tokio::fs::read(path).await?;
+                Bytes::from(buf)
+            }
         };
 
         let offset = (self.byte_offset as usize).min(buf.len());

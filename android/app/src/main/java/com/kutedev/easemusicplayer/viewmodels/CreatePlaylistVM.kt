@@ -116,16 +116,13 @@ class CreatePlaylistVM @Inject constructor(
     fun prepareImportCreate() {
         importRepository.prepare(listOf(StorageEntryType.MUSIC, StorageEntryType.IMAGE)) {
                 entries ->
-            _entries.value = entries.filter { v -> v.entryTyp() == StorageEntryType.MUSIC }
-            _cover.value = entries.filter { v -> v.entryTyp() == StorageEntryType.IMAGE }.map { v ->
-                StorageEntryLoc(v.storageId, v.path) }.firstOrNull()
-            _fullImported.value = true
-
-            val name = recommendPlaylistNames.value.lastOrNull()
-            if (name != null) {
-                _name.value = name
-            }
+            applyImportedEntries(entries)
         }
+    }
+
+    fun importFromEntries(entries: List<StorageEntry>) {
+        applyImportedEntries(entries)
+        openModal()
     }
 
     fun finish(context: Context) {
@@ -136,5 +133,18 @@ class CreatePlaylistVM @Inject constructor(
             cover = _cover.value,
             entries = entries
         ))
+    }
+
+    private fun applyImportedEntries(entries: List<StorageEntry>) {
+        _mode.value = CreatePlaylistMode.FULL
+        _entries.value = entries.filter { v -> v.entryTyp() == StorageEntryType.MUSIC }
+        _cover.value = entries.filter { v -> v.entryTyp() == StorageEntryType.IMAGE }.map { v ->
+            StorageEntryLoc(v.storageId, v.path) }.firstOrNull()
+        _fullImported.value = true
+
+        val name = recommendPlaylistNames.value.lastOrNull()
+        if (name != null) {
+            _name.value = name
+        }
     }
 }
