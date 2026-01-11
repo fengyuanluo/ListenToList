@@ -6,6 +6,7 @@ import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
 import com.kutedev.easemusicplayer.singleton.ToastRepository
 import com.kutedev.easemusicplayer.utils.formatDuration
+import com.kutedev.easemusicplayer.utils.resolveTotalDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,12 +31,14 @@ class PlayerVM @Inject constructor(
 ) : ViewModel() {
     private val _currentDuration = MutableStateFlow(Duration.ZERO)
     private val _bufferDuration = MutableStateFlow(Duration.ZERO)
+    private val _totalDuration = MutableStateFlow(null as Duration?)
     val music = playerRepository.music
     val previousMusic = playerRepository.previousMusic
     val nextMusic = playerRepository.nextMusic
     val playing = playerRepository.playing
     val currentDuration = _currentDuration.asStateFlow()
     val bufferDuration = _bufferDuration.asStateFlow()
+    val totalDuration = _totalDuration.asStateFlow()
     val playMode = playerRepository.playMode
     val loading = playerRepository.loading
 
@@ -43,6 +46,11 @@ class PlayerVM @Inject constructor(
         currentDuration, music ->
             music?.lyric?.data?.lines?.indexOfLast { it.duration <= currentDuration } ?: -1
     }.stateIn(viewModelScope, SharingStarted.Lazily, -1)
+
+    val displayTotalDuration = combine(totalDuration, music) {
+        runtimeDuration, currentMusic ->
+            resolveTotalDuration(runtimeDuration, currentMusic?.meta?.duration)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     init {
         viewModelScope.launch {
@@ -103,5 +111,8 @@ class PlayerVM @Inject constructor(
             DurationUnit.MILLISECONDS).toJavaDuration()
         _bufferDuration.value = playerControllerRepository.getBufferedPosition().toDuration(
             DurationUnit.MILLISECONDS).toJavaDuration()
+        _totalDuration.value = playerControllerRepository.getDuration()?.toDuration(
+            DurationUnit.MILLISECONDS
+        )?.toJavaDuration()
     }
 }

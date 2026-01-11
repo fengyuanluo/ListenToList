@@ -1,5 +1,6 @@
 package com.kutedev.easemusicplayer.singleton
 
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Player.COMMAND_PLAY_PAUSE
@@ -109,6 +110,14 @@ class PlayerControllerRepository @Inject constructor(
 
     fun getBufferedPosition(): Long {
         return _mediaController?.bufferedPosition ?: 0
+    }
+
+    fun getDuration(): Long? {
+        val duration = _mediaController?.duration ?: return null
+        if (duration == C.TIME_UNSET || duration <= 0) {
+            return null
+        }
+        return duration
     }
 
     fun play(id: MusicId, playlistId: PlaylistId) {

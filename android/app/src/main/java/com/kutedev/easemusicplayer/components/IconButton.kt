@@ -57,6 +57,7 @@ fun EaseIconButton(
     buttonType: EaseIconButtonType,
     painter: Painter,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     overrideColors: EaseIconButtonColors? = null,
     disabled: Boolean = false,
 ) {
@@ -109,6 +110,7 @@ fun EaseIconButton(
     Box(
         modifier = Modifier
             .size(buttonSize)
+            .then(modifier)
             .clip(RoundedCornerShape(999.dp))
             .background(buttonBg)
             .clickable(

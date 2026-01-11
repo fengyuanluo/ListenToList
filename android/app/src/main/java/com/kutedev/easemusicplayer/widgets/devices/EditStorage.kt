@@ -233,6 +233,74 @@ private fun WebdavConfig(
 }
 
 @Composable
+private fun OpenListConfig(
+    editStorageVM: EditStorageVM = hiltViewModel()
+) {
+    val form by editStorageVM.form.collectAsState()
+    val validated by editStorageVM.validated.collectAsState()
+    val isAnonymous = form.isAnonymous
+
+    FormSwitch(
+        label = stringResource(id = R.string.storage_edit_anonymous),
+        value = isAnonymous,
+        onChange = { editStorageVM.updateForm { storage ->
+            storage.isAnonymous = !storage.isAnonymous
+            storage
+        } }
+    )
+    FormText(
+        label = stringResource(id = R.string.storage_edit_alias),
+        value = form.alias,
+        onChange = { value -> editStorageVM.updateForm { storage ->
+            storage.alias = value
+            storage
+        } },
+    )
+    FormText(
+        label = stringResource(id = R.string.storage_edit_addr),
+        value = form.addr,
+        onChange = { value -> editStorageVM.updateForm { storage ->
+            storage.addr = value
+            storage
+        } },
+        error = if (validated.addrEmpty) {
+            R.string.storage_edit_form_address
+        } else {
+            null
+        }
+    )
+    if (!isAnonymous) {
+        FormText(
+            label = stringResource(id = R.string.storage_edit_username),
+            value = form.username,
+            onChange = { value -> editStorageVM.updateForm { storage ->
+                storage.username = value
+                storage
+            } },
+            error = if (validated.usernameEmpty) {
+                R.string.storage_edit_form_username
+            } else {
+                null
+            }
+        )
+        FormText(
+            label = stringResource(id = R.string.storage_edit_password),
+            value = form.password,
+            isPassword = true,
+            onChange = { value -> editStorageVM.updateForm { storage ->
+                storage.password = value
+                storage
+            } },
+            error = if (validated.passwordEmpty) {
+                R.string.storage_edit_form_password
+            } else {
+                null
+            }
+        )
+    }
+}
+
+@Composable
 private fun OneDriveConfig(
     editStorageVM: EditStorageVM = hiltViewModel()
 ) {
@@ -409,6 +477,13 @@ fun EditStoragesPage(
                             editStorageVM.changeType(StorageType.ONE_DRIVE)
                         }
                     )
+                    StorageBlock(
+                        title = "OpenList",
+                        isActive = storageType == StorageType.OPEN_LIST,
+                        onSelect = {
+                            editStorageVM.changeType(StorageType.OPEN_LIST)
+                        }
+                    )
                 }
                 Box(modifier = Modifier.height(30.dp))
                 if (storageType == StorageType.WEBDAV) {
@@ -416,6 +491,9 @@ fun EditStoragesPage(
                 }
                 if (storageType == StorageType.ONE_DRIVE) {
                     OneDriveConfig()
+                }
+                if (storageType == StorageType.OPEN_LIST) {
+                    OpenListConfig()
                 }
             }
         }

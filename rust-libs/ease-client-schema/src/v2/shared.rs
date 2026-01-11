@@ -95,6 +95,7 @@ pub enum StorageType {
     #[default]
     Webdav,
     OneDrive,
+    OpenList,
 }
 
 #[derive(

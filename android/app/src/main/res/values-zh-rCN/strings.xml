@@ -45,6 +45,8 @@
     <string name="import_musics_title_single_suffix">首曲目被选中</string>
     <string name="import_musics_title_multi_suffix">首曲目被选中</string>
     <string name="import_musics_paths_root">Root</string>
+    <string name="storage_browser_selected">已选 %1$d 项</string>
+    <string name="storage_browser_folder_playlist_prefix">文件夹播放</string>
     <string name="import_musics_error_authentication_desc">账号或密码错误，请检查配置中的账号与密码。</string>
     <string name="import_musics_error_timeout_desc">连接超时，请重试。</string>
     <string name="import_musics_error_unknown_desc">未知错误，请重试。</string>

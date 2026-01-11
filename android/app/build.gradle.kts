@@ -1,5 +1,7 @@
 import java.io.FileInputStream
 import java.util.Properties
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
     alias(libs.plugins.android.application)
@@ -8,6 +10,7 @@ plugins {
     kotlin("plugin.serialization") version "2.0.0"
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
+    id("jacoco")
 }
 
 
@@ -102,6 +105,10 @@ android {
     }
 }
 
+jacoco {
+    toolVersion = "0.8.11"
+}
+
 dependencies {
     val nav_version = "2.8.3"
     val media3_version = "1.5.0"
@@ -125,6 +132,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:$media3_version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3_version")
     implementation("androidx.media3:media3-session:$media3_version")
+    implementation("androidx.media3:media3-datasource:$media3_version")
+    implementation("androidx.media3:media3-database:$media3_version")
     implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
     implementation(libs.reorderable)
     testImplementation(libs.junit)
@@ -137,4 +146,71 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.56.2")
     ksp("com.google.dagger:hilt-android-compiler:2.56.2")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+}
+
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+
+    val coverageIncludes = listOf(
+        "com/kutedev/easemusicplayer/core/PlaybackCachePolicy*",
+        "com/kutedev/easemusicplayer/ui/theme/ThemePreset*",
+        "com/kutedev/easemusicplayer/ui/theme/ThemePresets*",
+        "com/kutedev/easemusicplayer/ui/theme/ThemeSettings*",
+    )
+
+    classDirectories.setFrom(
+        fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+            include(coverageIncludes)
+        }
+    )
+    sourceDirectories.setFrom(
+        files(
+            "src/main/java",
+            "src/main/kotlin"
+        )
+    )
+    executionData.setFrom(
+        fileTree(buildDir) {
+            include("jacoco/testDebugUnitTest.exec")
+        }
+    )
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+
+tasks.register<JacocoCoverageVerification>("jacocoTestCoverage") {
+    dependsOn("testDebugUnitTest")
+
+    val coverageIncludes = listOf(
+        "com/kutedev/easemusicplayer/core/PlaybackCachePolicy*",
+        "com/kutedev/easemusicplayer/ui/theme/ThemePreset*",
+        "com/kutedev/easemusicplayer/ui/theme/ThemePresets*",
+        "com/kutedev/easemusicplayer/ui/theme/ThemeSettings*",
+    )
+
+    classDirectories.setFrom(
+        fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+            include(coverageIncludes)
+        }
+    )
+    sourceDirectories.setFrom(
+        files(
+            "src/main/java",
+            "src/main/kotlin"
+        )
+    )
+    executionData.setFrom(
+        fileTree(buildDir) {
+            include("jacoco/testDebugUnitTest.exec")
+        }
+    )
+    violationRules {
+        rule {
+            limit {
+                minimum = "0.60".toBigDecimal()
+            }
+        }
+    }
 }

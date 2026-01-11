@@ -95,6 +95,7 @@ fn is_auth_error<T>(r: &StorageBackendResult<T>) -> bool {
 fn build_client() -> StorageBackendResult<reqwest::Client> {
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
+        .http1_only()
         .no_proxy()
         .build()?;
     Ok(client)

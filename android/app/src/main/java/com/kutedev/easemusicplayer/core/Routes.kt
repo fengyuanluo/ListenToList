@@ -18,6 +18,10 @@ fun RouteAddDevices(id: String): String {
     return "AddDevices/${id}"
 }
 
+fun RouteStorageBrowser(id: String): String {
+    return "StorageBrowser/${id}"
+}
+
 fun RoutePlaylist(id: String): String {
     return "Playlist/${id}"
 }

@@ -120,6 +120,7 @@ fun SettingSubpage() {
             .padding(paddingX, paddingX)
             .verticalScroll(rememberScrollState())
     ) {
+        ThemeSection()
         Title(title = stringResource(id = R.string.setting_debug))
         Item(
             iconPainter = painterResource(R.drawable.icon_log),

@@ -24,6 +24,10 @@ fun toMusicDurationMs(music: Music?): ULong {
     return music?.meta?.duration?.toMillis()?.toULong() ?: 0uL
 }
 
-fun toMusicDurationMs(duration: Duration): ULong {
-    return duration.toMillis().toULong()
+fun toMusicDurationMs(duration: Duration?): ULong {
+    return duration?.toMillis()?.toULong() ?: 0uL
+}
+
+fun resolveTotalDuration(runtime: Duration?, meta: Duration?): Duration? {
+    return runtime ?: meta
 }
