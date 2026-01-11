@@ -1,8 +1,10 @@
 package com.kutedev.easemusicplayer.widgets.settings
 
 import android.content.Intent
+import android.graphics.Color as AndroidColor
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,14 +21,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -40,9 +49,7 @@ import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.components.ThemeBackgroundImage
 import com.kutedev.easemusicplayer.ui.theme.ThemePresets
-import com.kutedev.easemusicplayer.ui.theme.buildPaletteColors
 import com.kutedev.easemusicplayer.viewmodels.ThemeVM
-
 
 @Composable
 private fun SectionTitle(title: String) {
@@ -79,12 +86,47 @@ private fun ColorSwatch(
 }
 
 @Composable
+private fun GradientSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    gradientColors: List<Color>,
+    modifier: Modifier = Modifier,
+    thumbColor: Color = MaterialTheme.colorScheme.primary,
+) {
+    Box(modifier = modifier) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .align(Alignment.Center)
+        ) {
+            drawRoundRect(
+                brush = Brush.horizontalGradient(gradientColors),
+                cornerRadius = CornerRadius(12f, 12f)
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                activeTrackColor = Color.Transparent,
+                inactiveTrackColor = Color.Transparent,
+                thumbColor = thumbColor,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
 fun ThemeSection(
-    themeVM: ThemeVM = hiltViewModel()
+    showTitle: Boolean = true,
+    themeVM: ThemeVM = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val settings by themeVM.settings.collectAsState()
-    val paletteColors = remember { buildPaletteColors() }
 
     val pickBackgroundLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -98,12 +140,39 @@ fun ThemeSection(
         }
     }
 
+    var hue by remember { mutableStateOf(0f) }
+    var saturation by remember { mutableStateOf(0.8f) }
+    var value by remember { mutableStateOf(0.9f) }
+
+    LaunchedEffect(settings.primaryColor) {
+        val hsv = FloatArray(3)
+        AndroidColor.colorToHSV(settings.primaryColor.toArgb(), hsv)
+        hue = hsv[0]
+        saturation = hsv[1]
+        value = hsv[2]
+    }
+
+    val previewColor = Color.hsv(hue, saturation, value)
+    val hueGradient = remember {
+        listOf(
+            Color.hsv(0f, 1f, 1f),
+            Color.hsv(60f, 1f, 1f),
+            Color.hsv(120f, 1f, 1f),
+            Color.hsv(180f, 1f, 1f),
+            Color.hsv(240f, 1f, 1f),
+            Color.hsv(300f, 1f, 1f),
+            Color.hsv(360f, 1f, 1f),
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
     ) {
-        SectionTitle(title = stringResource(id = R.string.setting_theme_title))
-        Spacer(modifier = Modifier.height(12.dp))
+        if (showTitle) {
+            SectionTitle(title = stringResource(id = R.string.setting_theme_title))
+            Spacer(modifier = Modifier.height(12.dp))
+        }
         Text(
             text = stringResource(id = R.string.setting_theme_preset),
             fontSize = 12.sp,
@@ -130,23 +199,80 @@ fun ThemeSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
-        val rows = paletteColors.chunked(6)
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (row in rows) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    for (color in row) {
-                        ColorSwatch(
-                            color = color,
-                            selected = color.toArgb() == settings.primaryColor.toArgb(),
-                            onClick = { themeVM.setPrimaryColor(color) }
-                        )
-                    }
-                }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(previewColor)
+                    .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(10.dp))
+            )
+            val hex = remember(previewColor) {
+                String.format("#%06X", 0xFFFFFF and previewColor.toArgb())
             }
+            Text(
+                text = "${stringResource(id = R.string.setting_theme_preview)} $hex",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(id = R.string.setting_theme_hue),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        GradientSlider(
+            value = hue,
+            onValueChange = { nextHue ->
+                hue = nextHue
+                themeVM.setPrimaryColor(Color.hsv(hue, saturation, value))
+            },
+            valueRange = 0f..360f,
+            gradientColors = hueGradient,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+        Text(
+            text = stringResource(id = R.string.setting_theme_saturation),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        GradientSlider(
+            value = saturation,
+            onValueChange = { nextSaturation ->
+                saturation = nextSaturation
+                themeVM.setPrimaryColor(Color.hsv(hue, saturation, value))
+            },
+            valueRange = 0f..1f,
+            gradientColors = listOf(
+                Color.hsv(hue, 0f, value),
+                Color.hsv(hue, 1f, value),
+            ),
+            modifier = Modifier.padding(vertical = 4.dp),
+            thumbColor = previewColor,
+        )
+        Text(
+            text = stringResource(id = R.string.setting_theme_brightness),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        GradientSlider(
+            value = value,
+            onValueChange = { nextValue ->
+                value = nextValue
+                themeVM.setPrimaryColor(Color.hsv(hue, saturation, value))
+            },
+            valueRange = 0f..1f,
+            gradientColors = listOf(
+                Color.Black,
+                Color.hsv(hue, saturation, 1f),
+            ),
+            modifier = Modifier.padding(vertical = 4.dp),
+            thumbColor = previewColor,
+        )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = stringResource(id = R.string.setting_theme_background),

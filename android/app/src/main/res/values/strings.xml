@@ -7,8 +7,14 @@
     <string name="dashboard_devices_add">Add Devices</string>
     <string name="setting_about">ABOUT</string>
     <string name="setting_theme_title">主题</string>
+    <string name="setting_theme_entry_title">主题设置</string>
+    <string name="setting_theme_entry_desc">主题色、调色板与背景图</string>
     <string name="setting_theme_preset">预设颜色</string>
-    <string name="setting_theme_palette">调色板</string>
+    <string name="setting_theme_palette">滑动调色</string>
+    <string name="setting_theme_preview">当前颜色</string>
+    <string name="setting_theme_hue">色相</string>
+    <string name="setting_theme_saturation">饱和度</string>
+    <string name="setting_theme_brightness">明度</string>
     <string name="setting_theme_background">背景图片</string>
     <string name="setting_theme_background_pick">选择图片</string>
     <string name="setting_theme_background_clear">清除背景</string>

@@ -28,12 +28,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteDebugMore
 import com.kutedev.easemusicplayer.core.RouteLog
+import com.kutedev.easemusicplayer.core.RouteThemeSettings
 
 
 private val paddingX = SettingPaddingX
@@ -120,7 +119,15 @@ fun SettingSubpage() {
             .padding(paddingX, paddingX)
             .verticalScroll(rememberScrollState())
     ) {
-        ThemeSection()
+        Title(title = stringResource(id = R.string.setting_theme_entry_title))
+        Item(
+            iconPainter = painterResource(R.drawable.icon_adjust),
+            title = stringResource(id = R.string.setting_theme_entry_title),
+            content = stringResource(id = R.string.setting_theme_entry_desc),
+            onClick = {
+                navController.navigate(RouteThemeSettings())
+            }
+        )
         Title(title = stringResource(id = R.string.setting_debug))
         Item(
             iconPainter = painterResource(R.drawable.icon_log),

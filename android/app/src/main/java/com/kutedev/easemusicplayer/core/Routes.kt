@@ -46,6 +46,10 @@ fun RouteDebugMore(): String {
     return "Debug/More"
 }
 
+fun RouteThemeSettings(): String {
+    return "Settings/Theme"
+}
+
 val LocalNavController = compositionLocalOf<NavHostController> {
     error("No LocalNavController provided")
 }
