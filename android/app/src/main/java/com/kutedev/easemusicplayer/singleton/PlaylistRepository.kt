@@ -1,11 +1,8 @@
 package com.kutedev.easemusicplayer.singleton
 
 import android.content.Context
-import androidx.annotation.OptIn
-import androidx.lifecycle.viewModelScope
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -17,6 +14,7 @@ import com.kutedev.easemusicplayer.core.syncMetadataUtil
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +45,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 
+@OptIn(FlowPreview::class)
 @Singleton
 class PlaylistRepository @Inject constructor(
     private val bridge: Bridge,
@@ -141,7 +140,6 @@ class PlaylistRepository @Inject constructor(
         reload()
     }
 
-    @OptIn(UnstableApi::class)
     private fun requestTotalDuration(context: Context, id: MusicId) {
         val musicAbstract = bridge.runSync { ctsGetMusicAbstract(it, id) } ?: return
         if (musicAbstract.meta.duration != null) {
@@ -158,6 +156,7 @@ class PlaylistRepository @Inject constructor(
                     _requestSemaphore.release()
                 }
             }
+            var metadataJob: kotlinx.coroutines.Job? = null
             try {
                 player = ExoPlayer.Builder(context)
                     .setMediaSourceFactory(
@@ -184,10 +183,14 @@ class PlaylistRepository @Inject constructor(
                                 },
                                 onFinished = { releaseOnce() }
                             )
+                            metadataJob = job
                             if (job == null) {
                                 releaseOnce()
                             }
-
+                        } else if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+                            if (metadataJob == null || metadataJob?.isActive == false) {
+                                releaseOnce()
+                            }
                         }
                     }
 

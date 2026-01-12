@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -178,9 +179,9 @@ private fun QuoteBlock() {
     val quote = remember { pickDailyQuote() }
     val shape = RoundedCornerShape(16.dp)
     val blockAlpha = 0.9f
-    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = blockAlpha)
-    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = blockAlpha)
-    val textColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = blockAlpha)
+    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val textColor = MaterialTheme.colorScheme.onSurfaceVariant
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -188,6 +189,7 @@ private fun QuoteBlock() {
             .clip(shape)
             .background(backgroundColor)
             .border(1.dp, borderColor, shape)
+            .alpha(blockAlpha)
             .padding(18.dp, 14.dp)
     ) {
         Text(

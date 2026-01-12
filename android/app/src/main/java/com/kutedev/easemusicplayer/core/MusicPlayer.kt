@@ -3,14 +3,13 @@ package com.kutedev.easemusicplayer.core
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
-import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.C.WAKE_MODE_NETWORK
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.Player.COMMAND_PLAY_PAUSE
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -51,7 +50,6 @@ class PlaybackService : MediaSessionService() {
     private var _mediaSession: MediaSession? = null
     private var _prefetcher: PlaybackPrefetcher? = null
 
-    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         easeLog("Playback service creating...")
@@ -84,7 +82,6 @@ class PlaybackService : MediaSessionService() {
         _mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(pendingIntent)
             .setCallback(object : MediaSession.Callback {
-                @OptIn(UnstableApi::class)
                 override fun onConnect(
                     session: MediaSession,
                     controller: MediaSession.ControllerInfo
@@ -174,6 +171,9 @@ class PlaybackService : MediaSessionService() {
                     syncCurrentMetadata(player)
                 } else if (playbackState == Player.STATE_BUFFERING) {
                     playerRepository.setIsLoading(true)
+                } else if (playbackState == Player.STATE_IDLE) {
+                    playerRepository.setIsLoading(false)
+                    _prefetcher?.cancel()
                 }
             }
 
@@ -187,6 +187,18 @@ class PlaybackService : MediaSessionService() {
                 reason: Int
             ) {
                 playerRepository.notifyDurationChanged()
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                playerRepository.setIsLoading(false)
+                _prefetcher?.cancel()
+                easeError("playback error: $error")
+                when (error.errorCode) {
+                    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+                    PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> {
+                        playNext()
+                    }
+                }
             }
         })
         easeLog("Playback service created")

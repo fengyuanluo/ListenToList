@@ -1,13 +1,11 @@
 package com.kutedev.easemusicplayer.core
 
-import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.core.text.isDigitsOnly
 import androidx.media3.common.C.TIME_UNSET
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.metadata.flac.PictureFrame
 import androidx.media3.extractor.metadata.id3.ApicFrame
@@ -28,7 +26,6 @@ import uniffi.ease_client_schema.MusicId
 import java.time.Duration
 
 
-@OptIn(UnstableApi::class)
 private fun extractCurrentTracksCover(player: Player): ByteArray? {
     player.currentTracks.groups.forEach { trackGroup ->
         (0 until trackGroup.length).forEach { i ->
@@ -67,7 +64,6 @@ data class BuildMediaContext(
     val scope: CoroutineScope
 )
 
-@OptIn(UnstableApi::class)
 private fun buildMediaItem(cx: BuildMediaContext, music: MusicOrMusicAbstract): MediaItem {
     val cover = when(music) {
         is MusicOrMusicAbstract.VMusic -> music.v1.cover
@@ -105,7 +101,6 @@ fun buildMediaItem(cx: BuildMediaContext, music: MusicAbstract): MediaItem {
     return buildMediaItem(cx, MusicOrMusicAbstract.VMusicAbstract(music))
 }
 
-@OptIn(UnstableApi::class)
 private fun playUtil(cx: BuildMediaContext, music: MusicOrMusicAbstract, player: Player) {
     val mediaItem = buildMediaItem(cx, music)
     player.stop()

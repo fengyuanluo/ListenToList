@@ -27,7 +27,7 @@ if (!existsSync(hostLibPath)) {
 for (const buildTarget of TARGETS) {
   console.log(`Generate kotlin file of ${buildTarget}`);
   execSync(
-    `cargo run -p ease-client-android-ffi-builder generate --library ${hostLibPath} --language kotlin --out-dir ${path.resolve(ROOT, "android/app/src/main/java/")}`,
+    `cargo run -p ease-client-android-ffi-builder generate --no-format --library ${hostLibPath} --language kotlin --out-dir ${path.resolve(ROOT, "android/app/src/main/java/")}`,
     {
       stdio: "inherit",
       cwd: RUST_LIBS_ROOTS,
