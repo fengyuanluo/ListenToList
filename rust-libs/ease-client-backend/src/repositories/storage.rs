@@ -6,7 +6,7 @@ use crate::{error::BResult, objects::ArgUpsertStorage};
 
 use super::core::DatabaseServer;
 use ease_client_schema::{
-    BlobId, DbKeyAlloc, MusicId, StorageId, StorageModel, TABLE_MUSIC, TABLE_MUSIC_BY_LOC,
+    BlobId, DbKeyAlloc, StorageId, StorageModel, TABLE_MUSIC, TABLE_MUSIC_BY_LOC,
     TABLE_MUSIC_PLAYLIST, TABLE_PLAYLIST_MUSIC, TABLE_STORAGE, TABLE_STORAGE_MUSIC,
 };
 

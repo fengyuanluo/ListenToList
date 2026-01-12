@@ -4,7 +4,6 @@ use ease_client_schema::{MusicId, PlaylistId, StorageEntryLoc};
 use ease_order_key::{OrderKey, OrderKeyRef};
 
 use crate::{
-    ctx::BackendContext,
     error::{BError, BResult},
     objects::{Playlist, PlaylistAbstract},
     repositories::{music::ArgDBAddMusic, playlist::AddedMusic},

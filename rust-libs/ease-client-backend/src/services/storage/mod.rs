@@ -8,7 +8,7 @@ use crate::{
     ctx::BackendContext,
     error::BResult,
     objects::{ArgUpsertStorage, Storage},
-    services::{get_music, get_music_abstract, get_music_cover_bytes},
+    services::{get_music, get_music_cover_bytes},
 };
 use ease_client_schema::{DataSourceKey, StorageEntryLoc, StorageId, StorageModel, StorageType};
 use ease_remote_storage::{

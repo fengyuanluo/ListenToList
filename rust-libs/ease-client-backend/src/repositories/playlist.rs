@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ease_order_key::OrderKey;
 use redb::{ReadTransaction, ReadableMultimapTable, ReadableTable, ReadableTableMetadata};
 
-use crate::{error::BResult, services::get_playlist};
+use crate::error::BResult;
 
 use super::{core::DatabaseServer, music::ArgDBAddMusic};
 use ease_client_schema::{

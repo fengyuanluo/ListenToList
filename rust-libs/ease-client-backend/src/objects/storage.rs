@@ -1,5 +1,5 @@
 use ease_client_schema::{MusicId, PlaylistId, StorageEntryLoc, StorageId, StorageType};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::objects::EASEM_ONEDRIVE_ID;
 

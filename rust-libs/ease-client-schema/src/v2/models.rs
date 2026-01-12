@@ -27,6 +27,8 @@ pub struct PlaylistModel {
 }
 
 #[derive(Debug, Clone, bitcode::Encode, bitcode::Decode)]
+#[allow(dead_code)]
+// 预留播放列表-曲目关系模型，便于后续兼容与迁移。
 pub struct PlaylistMusicModel {
     pub playlist_id: PlaylistId,
     pub music_id: MusicId,

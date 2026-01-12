@@ -42,8 +42,7 @@ pub async fn ct_upsert_storage(cx: Arc<Backend>, arg: ArgUpsertStorage) -> BResu
 }
 
 #[uniffi::export]
-pub async fn ct_get_refresh_token(cx: Arc<Backend>, code: String) -> BResult<String> {
-    let cx = cx.get_context();
+pub async fn ct_get_refresh_token(_cx: Arc<Backend>, code: String) -> BResult<String> {
     let refresh_token = OneDriveBackend::request_refresh_token(code).await?;
     Ok(refresh_token)
 }

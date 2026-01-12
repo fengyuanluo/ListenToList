@@ -348,11 +348,11 @@ impl OneDriveBackend {
 }
 
 impl StorageBackend for OneDriveBackend {
-    fn list(&self, dir: String) -> BoxFuture<StorageBackendResult<Vec<Entry>>> {
+    fn list(&self, dir: String) -> BoxFuture<'_, StorageBackendResult<Vec<Entry>>> {
         Box::pin(self.list_with_retry_impl(dir))
     }
 
-    fn get(&self, p: String, byte_offset: u64) -> BoxFuture<StorageBackendResult<StreamFile>> {
+    fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>> {
         Box::pin(self.get_with_retry_impl(p, byte_offset))
     }
 }
