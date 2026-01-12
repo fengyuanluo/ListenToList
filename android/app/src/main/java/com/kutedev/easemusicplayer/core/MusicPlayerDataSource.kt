@@ -1,10 +1,8 @@
 package com.kutedev.easemusicplayer.core
 
 import android.net.Uri
-import androidx.annotation.OptIn
 import androidx.media3.common.C.LENGTH_UNSET
 import androidx.media3.common.C.RESULT_END_OF_INPUT
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
@@ -22,12 +20,13 @@ import uniffi.ease_client_backend.ctGetAssetStream
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_schema.MusicId
+import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import kotlin.math.min
 
-@OptIn(UnstableApi::class)
 class MusicPlayerDataSource(
     private val bridge: Bridge,
     private val scope: CoroutineScope
@@ -37,7 +36,7 @@ class MusicPlayerDataSource(
     }
 
     private var _currentUri: Uri? = null
-    private var _inputStream: PipedInputStream? = null
+    private var _inputStream: InputStream? = null
     private var _outputStream: PipedOutputStream? = null
     private var _loadJob: Job? = null
     @Volatile private var _isClosed = true
@@ -53,10 +52,11 @@ class MusicPlayerDataSource(
         _remainingBytes = dataSpec.length
 
         val raw = dataSpec.uri.getQueryParameter("music")
-        val musicId = raw?.toLong()?.let { MusicId(it) }
+        val musicId = raw?.toLongOrNull()?.let { MusicId(it) }
 
         if (musicId == null) {
-            throw IOException("music id $raw not found")
+            easeError("music id $raw not found, skip data source")
+            return openEmpty(dataSpec)
         }
 
         _currentUri = dataSpec.uri
@@ -65,7 +65,8 @@ class MusicPlayerDataSource(
             bridge.run { ctGetAssetStream(it, DataSourceKey.Music(musicId), dataSpec.position.toULong()) }
         }
         if (assetStream == null) {
-            throw IOException("music $raw not found")
+            easeError("music $raw not found, skip data source")
+            return openEmpty(dataSpec)
         }
 
         val input = PipedInputStream(64 * 1024)
@@ -122,7 +123,9 @@ class MusicPlayerDataSource(
             if (_isClosed) {
                 return RESULT_END_OF_INPUT
             }
-            throw e
+            easeError("read stream failed: $e")
+            _remainingBytes = 0
+            return RESULT_END_OF_INPUT
         }
         if (read == -1) {
             return RESULT_END_OF_INPUT
@@ -153,6 +156,15 @@ class MusicPlayerDataSource(
             }
         }
         _inputStream = null
+    }
+
+    private fun openEmpty(dataSpec: DataSpec): Long {
+        _currentUri = dataSpec.uri
+        _remainingBytes = 0
+        _inputStream = ByteArrayInputStream(ByteArray(0))
+        _outputStream = null
+        _loadJob = null
+        return 0L
     }
 
     private suspend fun writeStream(

@@ -44,6 +44,8 @@ import uniffi.ease_client_schema.StorageId
 import uniffi.ease_client_schema.StorageType
 import kotlin.math.min
 
+private const val MAX_FOLDER_PREFETCH = 12
+
 data class BrowserPathItem(
     val path: String,
     val name: String,
@@ -276,7 +278,7 @@ class StorageBrowserVM @Inject constructor(
                     toastRepository.emitToast("播放列表为空")
                     return@launch
                 }
-                prefetchFolderSongs(songs, created.musicIds)
+                prefetchFolderSongs(songs, created.musicIds, index)
                 playlistRepository.requestTotalDuration(appContext, created.musicIds)
                 playlistRepository.reload()
                 playerControllerRepository.play(musicId, created.id)
@@ -361,13 +363,25 @@ class StorageBrowserVM @Inject constructor(
         return storageRepository.storages.value.find { it.id == storageId }
     }
 
-    private fun prefetchFolderSongs(songs: List<StorageEntry>, musicIds: List<uniffi.ease_client_backend.AddedMusic>) {
+    private fun prefetchFolderSongs(
+        songs: List<StorageEntry>,
+        musicIds: List<uniffi.ease_client_backend.AddedMusic>,
+        startIndex: Int
+    ) {
         if (songs.isEmpty() || musicIds.isEmpty()) {
             return
         }
         val tasks = mutableListOf<Pair<android.net.Uri, Long>>()
         val count = min(songs.size, musicIds.size)
-        for (index in 0 until count) {
+        if (count == 0) {
+            return
+        }
+        val safeStart = startIndex.coerceIn(0, count - 1)
+        val endExclusive = min(count, safeStart + MAX_FOLDER_PREFETCH)
+        for (index in safeStart until endExclusive) {
+            if (index == safeStart) {
+                continue
+            }
             val size = songs[index].size?.toLong() ?: continue
             val bytes = min(size, PlaybackCachePolicy.prefetchBytesByPercent(size, 0.1f))
             if (bytes <= 0) {
