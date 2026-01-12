@@ -524,11 +524,11 @@ impl OpenList {
 }
 
 impl StorageBackend for OpenList {
-    fn list(&self, dir: String) -> BoxFuture<StorageBackendResult<Vec<Entry>>> {
+    fn list(&self, dir: String) -> BoxFuture<'_, StorageBackendResult<Vec<Entry>>> {
         Box::pin(self.list_with_retry_impl(dir))
     }
 
-    fn get(&self, p: String, byte_offset: u64) -> BoxFuture<StorageBackendResult<StreamFile>> {
+    fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>> {
         Box::pin(self.get_with_retry_impl(p, byte_offset))
     }
 }
@@ -567,7 +567,6 @@ mod test {
         addr: String,
         handle: JoinHandle<()>,
         list_calls: Arc<AtomicUsize>,
-        get_calls: Arc<AtomicUsize>,
         file_calls: Arc<AtomicUsize>,
     }
     impl SetupServerRes {
@@ -577,10 +576,6 @@ mod test {
 
         pub fn list_calls(&self) -> usize {
             self.list_calls.load(Ordering::SeqCst)
-        }
-
-        pub fn get_calls(&self) -> usize {
-            self.get_calls.load(Ordering::SeqCst)
         }
 
         pub fn file_calls(&self) -> usize {
@@ -718,7 +713,6 @@ mod test {
             addr: format!("http://127.0.0.1:{port}"),
             handle,
             list_calls,
-            get_calls,
             file_calls,
         }
     }

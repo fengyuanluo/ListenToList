@@ -87,8 +87,8 @@ impl StorageBackendError {
 }
 
 pub trait StorageBackend {
-    fn list(&self, dir: String) -> BoxFuture<StorageBackendResult<Vec<Entry>>>;
-    fn get(&self, p: String, byte_offset: u64) -> BoxFuture<StorageBackendResult<StreamFile>>;
+    fn list(&self, dir: String) -> BoxFuture<'_, StorageBackendResult<Vec<Entry>>>;
+    fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>>;
 }
 
 impl StreamFile {

@@ -128,6 +128,8 @@ pub(crate) fn build_music_abstract(_cx: &BackendContext, model: MusicModel) -> M
     }
 }
 
+#[allow(dead_code)]
+// 预留给外部调用，当前未在后端内部使用。
 pub fn get_music_storage_entry_loc(
     cx: &BackendContext,
     id: MusicId,

@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use ease_client_schema::{DataSourceKey, MusicId, StorageEntryLoc};
-use ease_order_key::OrderKey;
 
 use super::lyric::Lyrics;
 

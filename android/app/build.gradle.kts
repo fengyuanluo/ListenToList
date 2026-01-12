@@ -150,6 +150,7 @@ dependencies {
 
 tasks.register<JacocoReport>("jacocoTestReport") {
     dependsOn("testDebugUnitTest")
+    val buildDirFile = layout.buildDirectory.get().asFile
 
     val coverageIncludes = listOf(
         "com/kutedev/easemusicplayer/core/PlaybackCachePolicy*",
@@ -159,7 +160,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
     )
 
     classDirectories.setFrom(
-        fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+        fileTree(buildDirFile.resolve("tmp/kotlin-classes/debug")) {
             include(coverageIncludes)
         }
     )
@@ -170,7 +171,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         )
     )
     executionData.setFrom(
-        fileTree(buildDir) {
+        fileTree(buildDirFile) {
             include("jacoco/testDebugUnitTest.exec")
         }
     )
@@ -182,6 +183,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
 
 tasks.register<JacocoCoverageVerification>("jacocoTestCoverage") {
     dependsOn("testDebugUnitTest")
+    val buildDirFile = layout.buildDirectory.get().asFile
 
     val coverageIncludes = listOf(
         "com/kutedev/easemusicplayer/core/PlaybackCachePolicy*",
@@ -191,7 +193,7 @@ tasks.register<JacocoCoverageVerification>("jacocoTestCoverage") {
     )
 
     classDirectories.setFrom(
-        fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+        fileTree(buildDirFile.resolve("tmp/kotlin-classes/debug")) {
             include(coverageIncludes)
         }
     )
@@ -202,7 +204,7 @@ tasks.register<JacocoCoverageVerification>("jacocoTestCoverage") {
         )
     )
     executionData.setFrom(
-        fileTree(buildDir) {
+        fileTree(buildDirFile) {
             include("jacoco/testDebugUnitTest.exec")
         }
     )

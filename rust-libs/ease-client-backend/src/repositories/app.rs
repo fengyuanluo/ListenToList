@@ -7,6 +7,8 @@ use crate::error::BResult;
 use super::core::DatabaseServer;
 
 impl DatabaseServer {
+    #[allow(dead_code)]
+    // 调试或测试场景使用，避免未使用告警。
     pub fn delete_all(self: &Arc<Self>) -> BResult<()> {
         let db = self.db().begin_write()?;
 

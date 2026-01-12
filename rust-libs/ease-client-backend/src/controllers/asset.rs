@@ -1,8 +1,8 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use ease_client_schema::DataSourceKey;
-use ease_remote_storage::{StorageBackendError, StorageBackendResult};
+use ease_remote_storage::StorageBackendResult;
 
 use crate::{error::BResult, services::get_asset_file, Backend};
 
