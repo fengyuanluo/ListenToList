@@ -16,7 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -57,6 +57,7 @@ fun Root() {
         val controller = LocalNavController.current
         val themeVM: ThemeVM = hiltViewModel()
         val themeSettings by themeVM.settings.collectAsState()
+        val layoutDirection = LocalLayoutDirection.current
 
         EaseMusicPlayerTheme(themeSettings = themeSettings) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -72,8 +73,8 @@ fun Root() {
                     Column(
                         modifier = Modifier
                             .padding(
-                                start = scaffoldPadding.calculateLeftPadding(LayoutDirection.Ltr),
-                                end = scaffoldPadding.calculateRightPadding(LayoutDirection.Ltr),
+                                start = scaffoldPadding.calculateLeftPadding(layoutDirection),
+                                end = scaffoldPadding.calculateRightPadding(layoutDirection),
                                 top = scaffoldPadding.calculateTopPadding(),
                             )
                             .fillMaxSize()
@@ -104,14 +105,14 @@ fun Root() {
                                     slideIn(
                                         animationSpec = tween(300),
                                         initialOffset = { fullSize ->
-                                            IntOffset(fullSize.width, 0)
+                                            IntOffset(-fullSize.width, 0)
                                         })
                                 },
                                 popExitTransition = {
                                     slideOut(
                                         animationSpec = tween(300),
                                         targetOffset = { fullSize ->
-                                            IntOffset(-fullSize.width, 0)
+                                            IntOffset(fullSize.width, 0)
                                         })
                                 },
                             ) {

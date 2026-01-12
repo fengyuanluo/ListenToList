@@ -58,8 +58,10 @@ import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonColors
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseTextButton
+import com.kutedev.easemusicplayer.components.EaseTextButtonSize
+import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.components.customAnchoredDraggable
-import com.kutedev.easemusicplayer.components.easeIconButtonSizeToDp
 import com.kutedev.easemusicplayer.components.rememberCustomAnchoredDraggableState
 import com.kutedev.easemusicplayer.viewmodels.PlayerVM
 import com.kutedev.easemusicplayer.viewmodels.PlaylistVM
@@ -234,7 +236,9 @@ private fun PlaylistHeader(
 }
 
 @Composable
-private fun EmptyPlaylist() {
+private fun EmptyPlaylist(
+    onImport: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize(),
@@ -243,9 +247,6 @@ private fun EmptyPlaylist() {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .clickable {
-
-                }
                 .clip(RoundedCornerShape(16.dp))
                 .padding(24.dp, 24.dp),
         ) {
@@ -256,6 +257,13 @@ private fun EmptyPlaylist() {
             Box(modifier = Modifier.height(11.dp))
             Text(
                 text = stringResource(id = R.string.playlist_empty_list)
+            )
+            Box(modifier = Modifier.height(12.dp))
+            EaseTextButton(
+                text = stringResource(id = R.string.playlist_context_menu_import),
+                type = EaseTextButtonType.Primary,
+                size = EaseTextButtonSize.Medium,
+                onClick = onImport
             )
         }
     }
@@ -275,7 +283,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
     val navController = LocalNavController.current
 
     val density = LocalDensity.current
-    val panelWidthDp = 48.dp
+    val panelWidthDp = 72.dp
 
     val playlistAbstr by playlistVM.playlistAbstr.collectAsState()
     val id = item.meta.id
@@ -313,6 +321,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val canClick = anchoredDraggableState.value == 0f
 
     LaunchedEffect(currentSwipingMusicId) {
         if (currentSwipingMusicId != id) {
@@ -341,11 +350,6 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                         onSwipe()
                     }
                 )
-                .clickable {
-                    navController.navigate(RouteMusicPlayer())
-                    playerVM.play(id, playlistAbstr.meta.id)
-                    onSwipe()
-                }
                 .background(bgColor)
                 .padding(8.dp, 16.dp)
                 .fillMaxWidth()
@@ -354,7 +358,13 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(enabled = canClick) {
+                        navController.navigate(RouteMusicPlayer())
+                        playerVM.play(id, playlistAbstr.meta.id)
+                        onSwipe()
+                    }
             ) {
                 Text(
                     modifier = Modifier.draggableHandle(),
@@ -395,7 +405,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
             ) {
                 Box(modifier = Modifier.width(8.dp))
                 EaseIconButton(
-                    sizeType = EaseIconButtonSize.Medium,
+                    sizeType = EaseIconButtonSize.Large,
                     buttonType = EaseIconButtonType.ErrorVariant,
                     painter = painterResource(id = R.drawable.icon_deleteseep),
                     onClick = {
@@ -471,6 +481,7 @@ fun PlaylistPage(
     scaffoldPadding: PaddingValues,
 ) {
     val navController = LocalNavController.current
+    val context = LocalContext.current
     val musics by playlistVM.playlistMusics.collectAsState()
     val playlistAbstr by playlistVM.playlistAbstr.collectAsState()
 
@@ -480,33 +491,37 @@ fun PlaylistPage(
             .fillMaxSize()
     ) {
         Column {
-            PlaylistHeader()
+            Box(modifier = Modifier.fillMaxWidth()) {
+                PlaylistHeader()
+                EaseIconButton(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 20.dp, bottom = 16.dp),
+                    sizeType = EaseIconButtonSize.Large,
+                    buttonType = EaseIconButtonType.Primary,
+                    painter = painterResource(id = R.drawable.icon_play),
+                    disabled = musics.isEmpty(),
+                    onClick = {
+                        val m = musics.firstOrNull()
+                        if (m != null) {
+                            navController.navigate(RouteMusicPlayer())
+                            playerVM.play(m.meta.id, playlistAbstr.meta.id)
+                        }
+                    }
+                )
+            }
             if (musics.isEmpty()) {
-                EmptyPlaylist()
+                EmptyPlaylist(
+                    onImport = {
+                        playlistVM.prepareImportMusics(context)
+                        navController.navigate(RouteImport(RouteImportType.Music))
+                    }
+                )
             } else {
                 PlaylistItemsBlock(
                     scaffoldPadding = scaffoldPadding,
                 )
             }
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset((-20).dp, 157.dp - easeIconButtonSizeToDp(EaseIconButtonSize.Large) / 2)
-        ) {
-            EaseIconButton(
-                sizeType = EaseIconButtonSize.Large,
-                buttonType = EaseIconButtonType.Primary,
-                painter = painterResource(id = R.drawable.icon_play),
-                disabled = musics.isEmpty(),
-                onClick = {
-                    val m = musics.firstOrNull()
-                    if (m != null) {
-                        navController.navigate(RouteMusicPlayer())
-                        playerVM.play(m.meta.id, playlistAbstr.meta.id)
-                    }
-                }
-            )
         }
         BottomBar(
             bottomBarPageState = null,

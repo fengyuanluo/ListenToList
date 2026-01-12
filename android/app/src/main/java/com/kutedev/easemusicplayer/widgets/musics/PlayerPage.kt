@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +87,8 @@ import kotlin.math.sign
 @Composable
 private fun MusicPlayerHeader(
     hasLyric: Boolean,
+    showLyric: Boolean,
+    onToggleLyric: () -> Unit,
     playerVM: PlayerVM = hiltViewModel(),
 ) {
     val navController = LocalNavController.current
@@ -110,50 +113,70 @@ private fun MusicPlayerHeader(
                 navController.popBackStack()
             }
         )
-        Box {
-            EaseIconButton(
-                sizeType = EaseIconButtonSize.Medium,
-                buttonType = EaseIconButtonType.Default,
-                painter = painterResource(id = R.drawable.icon_vertialcal_more),
-                onClick = { moreMenuExpanded = true; }
-            )
-            Box(
-                contentAlignment = Alignment.TopEnd,
-                modifier = Modifier
-                    .offset(20.dp, (20).dp)
-            ) {
-                EaseContextMenu(
-                    expanded = moreMenuExpanded,
-                    onDismissRequest = { moreMenuExpanded = false; },
-                    items = listOf(
-                        if (hasLyric) {
-                            EaseContextMenuItem(
-                                stringId = R.string.music_lyric_remove,
-                                onClick = {
-                                    playerVM.removeLyric()
-                                }
-                            )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (hasLyric) {
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_lyrics),
+                    overrideColors = EaseIconButtonColors(
+                        iconTint = if (showLyric) {
+                            MaterialTheme.colorScheme.primary
                         } else {
-                            EaseContextMenuItem(
-                                stringId = R.string.music_lyric_add,
-                                onClick = {
-                                    if (currentPlaying?.meta?.id != null) {
-                                        navController.navigate(
-                                            RouteImport(RouteImportType.Lyric)
-                                        )
-                                    }
-                                }
-                            )
-                        },
-                        EaseContextMenuItem(
-                            stringId = R.string.music_player_context_menu_remove,
-                            isError = true,
-                            onClick = {
-                                playerVM.remove()
-                            }
-                        ),
-                    )
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    ),
+                    onClick = onToggleLyric
                 )
+            }
+            Box {
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_vertialcal_more),
+                    onClick = { moreMenuExpanded = true; }
+                )
+                Box(
+                    contentAlignment = Alignment.TopEnd,
+                    modifier = Modifier
+                        .offset(20.dp, (20).dp)
+                ) {
+                    EaseContextMenu(
+                        expanded = moreMenuExpanded,
+                        onDismissRequest = { moreMenuExpanded = false; },
+                        items = listOf(
+                            if (hasLyric) {
+                                EaseContextMenuItem(
+                                    stringId = R.string.music_lyric_remove,
+                                    onClick = {
+                                        playerVM.removeLyric()
+                                    }
+                                )
+                            } else {
+                                EaseContextMenuItem(
+                                    stringId = R.string.music_lyric_add,
+                                    onClick = {
+                                        if (currentPlaying?.meta?.id != null) {
+                                            navController.navigate(
+                                                RouteImport(RouteImportType.Lyric)
+                                            )
+                                        }
+                                    }
+                                )
+                            },
+                            EaseContextMenuItem(
+                                stringId = R.string.music_player_context_menu_remove,
+                                isError = true,
+                                onClick = {
+                                    playerVM.remove()
+                                }
+                            ),
+                        )
+                    )
+                }
             }
         }
     }
@@ -196,6 +219,9 @@ internal fun MusicSlider(
     }
 
     val draggableState = rememberDraggableState { deltaPx ->
+        if (sliderWidth <= 0 || totalDurationMS == 0UL) {
+            return@rememberDraggableState
+        }
         val delta = (deltaPx.toDouble() / sliderWidth.toDouble() * totalDurationMS.toDouble()).toLong()
         var nextMS = draggingCurrentDurationMS.toLong() + delta
         nextMS = nextMS.coerceIn(0L, totalDurationMS.toLong())
@@ -218,6 +244,9 @@ internal fun MusicSlider(
                 }
                 .pointerInput(totalDurationMS, sliderWidth) {
                     detectTapGestures { offset ->
+                        if (sliderWidth <= 0 || totalDurationMS == 0UL) {
+                            return@detectTapGestures
+                        }
                         var nextMS =
                             (offset.x.toDouble() / sliderWidth.toDouble() * totalDurationMS.toDouble()).toLong()
                         nextMS = nextMS.coerceIn(0L, totalDurationMS.toLong())
@@ -423,10 +452,12 @@ private fun MusicPlayerBody(
     nextCover: DataSourceKey?,
     canPrev: Boolean,
     canNext: Boolean,
+    showLyric: Boolean,
     lyricIndex: Int,
     lyrics: List<LyricLine>,
     lyricLoadedState: LyricLoadState,
     onClickAddLyric: () -> Unit,
+    onResetLyric: () -> Unit,
 ) {
     val density = LocalDensity.current
     val anchoredDraggableState = rememberCustomAnchoredDraggableState(
@@ -447,8 +478,6 @@ private fun MusicPlayerBody(
     var widgetHeight by remember { mutableIntStateOf(0) }
 
     var dragStartX by remember { mutableFloatStateOf(0f) }
-    var showLyric by remember { mutableStateOf(false) }
-
     fun updateAnchored() {
         val anchors = listOfNotNull(
             0f to "DEFAULT",
@@ -467,13 +496,13 @@ private fun MusicPlayerBody(
                     nextTickOnMain {
                         onPrev()
                         anchoredDraggableState.update(0f)
-                        showLyric = false
+                        onResetLyric()
                     }
                 } else if (value == -widgetWidth.toFloat()) {
                     nextTickOnMain {
                         onNext()
                         anchoredDraggableState.update(0f)
-                        showLyric = false
+                        onResetLyric()
                     }
                 }
             }
@@ -486,11 +515,6 @@ private fun MusicPlayerBody(
 
     Box(
         modifier = Modifier
-            .pointerInput(Unit) {
-                detectTapGestures {
-                    showLyric = !showLyric
-                }
-            }
             .onSizeChanged { size ->
                 if (widgetWidth != size.width) {
                     widgetWidth = size.width;
@@ -670,8 +694,19 @@ fun MusicPlayerPage(
     val currentLyricIndex by playerVM.lyricIndex.collectAsState()
     val lyricLoadedState = currentMusic?.lyric?.loadedState ?: LyricLoadState.LOADING
     val lyrics = currentMusic?.lyric?.data?.lines ?: emptyList()
+    var showLyric by rememberSaveable { mutableStateOf(false) }
 
     val hasLyric = lyricLoadedState != LyricLoadState.MISSING
+
+    LaunchedEffect(currentMusic?.meta?.id) {
+        showLyric = false
+    }
+
+    LaunchedEffect(hasLyric) {
+        if (!hasLyric && showLyric) {
+            showLyric = false
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -682,6 +717,12 @@ fun MusicPlayerPage(
         Column {
             MusicPlayerHeader(
                 hasLyric = hasLyric,
+                showLyric = showLyric,
+                onToggleLyric = {
+                    if (hasLyric) {
+                        showLyric = !showLyric
+                    }
+                }
             )
             Column(
                 modifier = Modifier
@@ -699,6 +740,7 @@ fun MusicPlayerPage(
                     nextCover = nextMusic?.cover,
                     canPrev = previousMusic != null,
                     canNext = nextMusic != null,
+                    showLyric = showLyric,
                     lyricIndex = currentLyricIndex,
                     lyricLoadedState = lyricLoadedState,
                     lyrics = lyrics,
@@ -706,7 +748,8 @@ fun MusicPlayerPage(
                         if (currentMusic != null) {
                             navController.navigate(RouteImport(RouteImportType.Lyric))
                         }
-                    }
+                    },
+                    onResetLyric = { showLyric = false }
                 )
             }
             Column(
@@ -835,10 +878,12 @@ private fun MusicPlayerBodyPreview() {
                 nextCover = null,
                 canPrev = canPrev,
                 canNext = canNext,
+                showLyric = false,
                 lyricIndex = 0,
                 lyrics = listOf(),
                 lyricLoadedState = LyricLoadState.LOADING,
                 onClickAddLyric = {},
+                onResetLyric = {}
             )
         }
         Box(

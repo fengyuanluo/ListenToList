@@ -20,9 +20,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.time.debounce
 import uniffi.ease_client_backend.AddedMusic
 import uniffi.ease_client_backend.ArgCreatePlaylist
 import uniffi.ease_client_backend.ArgRemoveMusicFromPlaylist
@@ -39,7 +39,6 @@ import uniffi.ease_client_backend.ctsReorderPlaylist
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_schema.PlaylistId
-import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -66,7 +65,7 @@ class PlaylistRepository @Inject constructor(
 
     init {
         _scope.launch {
-            _debouncedReloadEvent.debounce(Duration.ofMillis(500)).collect {
+            _debouncedReloadEvent.debounce(500).collect {
                 reload()
             }
         }

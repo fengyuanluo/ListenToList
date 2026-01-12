@@ -18,13 +18,13 @@ import com.kutedev.easemusicplayer.utils.formatDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.time.debounce
 import uniffi.ease_client_backend.AddedMusic
 import uniffi.ease_client_backend.ArgAddMusicsToPlaylist
 import uniffi.ease_client_backend.ArgRemoveMusicFromPlaylist
@@ -46,7 +46,6 @@ import uniffi.ease_client_backend.ctsReorderMusicInPlaylist
 import uniffi.ease_client_backend.ctsReorderPlaylist
 import java.time.Duration
 import javax.inject.Inject
-import kotlin.time.toKotlinDuration
 
 private fun defaultPlaylistAbstract(): PlaylistAbstract {
     return PlaylistAbstract(
@@ -64,6 +63,7 @@ private fun defaultPlaylistAbstract(): PlaylistAbstract {
 }
 
 @HiltViewModel
+@OptIn(FlowPreview::class)
 class PlaylistVM @Inject constructor(
     private val bridge: Bridge,
     private val playlistRepository: PlaylistRepository,
@@ -88,7 +88,7 @@ class PlaylistVM @Inject constructor(
             }
         }
         viewModelScope.launch {
-            playlistRepository.syncedTotalDuration.debounce(Duration.ofMillis(500)).collect {
+            playlistRepository.syncedTotalDuration.debounce(500).collect {
                 reload()
             }
         }

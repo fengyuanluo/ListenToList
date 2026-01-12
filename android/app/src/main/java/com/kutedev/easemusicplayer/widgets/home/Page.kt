@@ -3,14 +3,16 @@ package com.kutedev.easemusicplayer.widgets.home
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.viewmodels.PlayerVM
@@ -25,10 +27,18 @@ fun HomePage(
     playerVM: PlayerVM = hiltViewModel(),
     scaffoldPadding: PaddingValues,
 ) {
-    val pagerState = rememberPagerState(pageCount = {
-        3
-    })
+    val savedPage = rememberSaveable { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(
+        initialPage = savedPage.intValue,
+        pageCount = { 3 }
+    )
     val isPlaying by playerVM.playing.collectAsState()
+
+    LaunchedEffect(pagerState.currentPage) {
+        if (savedPage.intValue != pagerState.currentPage) {
+            savedPage.intValue = pagerState.currentPage
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),

@@ -167,6 +167,29 @@ private fun Block(
                 )
             }
         }
+        Box(modifier = Modifier.height(6.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            EaseTextButton(
+                text = "-1",
+                type = EaseTextButtonType.Default,
+                size = EaseTextButtonSize.Small,
+                onClick = {
+                    dragOffsetInDp = 0f
+                    onChange(next(-1))
+                }
+            )
+            EaseTextButton(
+                text = "+1",
+                type = EaseTextButtonType.Default,
+                size = EaseTextButtonSize.Small,
+                onClick = {
+                    dragOffsetInDp = 0f
+                    onChange(next(1))
+                }
+            )
+        }
     }
 }
 

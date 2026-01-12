@@ -6,7 +6,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.Player.COMMAND_PLAY_PAUSE
 import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
 import androidx.media3.common.Player.COMMAND_STOP
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaController
 import com.kutedev.easemusicplayer.core.BuildMediaContext
 import com.kutedev.easemusicplayer.core.playUtil
@@ -14,26 +13,30 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.ArgRemoveMusicFromPlaylist
+import uniffi.ease_client_backend.Music
 import uniffi.ease_client_backend.Playlist
+import uniffi.ease_client_backend.ctGetAssetStream
 import uniffi.ease_client_backend.ctGetMusic
 import uniffi.ease_client_backend.ctGetPlaylist
 import uniffi.ease_client_backend.ctRemoveMusicFromPlaylist
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_backend.easeLog
+import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_schema.PlaylistId
+import uniffi.ease_client_schema.PlayMode
 import java.time.Duration
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
+
+private const val PLAY_DIRECTION_NEXT = 1
+private const val PLAY_DIRECTION_PREVIOUS = -1
 
 @Singleton
 class PlayerControllerRepository @Inject constructor(
@@ -120,7 +123,55 @@ class PlayerControllerRepository @Inject constructor(
         return duration
     }
 
-    fun play(id: MusicId, playlistId: PlaylistId) {
+    private suspend fun isMusicAvailable(id: MusicId): Boolean {
+        val stream = bridge.run { ctGetAssetStream(it, DataSourceKey.Music(id), 0u) } ?: return false
+        val size = stream.size()?.toLong()
+        return size == null || size > 0L
+    }
+
+    private suspend fun pickPlayableMusic(
+        startId: MusicId,
+        playlist: Playlist,
+        direction: Int
+    ): Music? {
+        val musics = playlist.musics
+        if (musics.isEmpty()) {
+            return null
+        }
+        val startIndex = musics.indexOfFirst { it.meta.id == startId }
+        if (startIndex == -1) {
+            return null
+        }
+
+        val shouldWrap = playerRepository.playMode.value == PlayMode.LIST_LOOP
+        var index = startIndex
+        var steps = 0
+
+        while (steps < musics.size) {
+            val candidate = musics[index]
+            if (isMusicAvailable(candidate.meta.id)) {
+                val music = bridge.run { ctGetMusic(it, candidate.meta.id) }
+                if (music != null) {
+                    return music
+                }
+            }
+            if (direction >= 0) {
+                if (index == musics.lastIndex && !shouldWrap) {
+                    break
+                }
+                index = (index + 1) % musics.size
+            } else {
+                if (index == 0 && !shouldWrap) {
+                    break
+                }
+                index = (index - 1 + musics.size) % musics.size
+            }
+            steps += 1
+        }
+        return null
+    }
+
+    fun play(id: MusicId, playlistId: PlaylistId, direction: Int = PLAY_DIRECTION_NEXT) {
         val mediaController = _mediaController ?: return
 
         if (_music.value?.meta?.id == id && _playlist.value?.abstr?.meta?.id == playlistId) {
@@ -131,17 +182,23 @@ class PlayerControllerRepository @Inject constructor(
         _scope.launch(Dispatchers.Main) {
             stop()
 
-            val music = bridge.run { ctGetMusic(it, id) }
             val playlist = bridge.run { ctGetPlaylist(it, playlistId) }
-            val inPlaylist = music != null && playlist != null && playlist.musics.find { music -> music.meta.id == id }.let { it -> it != null }
-
-            if (inPlaylist) {
-                playerRepository.setCurrent(music, playlist)
-
-                playUtil(BuildMediaContext(bridge = bridge, scope = _scope), music, mediaController)
-            } else {
+            if (playlist == null) {
                 playerRepository.resetCurrent()
+                return@launch
             }
+
+            val resolved = pickPlayableMusic(id, playlist, direction)
+            if (resolved == null) {
+                toastRepository.emitToast("歌曲资源不可用")
+                playerRepository.resetCurrent()
+                return@launch
+            }
+            if (resolved.meta.id != id) {
+                toastRepository.emitToast("歌曲资源不可用，已跳过")
+            }
+            playerRepository.setCurrent(resolved, playlist)
+            playUtil(BuildMediaContext(bridge = bridge, scope = _scope), resolved, mediaController)
         }
     }
 
@@ -181,7 +238,7 @@ class PlayerControllerRepository @Inject constructor(
         val m = nextMusic.value
         val p = _playlist.value
         if (m != null && p != null) {
-            play(m.meta.id, p.abstr.meta.id)
+            play(m.meta.id, p.abstr.meta.id, PLAY_DIRECTION_NEXT)
         }
     }
 
@@ -189,7 +246,7 @@ class PlayerControllerRepository @Inject constructor(
         val m = previousMusic.value
         val p = _playlist.value
         if (m != null && p != null) {
-            play(m.meta.id, p.abstr.meta.id)
+            play(m.meta.id, p.abstr.meta.id, PLAY_DIRECTION_PREVIOUS)
         }
     }
 

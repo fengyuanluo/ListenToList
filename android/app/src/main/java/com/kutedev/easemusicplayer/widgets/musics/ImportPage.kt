@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -146,16 +147,15 @@ private fun ImportEntry(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier
-            .clickable {
-                onClick()
-            }
             .padding(0.dp, 8.dp)
             .fillMaxWidth()
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1.0F)
+            modifier = Modifier
+                .weight(1.0F)
+                .clickable { onClick() }
         ) {
             Icon(
                 painter = painter,
@@ -203,16 +203,20 @@ private fun ImportEntries(
         text: String,
         path: String,
         disabled: Boolean,
+        isCurrent: Boolean,
     ) {
-        val color = if (!disabled) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
+        val color = when {
+            isCurrent -> MaterialTheme.colorScheme.primary
+            !disabled -> MaterialTheme.colorScheme.onSurface
+            else -> MaterialTheme.colorScheme.surfaceVariant
         }
+        val fontSize = if (isCurrent) 13.sp else 12.sp
+        val fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
         Text(
             text = text,
             color = color,
-            fontSize = 10.sp,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
@@ -240,23 +244,26 @@ private fun ImportEntries(
                     .padding(28.dp, 8.dp)
                     .horizontalScroll(rememberScrollState())
             ) {
-                PathTab(
-                    text = stringResource(id = R.string.import_musics_paths_root),
-                    path = "/",
-                    disabled = splitPaths.isEmpty()
+            PathTab(
+                text = stringResource(id = R.string.import_musics_paths_root),
+                path = "/",
+                disabled = splitPaths.isEmpty(),
+                isCurrent = splitPaths.isEmpty()
+            )
+            for ((index, v) in splitPaths.withIndex()) {
+                Text(
+                    text = ">",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                for ((index, v) in splitPaths.withIndex()) {
-                    Text(
-                        text = ">",
-                        fontSize = 10.sp,
-                    )
-                    PathTab(
-                        text = v.name,
-                        path = v.path,
-                        disabled = index == splitPaths.size - 1,
-                    )
-                }
+                PathTab(
+                    text = v.name,
+                    path = v.path,
+                    disabled = index == splitPaths.size - 1,
+                    isCurrent = index == splitPaths.size - 1,
+                )
             }
+        }
             LazyColumn(
                 modifier = Modifier
                     .padding(28.dp, 0.dp)
