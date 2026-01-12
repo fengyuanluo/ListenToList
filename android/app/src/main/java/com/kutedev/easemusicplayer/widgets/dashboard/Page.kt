@@ -1,6 +1,7 @@
 package com.kutedev.easemusicplayer.widgets.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -175,17 +176,23 @@ private fun ColumnScope.DevicesBlock(
 @Composable
 private fun QuoteBlock() {
     val quote = remember { pickDailyQuote() }
+    val shape = RoundedCornerShape(16.dp)
+    val blockAlpha = 0.9f
+    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = blockAlpha)
+    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = blockAlpha)
+    val textColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = blockAlpha)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(paddingX, 0.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(shape)
+            .background(backgroundColor)
+            .border(1.dp, borderColor, shape)
             .padding(18.dp, 14.dp)
     ) {
         Text(
             text = quote,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = textColor,
             fontSize = 12.sp,
         )
     }
