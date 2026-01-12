@@ -23,6 +23,7 @@ object PlaybackCachePolicy {
         }
         val safePercent = percent.coerceIn(0.01f, 1f)
         val estimated = (fileSizeBytes * safePercent).toLong()
-        return min(MAX_PREFETCH_BYTES, max(MIN_PREFETCH_BYTES, estimated))
+        val bounded = min(MAX_PREFETCH_BYTES, max(MIN_PREFETCH_BYTES, estimated))
+        return min(fileSizeBytes, bounded)
     }
 }

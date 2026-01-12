@@ -64,8 +64,9 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
         val upstreamFactory = DataSource.Factory { MusicPlayerDataSource(bridge, serviceScope) }
+        val cache = PlaybackCache.getCache(context)
         val cacheFactory = PlaybackCache.buildCacheDataSourceFactory(context, upstreamFactory)
-        _prefetcher = PlaybackPrefetcher(cacheFactory, serviceScope)
+        _prefetcher = PlaybackPrefetcher(cache, cacheFactory, serviceScope)
 
         val player = ExoPlayer.Builder(context)
             .setAudioAttributes(

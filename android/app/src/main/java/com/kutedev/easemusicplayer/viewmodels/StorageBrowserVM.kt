@@ -91,7 +91,9 @@ class StorageBrowserVM @Inject constructor(
     private val _storage = storageRepository.storages.map { storages ->
         storages.find { it.id == storageId }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+    private val prefetchCache = PlaybackCache.getCache(appContext)
     private val folderPrefetcher = FolderPrefetcher(
+        prefetchCache,
         PlaybackCache.buildCacheDataSourceFactory(
             appContext,
             DataSource.Factory { MusicPlayerDataSource(bridge, viewModelScope) }
@@ -367,7 +369,7 @@ class StorageBrowserVM @Inject constructor(
         val count = min(songs.size, musicIds.size)
         for (index in 0 until count) {
             val size = songs[index].size?.toLong() ?: continue
-            val bytes = PlaybackCachePolicy.prefetchBytesByPercent(size, 0.1f)
+            val bytes = min(size, PlaybackCachePolicy.prefetchBytesByPercent(size, 0.1f))
             if (bytes <= 0) {
                 continue
             }

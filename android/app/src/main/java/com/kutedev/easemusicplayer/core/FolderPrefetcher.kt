@@ -2,7 +2,9 @@ package com.kutedev.easemusicplayer.core
 
 import android.net.Uri
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.CacheWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,12 +17,14 @@ import java.util.Collections
 
 
 class FolderPrefetcher(
+    private val cache: Cache,
     private val cacheDataSourceFactory: CacheDataSource.Factory,
     private val scope: CoroutineScope,
     private val maxConcurrent: Int = 2,
 ) {
     private val writers = Collections.synchronizedList(mutableListOf<CacheWriter>())
     private var prefetchJob: Job? = null
+    private val cacheKeyFactory = CacheKeyFactory.DEFAULT
 
     fun prefetch(items: List<Pair<Uri, Long>>) {
         cancel()
@@ -33,13 +37,16 @@ class FolderPrefetcher(
                 if (bytes <= 0) {
                     continue
                 }
+                val dataSpec = DataSpec.Builder()
+                    .setUri(uri)
+                    .setPosition(0)
+                    .setLength(bytes)
+                    .build()
+                if (isCached(dataSpec)) {
+                    continue
+                }
                 launch {
                     semaphore.withPermit {
-                        val dataSpec = DataSpec.Builder()
-                            .setUri(uri)
-                            .setPosition(0)
-                            .setLength(bytes)
-                            .build()
                         val dataSource = cacheDataSourceFactory.createDataSource()
                         val writer = CacheWriter(dataSource, dataSpec, null, null)
                         writers.add(writer)
@@ -61,5 +68,13 @@ class FolderPrefetcher(
         writers.clear()
         prefetchJob?.cancel()
         prefetchJob = null
+    }
+
+    private fun isCached(dataSpec: DataSpec): Boolean {
+        if (dataSpec.length <= 0) {
+            return false
+        }
+        val cacheKey = cacheKeyFactory.buildCacheKey(dataSpec)
+        return cache.isCached(cacheKey, dataSpec.position, dataSpec.length)
     }
 }

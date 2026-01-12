@@ -10,6 +10,7 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
 import com.kutedev.easemusicplayer.singleton.Bridge
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -24,6 +25,7 @@ import uniffi.ease_client_schema.MusicId
 import java.io.IOException
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
+import kotlin.math.min
 
 @OptIn(UnstableApi::class)
 class MusicPlayerDataSource(
@@ -38,6 +40,8 @@ class MusicPlayerDataSource(
     private var _inputStream: PipedInputStream? = null
     private var _outputStream: PipedOutputStream? = null
     private var _loadJob: Job? = null
+    @Volatile private var _isClosed = true
+    @Volatile private var _remainingBytes: Long = LENGTH_UNSET.toLong()
 
     override fun addTransferListener(transferListener: TransferListener) {
         // noop
@@ -45,12 +49,14 @@ class MusicPlayerDataSource(
 
     override fun open(dataSpec: DataSpec): Long {
         reset()
+        _isClosed = false
+        _remainingBytes = dataSpec.length
 
         val raw = dataSpec.uri.getQueryParameter("music")
         val musicId = raw?.toLong()?.let { MusicId(it) }
 
         if (musicId == null) {
-            throw RuntimeException("music id $raw not found")
+            throw IOException("music id $raw not found")
         }
 
         _currentUri = dataSpec.uri
@@ -59,10 +65,10 @@ class MusicPlayerDataSource(
             bridge.run { ctGetAssetStream(it, DataSourceKey.Music(musicId), dataSpec.position.toULong()) }
         }
         if (assetStream == null) {
-            throw RuntimeException("music $raw not found")
+            throw IOException("music $raw not found")
         }
 
-        val input = PipedInputStream()
+        val input = PipedInputStream(64 * 1024)
         val output = PipedOutputStream(input)
         _inputStream = input
         _outputStream = output
@@ -71,11 +77,18 @@ class MusicPlayerDataSource(
             writeStream(musicId, dataSpec.position, assetStream, output)
         }
 
-        val fileSize = assetStream.size()
-        if (fileSize != null) {
-            return fileSize.toLong()
+        val fileSize = assetStream.size()?.toLong()
+        if (_remainingBytes == LENGTH_UNSET.toLong() && fileSize != null) {
+            _remainingBytes = fileSize
+        } else if (_remainingBytes != LENGTH_UNSET.toLong() && fileSize != null) {
+            _remainingBytes = min(_remainingBytes, fileSize)
         }
-        return LENGTH_UNSET.toLong()
+
+        return if (_remainingBytes != LENGTH_UNSET.toLong()) {
+            _remainingBytes
+        } else {
+            fileSize ?: LENGTH_UNSET.toLong()
+        }
     }
 
     override fun getUri(): Uri? {
@@ -92,14 +105,37 @@ class MusicPlayerDataSource(
         length: Int
     ): Int {
         val stream = _inputStream ?: return RESULT_END_OF_INPUT
-        val read = stream.read(buffer, offset, length)
+        if (_remainingBytes == 0L) {
+            return RESULT_END_OF_INPUT
+        }
+        val targetLength = if (_remainingBytes != LENGTH_UNSET.toLong()) {
+            min(length.toLong(), _remainingBytes).toInt()
+        } else {
+            length
+        }
+        if (targetLength <= 0) {
+            return RESULT_END_OF_INPUT
+        }
+        val read = try {
+            stream.read(buffer, offset, targetLength)
+        } catch (e: IOException) {
+            if (_isClosed) {
+                return RESULT_END_OF_INPUT
+            }
+            throw e
+        }
         if (read == -1) {
             return RESULT_END_OF_INPUT
+        }
+        if (_remainingBytes != LENGTH_UNSET.toLong()) {
+            _remainingBytes = (_remainingBytes - read).coerceAtLeast(0L)
         }
         return read
     }
 
     private fun reset() {
+        _isClosed = true
+        _remainingBytes = LENGTH_UNSET.toLong()
         _loadJob?.cancel()
         _loadJob = null
         _currentUri = null
@@ -140,6 +176,8 @@ class MusicPlayerDataSource(
                     output.write(b)
                     offset += b.size
                     retries = 0
+                } catch (e: CancellationException) {
+                    break
                 } catch (e: IOException) {
                     break
                 } catch (e: Exception) {
