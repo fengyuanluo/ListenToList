@@ -73,18 +73,23 @@ private fun Item(
     iconPainter: Painter,
     title: String,
     content: String?,
-    onClick: () -> Unit
+    onClick: (() -> Unit)?
 ) {
+    val clickableModifier = if (onClick != null) {
+        Modifier.clickable { onClick() }
+    } else {
+        Modifier
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .then(clickableModifier)
     ) {
         Box(modifier = Modifier.height(56.dp))
         Icon(
             painter = iconPainter,
-            contentDescription = null,
+            contentDescription = title,
             modifier = Modifier
                 .size(24.dp)
         )
@@ -158,7 +163,7 @@ fun SettingSubpage() {
             iconPainter = painterResource(R.drawable.icon_info),
             title = stringResource(id = R.string.setting_version),
             content = getAppVersion(context),
-            onClick = {}
+            onClick = null
         )
     }
 }

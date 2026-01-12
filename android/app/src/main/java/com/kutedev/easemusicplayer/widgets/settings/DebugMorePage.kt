@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -17,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
+import com.kutedev.easemusicplayer.components.ConfirmDialog
 import com.kutedev.easemusicplayer.viewmodels.DebugMoreVM
 
 private val paddingX = SettingPaddingX
@@ -46,6 +51,19 @@ private fun Item(
 fun DebugMorePage(
     debugMoreVM: DebugMoreVM = hiltViewModel()
 ) {
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var pendingTitle by remember { mutableStateOf("") }
+
+    fun requestConfirm(title: String, action: () -> Unit) {
+        pendingTitle = title
+        pendingAction = action
+    }
+    val rustErrorTitle = stringResource(id = R.string.debug_trigger_rs_err)
+    val rustAsyncErrorTitle = stringResource(id = R.string.debug_trigger_rs_async_err)
+    val rustPanicTitle = stringResource(id = R.string.debug_trigger_rs_panic)
+    val kotlinErrorTitle = stringResource(id = R.string.debug_trigger_kt_exception)
+    val kotlinAsyncErrorTitle = stringResource(id = R.string.debug_trigger_kt_async_exception)
+
     Box(
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -57,35 +75,61 @@ fun DebugMorePage(
             )
             Box(modifier = Modifier.height(24.dp))
             Item(
-                title = stringResource(id = R.string.debug_trigger_rs_err),
+                title = rustErrorTitle,
                 onClick = {
-                    debugMoreVM.triggerRustError()
+                    requestConfirm(rustErrorTitle) {
+                        debugMoreVM.triggerRustError()
+                    }
                 }
             )
             Item(
-                title = stringResource(id = R.string.debug_trigger_rs_async_err),
+                title = rustAsyncErrorTitle,
                 onClick = {
-                    debugMoreVM.triggerRustAsyncError()
+                    requestConfirm(rustAsyncErrorTitle) {
+                        debugMoreVM.triggerRustAsyncError()
+                    }
                 }
             )
             Item(
-                title = stringResource(id = R.string.debug_trigger_rs_panic),
+                title = rustPanicTitle,
                 onClick = {
-                    debugMoreVM.triggerRustPanic()
+                    requestConfirm(rustPanicTitle) {
+                        debugMoreVM.triggerRustPanic()
+                    }
                 }
             )
             Item(
-                title = stringResource(id = R.string.debug_trigger_kt_exception),
+                title = kotlinErrorTitle,
                 onClick = {
-                    debugMoreVM.triggerKotlinError()
+                    requestConfirm(kotlinErrorTitle) {
+                        debugMoreVM.triggerKotlinError()
+                    }
                 }
             )
             Item(
-                title = stringResource(id = R.string.debug_trigger_kt_async_exception),
+                title = kotlinAsyncErrorTitle,
                 onClick = {
-                    debugMoreVM.triggerKotlinAsyncError()
+                    requestConfirm(kotlinAsyncErrorTitle) {
+                        debugMoreVM.triggerKotlinAsyncError()
+                    }
                 }
             )
         }
+    }
+
+    ConfirmDialog(
+        open = pendingAction != null,
+        onConfirm = {
+            pendingAction?.invoke()
+            pendingAction = null
+        },
+        onCancel = {
+            pendingAction = null
+        }
+    ) {
+        Text(
+            text = stringResource(id = R.string.debug_confirm_desc, pendingTitle),
+            fontSize = 14.sp
+        )
     }
 }

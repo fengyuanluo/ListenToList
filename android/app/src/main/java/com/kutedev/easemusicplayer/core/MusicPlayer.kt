@@ -27,7 +27,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import uniffi.ease_client_backend.Music
 import uniffi.ease_client_backend.Playlist
+import uniffi.ease_client_backend.ctGetAssetStream
 import uniffi.ease_client_backend.ctGetMusic
 import javax.inject.Inject
 import com.kutedev.easemusicplayer.singleton.Bridge
@@ -35,10 +37,16 @@ import dagger.hilt.android.AndroidEntryPoint
 import uniffi.ease_client_backend.MusicAbstract
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_backend.easeLog
+import uniffi.ease_client_schema.DataSourceKey
+import uniffi.ease_client_schema.MusicId
+import uniffi.ease_client_schema.PlayMode
 
 
 const val PLAYER_TO_PREV_COMMAND = "PLAYER_TO_PREV_COMMAND";
 const val PLAYER_TO_NEXT_COMMAND = "PLAYER_TO_NEXT_COMMAND";
+
+private const val PLAY_DIRECTION_NEXT = 1
+private const val PLAY_DIRECTION_PREVIOUS = -1
 
 
 
@@ -235,14 +243,75 @@ class PlaybackService : MediaSessionService() {
         serviceScope.cancel()
     }
 
+    private suspend fun isMusicAvailable(id: MusicId): Boolean {
+        val stream = bridge.run { ctGetAssetStream(it, DataSourceKey.Music(id), 0u) } ?: return false
+        val size = stream.size()?.toLong()
+        return size == null || size > 0L
+    }
 
-    fun play(musicAbstract: MusicAbstract, playlist: Playlist) {
+    private suspend fun pickPlayableMusic(
+        startId: MusicId,
+        playlist: Playlist,
+        direction: Int
+    ): Music? {
+        val musics = playlist.musics
+        if (musics.isEmpty()) {
+            return null
+        }
+        val startIndex = musics.indexOfFirst { it.meta.id == startId }
+        if (startIndex == -1) {
+            return null
+        }
+
+        val shouldWrap = playerRepository.playMode.value == PlayMode.LIST_LOOP
+        var index = startIndex
+        var steps = 0
+
+        while (steps < musics.size) {
+            val candidate = musics[index]
+            if (isMusicAvailable(candidate.meta.id)) {
+                val music = bridge.run { ctGetMusic(it, candidate.meta.id) }
+                if (music != null) {
+                    return music
+                }
+            }
+            if (direction >= 0) {
+                if (index == musics.lastIndex && !shouldWrap) {
+                    break
+                }
+                index = (index + 1) % musics.size
+            } else {
+                if (index == 0 && !shouldWrap) {
+                    break
+                }
+                index = (index - 1 + musics.size) % musics.size
+            }
+            steps += 1
+        }
+        return null
+    }
+
+
+    fun play(
+        musicAbstract: MusicAbstract,
+        playlist: Playlist,
+        direction: Int = PLAY_DIRECTION_NEXT
+    ) {
         val player = _mediaSession?.player ?: return
 
         serviceScope.launch {
-            val music = bridge.run { ctGetMusic(it, musicAbstract.meta.id) } ?: return@launch
-            playerRepository.setCurrent(music, playlist)
-            playUtil(BuildMediaContext(bridge = bridge, scope = serviceScope), musicAbstract, player as ExoPlayer)
+            val resolved = pickPlayableMusic(musicAbstract.meta.id, playlist, direction)
+            if (resolved == null) {
+                playerRepository.resetCurrent()
+                playerRepository.setIsLoading(false)
+                easeError("no playable music found in playlist=${playlist.abstr.meta.id.value}")
+                return@launch
+            }
+            if (resolved.meta.id != musicAbstract.meta.id) {
+                easeError("skip unavailable music id=${musicAbstract.meta.id.value}, fallback to ${resolved.meta.id.value}")
+            }
+            playerRepository.setCurrent(resolved, playlist)
+            playUtil(BuildMediaContext(bridge = bridge, scope = serviceScope), resolved, player as ExoPlayer)
             prefetchNext()
         }
     }
@@ -251,7 +320,7 @@ class PlaybackService : MediaSessionService() {
         val m = playerRepository.onCompleteMusic.value
         val p = playerRepository.playlist.value
         if (m != null && p != null) {
-            play(m, p)
+            play(m, p, PLAY_DIRECTION_NEXT)
         }
     }
 
@@ -259,7 +328,7 @@ class PlaybackService : MediaSessionService() {
         val m = playerRepository.nextMusic.value
         val p = playerRepository.playlist.value
         if (m != null && p != null) {
-            play(m, p)
+            play(m, p, PLAY_DIRECTION_NEXT)
         }
     }
 
@@ -267,7 +336,7 @@ class PlaybackService : MediaSessionService() {
         val m = playerRepository.previousMusic.value
         val p = playerRepository.playlist.value
         if (m != null && p != null) {
-            play(m, p)
+            play(m, p, PLAY_DIRECTION_PREVIOUS)
         }
     }
 

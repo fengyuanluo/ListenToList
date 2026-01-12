@@ -99,4 +99,23 @@
         <item quantity="other">%d log files found</item>
     </plurals>
     <string name="debug_trigger_rs_panic">Trigger Rust panic!</string>
+    <string name="bottom_bar_playlist">播放列表</string>
+    <string name="bottom_bar_dashboard">仪表盘</string>
+    <string name="bottom_bar_setting">设置</string>
+    <string name="playlist_empty_action">创建播放列表</string>
+    <string name="storage_browser_error_retry">重试</string>
+    <string name="storage_browser_error_request_permission">授权</string>
+    <string name="storage_browser_toggle_all_label">全选</string>
+    <string name="storage_browser_mode_select">选择</string>
+    <string name="storage_browser_mode_done">完成</string>
+    <string name="log_action_share">分享日志</string>
+    <string name="log_action_copy">复制路径</string>
+    <string name="log_action_open">打开</string>
+    <string name="log_action_close">关闭</string>
+    <string name="log_preview_title">日志预览</string>
+    <string name="log_preview_truncated">仅展示前 200 行</string>
+    <string name="log_copy_done">已复制到剪贴板</string>
+    <string name="log_preview_failed">日志读取失败</string>
+    <string name="log_preview_empty">日志为空或不存在</string>
+    <string name="debug_confirm_desc">即将执行：%1$s。该操作可能导致崩溃，是否继续？</string>
 </resources>

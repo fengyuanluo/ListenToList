@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -64,15 +68,24 @@ private object BSetting: IBottomItem {
         get() = 2;
 }
 
+@Composable
 fun getBottomBarSpace(
     isPlaying: Boolean,
     scaffoldPadding: PaddingValues
 ): Dp {
-    var total = 60.dp + scaffoldPadding.calculateBottomPadding();
+    val bottomInset = bottomSafePadding(scaffoldPadding)
+    var total = 60.dp + bottomInset
     if (isPlaying) {
         total += 124.dp;
     }
     return total;
+}
+
+@Composable
+private fun bottomSafePadding(scaffoldPadding: PaddingValues): Dp {
+    val navPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val scaffoldBottom = scaffoldPadding.calculateBottomPadding()
+    return if (scaffoldBottom > navPadding) scaffoldBottom else navPadding
 }
 
 @Composable
@@ -105,6 +118,7 @@ fun BoxScope.BottomBar(
 
     val showBottomBar = isRouteHome(currentRoute)
     val showMiniPlayer = hasCurrentMusic && (isRouteHome(currentRoute) || isRoutePlaylist(currentRoute))
+    val bottomInset = bottomSafePadding(scaffoldPadding)
 
     if (!showBottomBar && !showMiniPlayer) {
         Box(modifier = Modifier
@@ -141,7 +155,13 @@ fun BoxScope.BottomBar(
                     val tint = if (isSelected) {
                         MaterialTheme.colorScheme.primary
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    val contentDescription = when (item) {
+                        BPlaylist -> stringResource(id = R.string.bottom_bar_playlist)
+                        BDashboard -> stringResource(id = R.string.bottom_bar_dashboard)
+                        BSetting -> stringResource(id = R.string.bottom_bar_setting)
+                        else -> null
                     }
 
                     Box(modifier = Modifier
@@ -156,7 +176,7 @@ fun BoxScope.BottomBar(
                         Icon(
                             painter = painterResource(id = item.painterId),
                             tint = tint,
-                            contentDescription = null,
+                            contentDescription = contentDescription,
                             modifier = Modifier
                                 .width(20.dp)
                                 .height(20.dp)
@@ -168,7 +188,7 @@ fun BoxScope.BottomBar(
         }
         Box(modifier = Modifier
             .fillMaxWidth()
-            .height(scaffoldPadding.calculateBottomPadding())
+            .height(bottomInset)
         )
     }
 }

@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,9 @@ import com.kutedev.easemusicplayer.components.EaseCheckbox
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseTextButton
+import com.kutedev.easemusicplayer.components.EaseTextButtonSize
+import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
 import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
@@ -121,6 +125,18 @@ private fun StorageBrowserError(
             throw RuntimeException("unsupported type")
         }
     }
+    val actionText = if (type == CurrentStorageStateType.NEED_PERMISSION) {
+        stringResource(id = R.string.storage_browser_error_request_permission)
+    } else {
+        stringResource(id = R.string.storage_browser_error_retry)
+    }
+    val onAction = {
+        if (type == CurrentStorageStateType.NEED_PERMISSION) {
+            onRequestPermission()
+        } else {
+            onReload()
+        }
+    }
 
     Box(
         contentAlignment = Alignment.Center,
@@ -130,13 +146,6 @@ private fun StorageBrowserError(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
-                .clickable {
-                    if (type == CurrentStorageStateType.NEED_PERMISSION) {
-                        onRequestPermission()
-                    } else {
-                        onReload()
-                    }
-                }
                 .padding(10.dp)
         ) {
             Box(
@@ -161,6 +170,13 @@ private fun StorageBrowserError(
                 text = desc,
                 fontSize = 14.sp,
                 modifier = Modifier.widthIn(0.dp, 240.dp)
+            )
+            Box(modifier = Modifier.height(12.dp))
+            EaseTextButton(
+                text = actionText,
+                type = EaseTextButtonType.Primary,
+                size = EaseTextButtonSize.Medium,
+                onClick = onAction
             )
         }
     }
@@ -263,16 +279,20 @@ private fun StorageBrowserEntries(
         text: String,
         path: String,
         disabled: Boolean,
+        isCurrent: Boolean,
     ) {
-        val color = if (!disabled) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
+        val color = when {
+            isCurrent -> MaterialTheme.colorScheme.primary
+            !disabled -> MaterialTheme.colorScheme.onSurface
+            else -> MaterialTheme.colorScheme.surfaceVariant
         }
+        val fontSize = if (isCurrent) 14.sp else 13.sp
+        val fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
         Text(
             text = text,
             color = color,
-            fontSize = 12.sp,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
@@ -299,17 +319,20 @@ private fun StorageBrowserEntries(
             PathTab(
                 text = stringResource(id = R.string.import_musics_paths_root),
                 path = "/",
-                disabled = splitPaths.isEmpty()
+                disabled = splitPaths.isEmpty(),
+                isCurrent = splitPaths.isEmpty()
             )
             for ((index, v) in splitPaths.withIndex()) {
                 Text(
                     text = ">",
                     fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 PathTab(
                     text = v.name,
                     path = v.path,
                     disabled = index == splitPaths.size - 1,
+                    isCurrent = index == splitPaths.size - 1,
                 )
             }
         }
@@ -397,32 +420,54 @@ fun StorageBrowserContent(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (selectMode) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            EaseIconButton(
+                                sizeType = EaseIconButtonSize.Large,
+                                buttonType = EaseIconButtonType.Default,
+                                painter = painterResource(id = R.drawable.icon_toggle_all),
+                                disabled = disableToggleAll,
+                                onClick = onToggleAll,
+                                modifier = Modifier.testTag("storage_browser_toggle_all")
+                            )
+                            Text(
+                                text = stringResource(id = R.string.storage_browser_toggle_all_label),
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         EaseIconButton(
                             sizeType = EaseIconButtonSize.Large,
-                            buttonType = EaseIconButtonType.Default,
-                            painter = painterResource(id = R.drawable.icon_toggle_all),
-                            disabled = disableToggleAll,
-                            onClick = onToggleAll,
-                            modifier = Modifier.testTag("storage_browser_toggle_all")
+                            buttonType = if (selectMode) {
+                                EaseIconButtonType.Primary
+                            } else {
+                                EaseIconButtonType.Default
+                            },
+                            painter = painterResource(
+                                id = if (selectMode) {
+                                    R.drawable.icon_ok
+                                } else {
+                                    R.drawable.icon_mode_list
+                                }
+                            ),
+                            onClick = onToggleSelectMode,
+                            modifier = Modifier.testTag("storage_browser_toggle_select_mode")
+                        )
+                        Text(
+                            text = if (selectMode) {
+                                stringResource(id = R.string.storage_browser_mode_done)
+                            } else {
+                                stringResource(id = R.string.storage_browser_mode_select)
+                            },
+                            fontSize = 10.sp,
+                            color = if (selectMode) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Large,
-                        buttonType = if (selectMode) {
-                            EaseIconButtonType.Primary
-                        } else {
-                            EaseIconButtonType.Default
-                        },
-                        painter = painterResource(
-                            id = if (selectMode) {
-                                R.drawable.icon_ok
-                            } else {
-                                R.drawable.icon_mode_list
-                            }
-                        ),
-                        onClick = onToggleSelectMode,
-                        modifier = Modifier.testTag("storage_browser_toggle_select_mode")
-                    )
                 }
             }
 

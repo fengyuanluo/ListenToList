@@ -85,7 +85,6 @@ private fun ColumnScope.DevicesBlock(
 
     Column(
         modifier = Modifier
-            .verticalScroll(rememberScrollState())
             .weight(1f)
             .padding(paddingX, paddingY)
     ) {
@@ -122,9 +121,6 @@ private fun ColumnScope.DevicesBlock(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        navController.navigate(RouteStorageBrowser(item.id.value.toString()))
-                    }
                     .padding(0.dp, 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -133,34 +129,43 @@ private fun ColumnScope.DevicesBlock(
                 }
                 val subTitle = item.addr
 
-                Box(modifier = Modifier.height(48.dp))
-                Icon(
-                    modifier = Modifier.size(32.dp),
-                    painter = painterResource(id = R.drawable.icon_cloud),
-                    contentDescription = null
-                )
-                Box(
+                Row(
                     modifier = Modifier
-                        .width(20.dp)
-                )
-                Column {
-                    Text(
-                        text = title,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        .weight(1f)
+                        .clickable {
+                            navController.navigate(RouteStorageBrowser(item.id.value.toString()))
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.height(48.dp))
+                    Icon(
+                        modifier = Modifier.size(32.dp),
+                        painter = painterResource(id = R.drawable.icon_cloud),
+                        contentDescription = null
                     )
-                    if (subTitle.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .width(20.dp)
+                    )
+                    Column {
                         Text(
-                            text = subTitle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
+                            text = title,
+                            fontSize = 14.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (subTitle.isNotBlank()) {
+                            Text(
+                                text = subTitle,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
-                Box(modifier = Modifier.weight(1f))
+                Box(modifier = Modifier.width(12.dp))
                 EaseIconButton(
                     sizeType = EaseIconButtonSize.Small,
                     buttonType = EaseIconButtonType.Default,

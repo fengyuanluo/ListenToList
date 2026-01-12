@@ -32,7 +32,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -43,6 +46,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseTextButton
+import com.kutedev.easemusicplayer.components.EaseTextButtonSize
+import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.PlaylistsVM
 import com.kutedev.easemusicplayer.viewmodels.durationStr
@@ -71,9 +77,6 @@ fun PlaylistsSubpage(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .clickable {
-                        editPlaylistVM.openModal()
-                    }
                     .clip(RoundedCornerShape(16.dp))
                     .padding(24.dp, 24.dp),
             ) {
@@ -81,6 +84,15 @@ fun PlaylistsSubpage(
                 Box(modifier = Modifier.height(20.dp))
                 Text(
                     text = stringResource(id = R.string.playlist_empty),
+                )
+                Box(modifier = Modifier.height(12.dp))
+                EaseTextButton(
+                    text = stringResource(id = R.string.playlist_empty_action),
+                    type = EaseTextButtonType.Primary,
+                    size = EaseTextButtonSize.Medium,
+                    onClick = {
+                        editPlaylistVM.openModal()
+                    }
                 )
             }
         }
@@ -151,13 +163,16 @@ private fun GridPlaylists(
 
     LazyVerticalGrid(
         modifier = Modifier.fillMaxSize(),
-        columns = GridCells.FixedSize(172.dp),
+        columns = GridCells.Adaptive(minSize = 160.dp),
         horizontalArrangement = Arrangement.Center,
         state = lazyGridState
     ) {
         items(playlists, key = { it.meta.id.value }) {
             ReorderableItem(reorderableLazyListState, key = it.meta.id.value) { isDragging ->
-                PlaylistItem(playlist = it)
+                PlaylistItem(
+                    playlist = it,
+                    isDragging = isDragging
+                )
             }
         }
     }
@@ -166,21 +181,33 @@ private fun GridPlaylists(
 @Composable
 private fun ReorderableCollectionItemScope.PlaylistItem(
     playlist: PlaylistAbstract,
+    isDragging: Boolean,
     playlistsVM: PlaylistsVM = hiltViewModel()
 ) {
     val mode by playlistsVM.mode.collectAsState()
     val navController = LocalNavController.current
+    val shape = RoundedCornerShape(20.dp)
+    val dragModifier = if (isDragging) {
+        Modifier
+            .shadow(8.dp, shape)
+            .scale(1.02f)
+            .alpha(0.95f)
+    } else {
+        Modifier
+    }
 
-    Box(Modifier
-        .then(if (mode == PlaylistsMode.Adjust) {
-            Modifier.draggableHandle()
-        } else {
-            Modifier.clickable(
-                onClick = {
-                    navController.navigate(RoutePlaylist(playlist.meta.id.value.toString()))
-                },
-            )
-        })
+    Box(
+        modifier = dragModifier.then(
+            if (mode == PlaylistsMode.Adjust) {
+                Modifier.draggableHandle()
+            } else {
+                Modifier.clickable(
+                    onClick = {
+                        navController.navigate(RoutePlaylist(playlist.meta.id.value.toString()))
+                    },
+                )
+            }
+        )
     ) {
         Column(
             modifier = Modifier.padding(12.dp, 8.dp),
@@ -188,7 +215,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
             horizontalAlignment = Alignment.Start
         ) {
             Box(
-                modifier = Modifier.clip(RoundedCornerShape(20.dp))
+                modifier = Modifier.clip(shape)
                     .background(MaterialTheme.colorScheme.onSurfaceVariant).size(136.dp)
             ) {
                 val cover = playlist.meta.showCover

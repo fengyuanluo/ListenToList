@@ -50,6 +50,7 @@ import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.components.ThemeBackgroundImage
 import com.kutedev.easemusicplayer.ui.theme.ThemePresets
 import com.kutedev.easemusicplayer.viewmodels.ThemeVM
+import kotlin.math.roundToInt
 
 @Composable
 private fun SectionTitle(title: String) {
@@ -221,7 +222,7 @@ fun ThemeSection(
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = stringResource(id = R.string.setting_theme_hue),
+            text = "${stringResource(id = R.string.setting_theme_hue)} ${hue.roundToInt()} deg",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -236,7 +237,7 @@ fun ThemeSection(
             modifier = Modifier.padding(vertical = 4.dp)
         )
         Text(
-            text = stringResource(id = R.string.setting_theme_saturation),
+            text = "${stringResource(id = R.string.setting_theme_saturation)} ${(saturation * 100).roundToInt()}%",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -255,7 +256,7 @@ fun ThemeSection(
             thumbColor = previewColor,
         )
         Text(
-            text = stringResource(id = R.string.setting_theme_brightness),
+            text = "${stringResource(id = R.string.setting_theme_brightness)} ${(value * 100).roundToInt()}%",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

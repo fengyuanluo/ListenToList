@@ -74,21 +74,30 @@ class MusicPlayerDataSource(
         _inputStream = input
         _outputStream = output
 
-        _loadJob = scope.launch(Dispatchers.IO) {
-            writeStream(musicId, dataSpec.position, assetStream, output)
+        val remainingBytes = assetStream.size()?.toLong()
+        if (remainingBytes != null && remainingBytes <= 0L) {
+            easeError("music $raw remaining bytes is 0, skip data source")
+            return openEmpty(dataSpec)
+        }
+        if (_remainingBytes == LENGTH_UNSET.toLong()) {
+            _remainingBytes = remainingBytes ?: LENGTH_UNSET.toLong()
+        } else if (remainingBytes != null) {
+            _remainingBytes = min(_remainingBytes, remainingBytes)
         }
 
-        val fileSize = assetStream.size()?.toLong()
-        if (_remainingBytes == LENGTH_UNSET.toLong() && fileSize != null) {
-            _remainingBytes = fileSize
-        } else if (_remainingBytes != LENGTH_UNSET.toLong() && fileSize != null) {
-            _remainingBytes = min(_remainingBytes, fileSize)
+        val expectedBytes = if (_remainingBytes != LENGTH_UNSET.toLong()) {
+            _remainingBytes
+        } else {
+            null
+        }
+        _loadJob = scope.launch(Dispatchers.IO) {
+            writeStream(musicId, dataSpec.position, assetStream, output, expectedBytes)
         }
 
         return if (_remainingBytes != LENGTH_UNSET.toLong()) {
             _remainingBytes
         } else {
-            fileSize ?: LENGTH_UNSET.toLong()
+            LENGTH_UNSET.toLong()
         }
     }
 
@@ -128,6 +137,7 @@ class MusicPlayerDataSource(
             return RESULT_END_OF_INPUT
         }
         if (read == -1) {
+            _remainingBytes = 0
             return RESULT_END_OF_INPUT
         }
         if (_remainingBytes != LENGTH_UNSET.toLong()) {
@@ -171,10 +181,12 @@ class MusicPlayerDataSource(
         musicId: MusicId,
         initialOffset: Long,
         initialStream: AssetStream,
-        output: PipedOutputStream
+        output: PipedOutputStream,
+        expectedBytes: Long?
     ) {
         var stream: AssetStream? = initialStream
         var offset = initialOffset
+        val expectedEnd = expectedBytes?.let { initialOffset + it }
         var retries = 0
 
         try {
@@ -183,6 +195,22 @@ class MusicPlayerDataSource(
                 try {
                     val b = current.next()
                     if (b == null) {
+                        if (expectedEnd != null && offset < expectedEnd) {
+                            if (retries >= MAX_STREAM_RETRIES) {
+                                easeError("load chunk ended early at offset=$offset")
+                                break
+                            }
+                            retries += 1
+                            easeError("stream ended early, retry $retries at offset=$offset")
+                            stream = bridge.run {
+                                ctGetAssetStream(it, DataSourceKey.Music(musicId), offset.toULong())
+                            }
+                            if (stream == null) {
+                                easeError("reopen asset stream failed at offset=$offset")
+                                break
+                            }
+                            continue
+                        }
                         break
                     }
                     output.write(b)

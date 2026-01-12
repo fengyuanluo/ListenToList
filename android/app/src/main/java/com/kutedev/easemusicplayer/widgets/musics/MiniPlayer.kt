@@ -58,90 +58,93 @@ private fun MiniPlayerCore(
     onNext: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.clickable { onClick() }.fillMaxWidth().padding(30.dp).height(64.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(30.dp)
+            .height(64.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MusicCover(
+        Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .size(60.dp),
-            coverDataSourceKey = cover,
-        )
-        Box(modifier = Modifier.width(16.dp))
-        Column(
-            modifier = Modifier.fillMaxHeight(),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.SpaceBetween
+                .weight(1f)
+                .fillMaxHeight()
+                .clickable { onClick() },
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            MusicCover(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .size(60.dp),
+                coverDataSourceKey = cover,
+            )
+            Box(modifier = Modifier.width(16.dp))
+            Column(
+                modifier = Modifier.fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    modifier = Modifier.weight(1f),
                     text = title,
                     style = TextStyle(fontSize = 16.sp),
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1
                 )
-                Box(modifier = Modifier.width(16.dp))
-                Row(
-                    modifier = Modifier.wrapContentWidth()
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .fillMaxWidth()
                 ) {
-                    if (!isPlaying) {
-                        EaseIconButton(
-                            sizeType = EaseIconButtonSize.Medium,
-                            buttonType = EaseIconButtonType.Default,
-                            disabled = loading,
-                            painter = painterResource(R.drawable.icon_play),
-                            onClick = onPlay,
-                        )
-                    } else {
-                        EaseIconButton(
-                            sizeType = EaseIconButtonSize.Medium,
-                            buttonType = EaseIconButtonType.Default,
-                            painter = painterResource(R.drawable.icon_pause),
-                            onClick = onPause,
-                        )
-                    }
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Medium,
-                        buttonType = EaseIconButtonType.Default,
-                        painter = painterResource(R.drawable.icon_play_next),
-                        disabled = !canNext,
-                        onClick = onNext,
-                    )
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Medium,
-                        buttonType = EaseIconButtonType.Default,
-                        painter = painterResource(R.drawable.icon_stop),
-                        onClick = onStop,
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        progress = {
+                            if (totalDurationMS == 0uL) {
+                                0f
+                            } else {
+                                currentDurationMS.toFloat() / totalDurationMS.toFloat()
+                            }
+                        },
+                        color = MaterialTheme.colorScheme.onSurface,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     )
                 }
-            }
-            Box(modifier = Modifier.height(4.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .fillMaxWidth()
-            ) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    progress = {
-                        if (totalDurationMS == 0uL) {
-                            0f
-                        } else {
-                            currentDurationMS.toFloat() / totalDurationMS.toFloat()
-                        }
-                    },
-                    color = MaterialTheme.colorScheme.onSurface,
+                Text(
+                    text = totalDuration,
+                    fontSize = 9.sp,
                 )
             }
-            Text(
-                text = totalDuration,
-                fontSize = 9.sp,
+        }
+        Row(
+            modifier = Modifier.wrapContentWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!isPlaying) {
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    disabled = loading,
+                    painter = painterResource(R.drawable.icon_play),
+                    onClick = onPlay,
+                )
+            } else {
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(R.drawable.icon_pause),
+                    onClick = onPause,
+                )
+            }
+            EaseIconButton(
+                sizeType = EaseIconButtonSize.Medium,
+                buttonType = EaseIconButtonType.Default,
+                painter = painterResource(R.drawable.icon_play_next),
+                disabled = !canNext,
+                onClick = onNext,
+            )
+            EaseIconButton(
+                sizeType = EaseIconButtonSize.Medium,
+                buttonType = EaseIconButtonType.Default,
+                painter = painterResource(R.drawable.icon_stop),
+                onClick = onStop,
             )
         }
     }

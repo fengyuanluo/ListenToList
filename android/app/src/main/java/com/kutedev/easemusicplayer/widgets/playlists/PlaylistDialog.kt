@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,7 +27,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -66,7 +68,7 @@ private fun Tab(
             text = stringResource(id = stringId),
             fontSize = 11.sp,
             color = if (!isActive) {
-                Color.Unspecified
+                MaterialTheme.colorScheme.onSurfaceVariant
             } else {
                 activeColor
             }
@@ -215,6 +217,8 @@ fun CreatePlaylistsDialog(
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surface)
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp, 24.dp),
         ) {
             Row {
@@ -311,6 +315,8 @@ fun EditPlaylistsDialog(
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surface)
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp, 24.dp),
         ) {
 

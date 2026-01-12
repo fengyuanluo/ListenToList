@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -131,16 +133,24 @@ private fun RemoveDialog(
 private fun StorageBlock(
     title: String,
     isActive: Boolean,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val bgColor = if (isActive) { MaterialTheme.colorScheme.primary } else { MaterialTheme.colorScheme.surfaceVariant }
     val tint = if (isActive) { MaterialTheme.colorScheme.surface } else { MaterialTheme.colorScheme.onSurface }
+    val shape = RoundedCornerShape(20.dp)
+    val borderModifier = if (isActive) {
+        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+    } else {
+        Modifier
+    }
 
     Box(
-        modifier = Modifier
-            .size(100.dp)
-            .clip(RoundedCornerShape(20.dp))
+        modifier = modifier
+            .aspectRatio(1f)
+            .clip(shape)
             .background(bgColor)
+            .then(borderModifier)
             .clickable { onSelect() }
     ) {
         Column(
@@ -156,6 +166,17 @@ private fun StorageBlock(
             Text(
                 text = title,
                 color = tint,
+            )
+        }
+        if (isActive) {
+            Icon(
+                painter = painterResource(id = R.drawable.icon_yes),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(16.dp)
             )
         }
     }
@@ -466,21 +487,24 @@ fun EditStoragesPage(
                         isActive = storageType == StorageType.WEBDAV,
                         onSelect = {
                             editStorageVM.changeType(StorageType.WEBDAV)
-                        }
+                        },
+                        modifier = Modifier.weight(1f)
                     )
                     StorageBlock(
                         title = "OneDrive",
                         isActive = storageType == StorageType.ONE_DRIVE,
                         onSelect = {
                             editStorageVM.changeType(StorageType.ONE_DRIVE)
-                        }
+                        },
+                        modifier = Modifier.weight(1f)
                     )
                     StorageBlock(
                         title = "OpenList",
                         isActive = storageType == StorageType.OPEN_LIST,
                         onSelect = {
                             editStorageVM.changeType(StorageType.OPEN_LIST)
-                        }
+                        },
+                        modifier = Modifier.weight(1f)
                     )
                 }
                 Box(modifier = Modifier.height(30.dp))

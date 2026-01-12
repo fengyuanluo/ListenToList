@@ -1,11 +1,13 @@
 package com.kutedev.easemusicplayer.core
 
 import android.net.Uri
+import androidx.media3.common.C
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.CacheWriter
+import androidx.media3.datasource.cache.ContentMetadata
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -14,6 +16,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import uniffi.ease_client_backend.easeError
 import java.util.Collections
+import kotlin.math.min
 
 
 class FolderPrefetcher(
@@ -37,12 +40,22 @@ class FolderPrefetcher(
                 if (bytes <= 0) {
                     continue
                 }
-                val dataSpec = DataSpec.Builder()
+                val baseSpec = DataSpec.Builder()
                     .setUri(uri)
                     .setPosition(0)
                     .setLength(bytes)
                     .build()
-                if (isCached(dataSpec)) {
+                val cacheKey = cacheKeyFactory.buildCacheKey(baseSpec)
+                val resolvedLength = resolvePrefetchLength(cacheKey, baseSpec)
+                if (resolvedLength <= 0) {
+                    continue
+                }
+                val dataSpec = if (resolvedLength == baseSpec.length) {
+                    baseSpec
+                } else {
+                    baseSpec.buildUpon().setLength(resolvedLength).build()
+                }
+                if (isCached(cacheKey, dataSpec)) {
                     continue
                 }
                 launch {
@@ -70,11 +83,22 @@ class FolderPrefetcher(
         prefetchJob = null
     }
 
-    private fun isCached(dataSpec: DataSpec): Boolean {
+    private fun isCached(cacheKey: String, dataSpec: DataSpec): Boolean {
         if (dataSpec.length <= 0) {
             return false
         }
-        val cacheKey = cacheKeyFactory.buildCacheKey(dataSpec)
         return cache.isCached(cacheKey, dataSpec.position, dataSpec.length)
+    }
+
+    private fun resolvePrefetchLength(cacheKey: String, dataSpec: DataSpec): Long {
+        if (dataSpec.length <= 0) {
+            return dataSpec.length
+        }
+        val contentLength = ContentMetadata.getContentLength(cache.getContentMetadata(cacheKey))
+        if (contentLength == C.LENGTH_UNSET.toLong()) {
+            return dataSpec.length
+        }
+        val remaining = (contentLength - dataSpec.position).coerceAtLeast(0L)
+        return min(dataSpec.length, remaining)
     }
 }
