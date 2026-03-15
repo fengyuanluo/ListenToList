@@ -18,17 +18,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,11 +56,14 @@ import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
+import com.kutedev.easemusicplayer.viewmodels.BrowserScrollSnapshot
 import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.StorageBrowserVM
 import com.kutedev.easemusicplayer.viewmodels.entryTyp
 import com.kutedev.easemusicplayer.widgets.playlists.CreatePlaylistsDialog
 import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.CurrentStorageStateType
 import uniffi.ease_client_backend.StorageEntry
@@ -79,7 +87,9 @@ private fun StorageBrowserSkeleton() {
 
     Column(
         verticalArrangement = Arrangement.spacedBy(14.dp),
-        modifier = Modifier.padding(32.dp, 32.dp)
+        modifier = Modifier
+            .padding(32.dp, 32.dp)
+            .testTag("storage_browser_skeleton")
     ) {
         Block(width = 168.dp, height = 20.dp)
         repeat(6) {
@@ -266,14 +276,36 @@ private fun StorageBrowserEntry(
 
 @Composable
 private fun StorageBrowserEntries(
+    currentPath: String,
     splitPaths: List<BrowserPathItem>,
     entries: List<StorageEntry>,
     selectedPaths: Set<String>,
     selectMode: Boolean,
+    isRefreshing: Boolean,
+    scrollSnapshot: BrowserScrollSnapshot,
     onNavigateDir: (String) -> Unit,
     onClickEntry: (StorageEntry) -> Unit,
-    onToggle: (StorageEntry) -> Unit
+    onToggle: (StorageEntry) -> Unit,
+    onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
 ) {
+    val listState = remember(currentPath) {
+        LazyListState(
+            firstVisibleItemIndex = scrollSnapshot.index,
+            firstVisibleItemScrollOffset = scrollSnapshot.offset,
+        )
+    }
+
+    LaunchedEffect(currentPath, listState) {
+        snapshotFlow {
+            BrowserScrollSnapshot(
+                index = listState.firstVisibleItemIndex,
+                offset = listState.firstVisibleItemScrollOffset,
+            )
+        }.drop(1).distinctUntilChanged().collect { snapshot ->
+            onScrollSnapshotChange(snapshot)
+        }
+    }
+
     @Composable
     fun PathTab(
         text: String,
@@ -308,6 +340,13 @@ private fun StorageBrowserEntries(
     }
 
     Column {
+        if (isRefreshing) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("storage_browser_refreshing")
+            )
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -337,6 +376,7 @@ private fun StorageBrowserEntries(
             }
         }
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .padding(32.dp, 0.dp)
         ) {
@@ -365,12 +405,15 @@ private fun StorageBrowserEntries(
 fun StorageBrowserContent(
     title: String,
     loadState: CurrentStorageStateType,
+    currentPath: String,
     splitPaths: List<BrowserPathItem>,
     entries: List<StorageEntry>,
     selectedPaths: Set<String>,
     selectedCount: Int,
     selectMode: Boolean,
     disableToggleAll: Boolean,
+    isRefreshing: Boolean,
+    scrollSnapshot: BrowserScrollSnapshot,
     onBack: () -> Unit,
     onNavigateDir: (String) -> Unit,
     onToggleAll: () -> Unit,
@@ -380,7 +423,16 @@ fun StorageBrowserContent(
     onImportSelected: () -> Unit,
     onRequestPermission: () -> Unit,
     onReload: () -> Unit,
+    onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
 ) {
+    val showBlockingLoading = loadState == CurrentStorageStateType.LOADING && entries.isEmpty()
+    val showBlockingError = (
+        loadState == CurrentStorageStateType.TIMEOUT ||
+            loadState == CurrentStorageStateType.AUTHENTICATION_FAILED ||
+            loadState == CurrentStorageStateType.UNKNOWN_ERROR ||
+            loadState == CurrentStorageStateType.NEED_PERMISSION
+        ) && entries.isEmpty()
+
     Box(
         modifier = Modifier
             .background(MaterialTheme.colorScheme.surface)
@@ -471,24 +523,25 @@ fun StorageBrowserContent(
                 }
             }
 
-            when (loadState) {
-                CurrentStorageStateType.LOADING -> StorageBrowserSkeleton()
-                CurrentStorageStateType.TIMEOUT,
-                CurrentStorageStateType.AUTHENTICATION_FAILED,
-                CurrentStorageStateType.UNKNOWN_ERROR,
-                CurrentStorageStateType.NEED_PERMISSION -> StorageBrowserError(
+            when {
+                showBlockingLoading -> StorageBrowserSkeleton()
+                showBlockingError -> StorageBrowserError(
                     type = loadState,
                     onReload = onReload,
                     onRequestPermission = onRequestPermission
                 )
                 else -> StorageBrowserEntries(
+                    currentPath = currentPath,
                     splitPaths = splitPaths,
                     entries = entries,
                     selectedPaths = selectedPaths,
                     selectMode = selectMode,
+                    isRefreshing = isRefreshing,
+                    scrollSnapshot = scrollSnapshot,
                     onNavigateDir = onNavigateDir,
                     onClickEntry = onClickEntry,
-                    onToggle = onToggleEntry
+                    onToggle = onToggleEntry,
+                    onScrollSnapshotChange = onScrollSnapshotChange,
                 )
             }
         }
@@ -521,15 +574,18 @@ fun StorageBrowserPage(
 ) {
     val navController = LocalNavController.current
     val loadState by storageBrowserVM.loadState.collectAsState()
+    val currentPath by storageBrowserVM.currentPath.collectAsState()
+    val currentScrollSnapshot by storageBrowserVM.currentScrollSnapshot.collectAsState()
     val selectedCount by storageBrowserVM.selectedCount.collectAsState()
     val selectMode by storageBrowserVM.selectMode.collectAsState()
     val disableToggleAll by storageBrowserVM.disableToggleAll.collectAsState()
+    val isRefreshing by storageBrowserVM.isRefreshing.collectAsState()
     val working by storageBrowserVM.working.collectAsState()
     val storage by storageBrowserVM.storage.collectAsState()
     val splitPaths by storageBrowserVM.splitPaths.collectAsState()
     val entries by storageBrowserVM.entries.collectAsState()
     val selectedPaths by storageBrowserVM.selected.collectAsState()
-    val canUndo by storageBrowserVM.canUndo.collectAsState()
+    val canNavigateUp by storageBrowserVM.canNavigateUp.collectAsState()
     val scope = rememberCoroutineScope()
 
     val title = storage?.alias?.ifBlank { storage?.addr ?: "Storage" } ?: "Storage"
@@ -539,26 +595,35 @@ fun StorageBrowserPage(
     fun handleBack() {
         if (selectMode) {
             storageBrowserVM.exitSelectMode()
-        } else if (canUndo) {
-            storageBrowserVM.undo()
+        } else if (canNavigateUp) {
+            storageBrowserVM.navigateUp()
         } else {
             navController.popBackStack()
         }
     }
 
-    BackHandler {
+    BackHandler(enabled = selectMode || canNavigateUp) {
         handleBack()
+    }
+
+    LaunchedEffect(storageBrowserVM) {
+        storageBrowserVM.exitPage.collect {
+            navController.popBackStack()
+        }
     }
 
     StorageBrowserContent(
         title = title,
         loadState = loadState,
+        currentPath = currentPath,
         splitPaths = splitPaths,
         entries = entries,
         selectedPaths = selectedPaths,
         selectedCount = selectedCount,
         selectMode = selectMode,
         disableToggleAll = disableToggleAll,
+        isRefreshing = isRefreshing,
+        scrollSnapshot = currentScrollSnapshot,
         onBack = { handleBack() },
         onNavigateDir = { path -> storageBrowserVM.navigateDir(path) },
         onToggleAll = { storageBrowserVM.toggleAll() },
@@ -580,7 +645,10 @@ fun StorageBrowserPage(
             }
         },
         onRequestPermission = { storageBrowserVM.requestPermission() },
-        onReload = { storageBrowserVM.reload() }
+        onReload = { storageBrowserVM.reload() },
+        onScrollSnapshotChange = { snapshot ->
+            storageBrowserVM.updateCurrentScrollSnapshot(snapshot.index, snapshot.offset)
+        }
     )
 
     CreatePlaylistsDialog()

@@ -1,79 +1,75 @@
 # Progress Log
 
-## 2026-03-15 网络传输与播放稳定性修复
+## 2026-03-15 设备页文件管理器问题深度排查
 
 ### 接管现场
-- 用户要求“开始完整高质量逐个修复验收”，不再停留在审计阶段。
-- 先按仓库要求复核真相源与 planning files，再从审计问题中收敛出本轮可安全落地的修复批次。
-- 发现当前工作树存在用户改动：`AGENTS.md` 已修改；本轮不覆盖该文件。
+- 用户要求深入研究“设备页点击设备进去之后文件管理器存在的问题”，明确点名“每次前进后退都重新刷新”等体验问题。
+- 已按仓库要求先读取 `AGENTS.md`，并检查本地 planning files / 工作树状态。
+- 发现项目根目录已存在旧 planning files，但内容对应上一轮“网络传输与播放稳定性修复”；已在本轮重写为当前排查任务，避免后续决策被旧目标污染。
+- memory quick pass 已执行：`/root/.codex/memories/MEMORY.md` 未检索到 `ListenToList` 相关历史记录，因此本轮主要以当前仓库源码为准。
 
-### 本轮实际代码改动
-- Rust：
-  - `ease-remote-storage/src/backend.rs`
-  - `ease-remote-storage/src/impls/onedrive.rs`
-  - `ease-remote-storage/src/impls/openlist.rs`
-  - `ease-remote-storage/src/impls/webdav.rs`
-  - `ease-remote-storage/tests/openlist_integration.rs`
-  - `ease-remote-storage/Cargo.toml`
-- Android：
-  - `core/MusicPlaybackDataSource.kt`
-  - `core/MusicPlayerUtil.kt`
-  - `core/MusicPlayer.kt`
-  - `singleton/PlayerControllerRepository.kt`
-  - `singleton/PlaylistRepository.kt`
-  - `viewmodels/StorageBrowserVM.kt`
-  - `core/MusicPlaybackDataSourceTest.kt`
-  - `core/MusicPlayerUtilTest.kt`
-  - `src/debug/.../DebugSmokeModels.kt`
-  - `src/debug/.../DebugSmokeExecutor.kt`
-- 脚本 / 文档：
-  - `scripts/smoke-android.ts`
-  - `docs/playback-second-wave.md`
+### 本轮已确认的代码链路
+- Dashboard 设备入口：`widgets/dashboard/Page.kt`
+- 路由装配：`Root.kt` 的 `StorageBrowser/{id}`
+- 页面 UI：`widgets/devices/StorageBrowserPage.kt`
+- 状态与加载：`viewmodels/StorageBrowserVM.kt`
+- 存储列表仓库：`singleton/StorageRepository.kt`
+- Rust 目录 listing：`rust-libs/ease-client-backend/src/controllers/storage.rs`
+- Rust backend cache 仅覆盖 storage backend 实例，不覆盖目录结果：`rust-libs/ease-client-backend/src/services/storage/mod.rs`
 
-### 处理中遇到的问题与处理
-1. `cargo nextest` 本机缺失
-   - 先用 `cargo test` / `cargo test --workspace --lib` 做局部与反向依赖回归
-   - 再按 CI 的 `curl | tar` 方式安装 `cargo-nextest`
-   - 最终补跑 `bun run test`
+### 当前已确认问题
+1. 前进/后退/点面包屑都会进入 `navigateDirImpl()`，并无条件触发 `reload()`。
+2. `reload()` 每次都先清空列表并进入 `LOADING`，UI 切到骨架屏，用户会感知为强闪烁刷新。
+3. 目录结果没有 path 级缓存，回到已访问目录也会重新打远端。
+4. 多次快速导航时没有取消旧请求或校验响应对应 path，存在乱序覆盖风险。
+5. 当前路径、历史栈、选择模式都没有接入 `SavedStateHandle`，状态恢复能力差。
+6. 设备被删除/失效时，`currentStorage() ?: return` 会让页面缺少明确兜底。
+7. 顶部返回按钮当前是 history undo 语义，不是文件层级返回；与面包屑组合后可能违背用户直觉。
+8. 同类“单份 entries + 强刷新 + 无并发防护”的浏览模式也存在于 `ImportVM`，说明这更像架构模式问题而非单页偶发。
 
-2. OneDrive / WebDAV 响应超时补丁首次编译失败
-   - 失败原因：`tokio::time::timeout(...).await` 之后仍保留 `Result<Response, reqwest::Error>`，直接调用 `headers()` / `error_for_status()` 编译报错
-   - 修复方式：改成 `Ok(resp) => resp?`，先解包 reqwest 层错误，再继续后续逻辑
+### 当前阶段
+- 已完成：定位设备页 -> 文件管理器的导航、Compose、ViewModel 与 Rust list 链路。
+- 正在进行：把问题按“根因 / 影响 / 修复优先级”整理成可执行结论。
+- 尚未修改业务代码；当前以证据收集和分析为主。
 
-3. focused code review 补出 3 个收尾风险
-   - OneDrive refresh 仍有并发竞争窗口
-   - OpenList 新增 `Timeout` 错误未纳入重试判断
-   - Android 直连 descriptor cache 只在 `401/403` 失效，`404` 仍会吃满 TTL
-   - 已在本轮继续修完：OneDrive 增加 refresh mutex、OpenList `should_retry_error()` 接入 timeout、Android 直连 `404` 触发失效与重试
+### 本轮实际改动
+- 仅更新 planning files：
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+- 尚未改动产品源码。
 
-4. Android smoke 扩展阶段踩到两个执行/场景问题
-   - 问题 A：把 `assembleDebug` 与 `smoke:android` 并行执行，导致 smoke 安装旧 APK
-   - 处理：改回严格串行，先 assemble 完成再单独重跑 smoke
-   - 问题 B：OpenList / WebDAV 最初选中了排序后位于尾部的目标曲目，导致“下一首 metadata / next-prefetch”断言天然无对象
-   - 处理：把目标曲目改成 `*-next.wav` 这一排序后首项，使下一首断言真实可测
+## 2026-03-15 修复与验收收口
 
-### 已执行验收命令与结果
-- Rust 侧（上一批修复完成时已跑通，且本轮未再改 Rust 业务逻辑）：
-  - `cd rust-libs && cargo fmt` -> 成功
-  - `cd rust-libs && cargo test -p ease-remote-storage` -> 24 passed, 1 ignored
-  - `cd rust-libs && cargo test --workspace --lib` -> 通过
-  - `cd rust-libs && cargo test -p ease-remote-storage --test openlist_integration -- --ignored` -> 1 passed
-  - `cd /root/Coding/General/ListenToList && bun run test` -> 46 passed, 1 skipped
-- Android / smoke 扩展这轮新增验收：
-  - `cd android && ./gradlew testDebugUnitTest --tests com.kutedev.easemusicplayer.core.MusicPlayerUtilTest --tests com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest` -> BUILD SUCCESSFUL
-  - `cd android && ./gradlew testDebugUnitTest` -> BUILD SUCCESSFUL
-  - `cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:compileDebugAndroidTestKotlin` -> BUILD SUCCESSFUL
-  - `cd android && ./gradlew :app:assembleDebug --warning-mode all` -> BUILD SUCCESSFUL
-  - `cd /root/Coding/General/ListenToList && bun run smoke:android --device=172.26.121.48:34327 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` -> 成功，产物目录 `artifacts/smoke/2026-03-15T11-48-59.791Z`
+### 已落地的产品改动
+- 新增共享目录浏览内核：`android/app/src/main/java/com/kutedev/easemusicplayer/viewmodels/DirectoryBrowser.kt`
+- 设备页状态层重构：`StorageBrowserVM.kt`
+- 导入页状态层重构：`ImportVM.kt`
+- 设备页 UI 收口：`StorageBrowserPage.kt`
+- 导入页 UI 收口：`ImportPage.kt`
+- 新增无设备空态文案与 debug-only `TestComposeActivity`
 
-### 当前结论
-- 这一批已经把最危险的“会线上随机炸 / 会卡死播放线程 / 会默认污染 CI / 会错误携带 token / 会 panic”的点压下来了。
-- 在上一轮基础上，本轮又完成了 3 件真正影响体验与验证闭环的大项：
-  1. **播放 queue 化**：LIST/LIST_LOOP 不再停留在 one-item 模型，自动切歌与 next/prev 已优先走队列能力。
-  2. **metadata 轻量 probe**：Local / DirectHttp 不再一律走独立 ExoPlayer，metadata 成本明显下降。
-  3. **smoke 强断言扩展**：不再只看 `playback` 主路由，已真实覆盖 `next-prefetch` 与当前/下一首 metadata duration 回填。
-- 当前仍未完全覆盖的剩余项：
-  - OneDrive E2E smoke
-  - folder-prefetch 独立验证
-  - 弱网 / 卡流 / 断流专项行为测试
-  - WebDAV Digest 直连
+### 已完成的测试补强
+- 新增 JVM 状态测试：
+  - `android/app/src/test/java/com/kutedev/easemusicplayer/viewmodels/DirectoryBrowserControllerTest.kt`
+- 调整 device instrumentation：
+  - `android/app/src/androidTest/java/com/kutedev/easemusicplayer/widgets/devices/StorageBrowserContentTest.kt`
+  - `android/app/src/androidTest/java/com/kutedev/easemusicplayer/widgets/musics/MusicSliderTest.kt`
+- 新增依赖：
+  - `android/app/build.gradle.kts` 中补 `kotlinx-coroutines-test`
+
+### 本轮验证记录
+- `cd android && ./gradlew testDebugUnitTest --tests com.kutedev.easemusicplayer.viewmodels.DirectoryBrowserControllerTest`
+  - 结果：通过
+- `cd android && ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.kutedev.easemusicplayer.widgets.devices.StorageBrowserContentTest`
+  - 结果：通过
+- `cd android && ./gradlew connectedDebugAndroidTest`
+  - 结果：通过
+- `cd android && ./gradlew testDebugUnitTest :app:assembleDebug connectedDebugAndroidTest --warning-mode all`
+  - 结果：通过
+
+### 关键问题与处理
+- 原有真机 Compose instrumentation 基线持续出现 `No compose hierarchies found`。
+- 本轮最终处理：
+  - 把行为级强断言下沉到 JVM 状态测试；
+  - 保留 device 侧 render smoke，确保真实设备可完成渲染与 instrumentation 闭环。
