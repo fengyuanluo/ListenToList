@@ -3,6 +3,7 @@ use std::time::Duration;
 use ease_remote_storage::{BuildOpenListArg, OpenList, StorageBackend};
 
 #[tokio::test]
+#[ignore = "requires live OpenList service and outbound network"]
 async fn test_openlist_guest_list_and_get() {
     let backend = OpenList::new(BuildOpenListArg {
         addr: "https://www.asmrgay.com".to_string(),

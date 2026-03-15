@@ -4,12 +4,15 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Player.COMMAND_PLAY_PAUSE
+import androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
+import androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
 import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
 import androidx.media3.common.Player.COMMAND_STOP
 import androidx.media3.session.MediaController
 import com.kutedev.easemusicplayer.core.BuildMediaContext
 import com.kutedev.easemusicplayer.core.PLAY_DIRECTION_NEXT
 import com.kutedev.easemusicplayer.core.PLAY_DIRECTION_PREVIOUS
+import com.kutedev.easemusicplayer.core.playQueueUtil
 import com.kutedev.easemusicplayer.core.playUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -154,7 +157,12 @@ class PlayerControllerRepository @Inject constructor(
             }
             playerRepository.seedPlaybackRecovery(playlistId, id, direction)
             playerRepository.setCurrent(target, playlist)
-            playUtil(BuildMediaContext(bridge = bridge, scope = _scope), target, mediaController)
+            playQueueUtil(
+                playlist = playlist,
+                targetId = target.meta.id,
+                playMode = playerRepository.playMode.value,
+                player = mediaController,
+            )
         }
     }
 
@@ -191,6 +199,9 @@ class PlayerControllerRepository @Inject constructor(
     }
 
     fun playNext() {
+        if (seekAdjacentMediaItem(PLAY_DIRECTION_NEXT)) {
+            return
+        }
         val m = nextMusic.value
         val p = _playlist.value
         if (m != null && p != null) {
@@ -199,6 +210,9 @@ class PlayerControllerRepository @Inject constructor(
     }
 
     fun playPrevious() {
+        if (seekAdjacentMediaItem(PLAY_DIRECTION_PREVIOUS)) {
+            return
+        }
         val m = previousMusic.value
         val p = _playlist.value
         if (m != null && p != null) {
@@ -253,6 +267,33 @@ class PlayerControllerRepository @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun seekAdjacentMediaItem(direction: Int): Boolean {
+        val mediaController = _mediaController ?: return false
+        val playlist = _playlist.value ?: return false
+        val target = if (direction >= 0) {
+            nextMusic.value
+        } else {
+            previousMusic.value
+        } ?: return false
+
+        val command = if (direction >= 0) {
+            COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
+        } else {
+            COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
+        }
+        if (!mediaController.isCommandAvailable(command)) {
+            return false
+        }
+        playerRepository.seedPlaybackRecovery(playlist.abstr.meta.id, target.meta.id, direction)
+        if (direction >= 0) {
+            mediaController.seekToNextMediaItem()
+        } else {
+            mediaController.seekToPreviousMediaItem()
+        }
+        mediaController.play()
+        return true
     }
 
 }

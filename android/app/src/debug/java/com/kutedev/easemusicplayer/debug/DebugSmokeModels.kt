@@ -76,6 +76,10 @@ data class DebugSmokePlayPayload(
 @Serializable
 data class DebugSmokeAssertions(
     val expectedResolverMode: DebugSmokeResolverMode? = null,
+    val requiredSourceTags: List<String> = emptyList(),
+    val requireCurrentMetadataDuration: Boolean = false,
+    val requireNextMetadataDuration: Boolean = false,
+    val metadataWaitTimeoutMs: Long = 10_000,
 )
 
 @Serializable
@@ -103,6 +107,8 @@ data class DebugSmokeResult(
     val actualResolverMode: DebugSmokeResolverMode? = null,
     val resolvedUri: String? = null,
     val routeHistory: List<DebugSmokeRouteRecord> = emptyList(),
+    val currentMetadataDurationSynced: Boolean? = null,
+    val nextMetadataDurationSynced: Boolean? = null,
 )
 
 @Serializable

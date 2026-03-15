@@ -29,6 +29,7 @@ import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_backend.StorageEntry
 import uniffi.ease_client_backend.StorageEntryType
 import uniffi.ease_client_backend.ToAddMusicEntry
+import uniffi.ease_client_backend.ctGetMusic
 import uniffi.ease_client_backend.ctCreatePlaylist
 import uniffi.ease_client_backend.ctListStorageEntryChildren
 import uniffi.ease_client_backend.ctRemovePlaylist
@@ -74,8 +75,12 @@ class DebugSmokeExecutor @Inject constructor(
                     timeoutMs = request.play.awaitReadyTimeoutMs,
                 )
                 if (ready) {
+                    val expectedTags = buildSet {
+                        add(PLAYBACK_SOURCE_TAG_PLAYBACK)
+                        addAll(request.assertions.requiredSourceTags)
+                    }
                     awaitRouteTags(
-                        expectedTags = setOf(PLAYBACK_SOURCE_TAG_PLAYBACK),
+                        expectedTags = expectedTags,
                         timeoutMs = DEBUG_SMOKE_PLAYBACK_ROUTE_TIMEOUT_MS,
                     )
                 }
@@ -84,6 +89,23 @@ class DebugSmokeExecutor @Inject constructor(
                 val fallbackSnapshot = PlaybackDiagnostics.currentSnapshot()
                 val actualResolverMode = playbackRoute?.resolverMode ?: fallbackSnapshot.route.toResolverMode()
                 val resolvedUri = playbackRoute?.resolvedUri ?: fallbackSnapshot.resolvedUri
+                val nextMusicId = created.musicIds.getOrNull(targetIndex + 1)?.id?.value
+                val currentDurationSynced = if (request.assertions.requireCurrentMetadataDuration) {
+                    awaitMetadataDuration(
+                        musicId = musicId,
+                        timeoutMs = request.assertions.metadataWaitTimeoutMs,
+                    )
+                } else {
+                    null
+                }
+                val nextDurationSynced = if (request.assertions.requireNextMetadataDuration && nextMusicId != null) {
+                    awaitMetadataDuration(
+                        musicId = nextMusicId,
+                        timeoutMs = request.assertions.metadataWaitTimeoutMs,
+                    )
+                } else {
+                    null
+                }
                 if (!ready) {
                     DebugSmokeResult(
                         requestId = request.requestId,
@@ -98,6 +120,8 @@ class DebugSmokeExecutor @Inject constructor(
                         actualResolverMode = actualResolverMode,
                         resolvedUri = resolvedUri,
                         routeHistory = routeHistory,
+                        currentMetadataDurationSynced = currentDurationSynced,
+                        nextMetadataDurationSynced = nextDurationSynced,
                     )
                 } else {
                     val expectedResolverMode = request.assertions.expectedResolverMode
@@ -116,6 +140,46 @@ class DebugSmokeExecutor @Inject constructor(
                             actualResolverMode = actualResolverMode,
                             resolvedUri = resolvedUri,
                             routeHistory = routeHistory,
+                            currentMetadataDurationSynced = currentDurationSynced,
+                            nextMetadataDurationSynced = nextDurationSynced,
+                        )
+                    }
+                    if (request.assertions.requireCurrentMetadataDuration && currentDurationSynced != true) {
+                        return@runCatching DebugSmokeResult(
+                            requestId = request.requestId,
+                            status = "error",
+                            stage = "assert",
+                            message = "当前曲目 metadata duration 未在超时内回填",
+                            storageId = storage.id.value,
+                            playlistId = playlistId,
+                            musicId = musicId,
+                            targetEntryPath = request.playlist.targetEntryPath,
+                            durationMs = readDurationOnMain(),
+                            expectedResolverMode = expectedResolverMode,
+                            actualResolverMode = actualResolverMode,
+                            resolvedUri = resolvedUri,
+                            routeHistory = routeHistory,
+                            currentMetadataDurationSynced = currentDurationSynced,
+                            nextMetadataDurationSynced = nextDurationSynced,
+                        )
+                    }
+                    if (request.assertions.requireNextMetadataDuration && nextMusicId != null && nextDurationSynced != true) {
+                        return@runCatching DebugSmokeResult(
+                            requestId = request.requestId,
+                            status = "error",
+                            stage = "assert",
+                            message = "下一首曲目 metadata duration 未在超时内回填",
+                            storageId = storage.id.value,
+                            playlistId = playlistId,
+                            musicId = musicId,
+                            targetEntryPath = request.playlist.targetEntryPath,
+                            durationMs = readDurationOnMain(),
+                            expectedResolverMode = expectedResolverMode,
+                            actualResolverMode = actualResolverMode,
+                            resolvedUri = resolvedUri,
+                            routeHistory = routeHistory,
+                            currentMetadataDurationSynced = currentDurationSynced,
+                            nextMetadataDurationSynced = nextDurationSynced,
                         )
                     }
                     if (request.play.seekToMs > 0) {
@@ -137,6 +201,8 @@ class DebugSmokeExecutor @Inject constructor(
                         actualResolverMode = actualResolverMode,
                         resolvedUri = resolvedUri,
                         routeHistory = routeHistory,
+                        currentMetadataDurationSynced = currentDurationSynced,
+                        nextMetadataDurationSynced = nextDurationSynced,
                     )
                 }
             } else {
@@ -157,6 +223,8 @@ class DebugSmokeExecutor @Inject constructor(
                         ?: PlaybackDiagnostics.currentSnapshot().route.toResolverMode(),
                     resolvedUri = playbackRoute?.resolvedUri ?: PlaybackDiagnostics.currentSnapshot().resolvedUri,
                     routeHistory = routeHistory,
+                    currentMetadataDurationSynced = null,
+                    nextMetadataDurationSynced = null,
                 )
             }
         }.getOrElse { error ->
@@ -172,6 +240,8 @@ class DebugSmokeExecutor @Inject constructor(
                 actualResolverMode = PlaybackDiagnostics.currentSnapshot().route.toResolverMode(),
                 resolvedUri = PlaybackDiagnostics.currentSnapshot().resolvedUri,
                 routeHistory = routeHistory,
+                currentMetadataDurationSynced = null,
+                nextMetadataDurationSynced = null,
             )
         }.also { result ->
             writeImmediateResult(result)
@@ -305,6 +375,24 @@ class DebugSmokeExecutor @Inject constructor(
         return withContext(Dispatchers.Main.immediate) {
             playerControllerRepository.getDuration()
         }
+    }
+
+    private suspend fun awaitMetadataDuration(
+        musicId: Long,
+        timeoutMs: Long,
+    ): Boolean {
+        val synced = withTimeoutOrNull(timeoutMs) {
+            while (true) {
+                val music = bridge.runRaw { backend ->
+                    ctGetMusic(backend, uniffi.ease_client_schema.MusicId(musicId))
+                }
+                if (music?.meta?.duration != null) {
+                    return@withTimeoutOrNull true
+                }
+                delay(250)
+            }
+        }
+        return synced == true
     }
 
     private fun String?.toResolverMode(): DebugSmokeResolverMode? {

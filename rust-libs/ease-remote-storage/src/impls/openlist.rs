@@ -17,6 +17,8 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 const OPENLIST_API_TIMEOUT: Duration = Duration::from_secs(25);
+const OPENLIST_DOWNLOAD_RESPONSE_TIMEOUT: Duration = Duration::from_secs(20);
+const OPENLIST_DOWNLOAD_CHUNK_TIMEOUT: Duration = Duration::from_secs(30);
 const OPENLIST_MAX_RETRIES: usize = 2;
 const OPENLIST_RETRY_BASE_DELAY_MS: u64 = 400;
 const OPENLIST_RETRY_MAX_DELAY_MS: u64 = 2000;
@@ -103,6 +105,9 @@ fn should_retry_error(err: &StorageBackendError) -> bool {
     if err.is_unauthorized() {
         return false;
     }
+    if err.is_timeout() {
+        return true;
+    }
     match err {
         StorageBackendError::RequestFail(e) => {
             if e.is_timeout() || e.is_connect() || e.is_request() {
@@ -127,6 +132,12 @@ fn retry_delay(attempt: usize) -> Duration {
     let base = OPENLIST_RETRY_BASE_DELAY_MS.saturating_mul(1_u64 << shift);
     let delay = base.min(OPENLIST_RETRY_MAX_DELAY_MS);
     Duration::from_millis(delay)
+}
+
+fn same_origin(base: &Url, url: &Url) -> bool {
+    base.scheme() == url.scheme()
+        && base.host_str() == url.host_str()
+        && base.port_or_known_default() == url.port_or_known_default()
 }
 
 async fn sleep_backoff(delay: Duration) -> StorageBackendResult<()> {
@@ -463,7 +474,7 @@ impl OpenList {
 
         if let Some(token) = self.token.read().await.clone() {
             if let Ok(base) = Url::parse(&self.addr) {
-                if base.domain() == url.domain() {
+                if same_origin(&base, &url) {
                     let mut val = HeaderValue::from_str(token.as_str()).unwrap();
                     val.set_sensitive(true);
                     headers.insert(reqwest::header::AUTHORIZATION, val);
@@ -507,12 +518,30 @@ impl OpenList {
             let url = url.clone();
             let headers = headers.clone();
             let resp = tokio_runtime()
-                .spawn(async move { client.get(url).headers(headers).send().await })
+                .spawn(async move {
+                    tokio::time::timeout(
+                        OPENLIST_DOWNLOAD_RESPONSE_TIMEOUT,
+                        client.get(url).headers(headers).send(),
+                    )
+                    .await
+                })
                 .await;
             let resp = match resp {
-                Ok(Ok(resp)) => resp,
-                Ok(Err(e)) => {
+                Ok(Ok(Ok(resp))) => resp,
+                Ok(Ok(Err(e))) => {
                     let err: StorageBackendError = e.into();
+                    if should_retry_error(&err) && attempt < OPENLIST_MAX_RETRIES {
+                        attempt += 1;
+                        sleep_backoff(retry_delay(attempt)).await?;
+                        continue;
+                    }
+                    return Err(err);
+                }
+                Ok(Err(_)) => {
+                    let err = StorageBackendError::Timeout {
+                        operation: "openlist download response",
+                        timeout_ms: OPENLIST_DOWNLOAD_RESPONSE_TIMEOUT.as_millis() as u64,
+                    };
                     if should_retry_error(&err) && attempt < OPENLIST_MAX_RETRIES {
                         attempt += 1;
                         sleep_backoff(retry_delay(attempt)).await?;
@@ -543,9 +572,13 @@ impl OpenList {
         } else {
             byte_offset
         };
-        let res = resp
-            .error_for_status()
-            .map(|resp| StreamFile::new(resp, byte_offset))?;
+        let res = resp.error_for_status().map(|resp| {
+            StreamFile::new_with_chunk_timeout(
+                resp,
+                byte_offset,
+                Some(OPENLIST_DOWNLOAD_CHUNK_TIMEOUT),
+            )
+        })?;
         Ok(res)
     }
 
@@ -631,6 +664,7 @@ mod test {
         list_failures: usize,
         get_failures: usize,
         file_failures: usize,
+        raw_url_host: Option<&'static str>,
     }
 
     struct SetupServerRes {
@@ -715,8 +749,9 @@ mod test {
                                     *resp.status_mut() = StatusCode::BAD_GATEWAY;
                                     return Ok::<_, Infallible>(resp);
                                 }
+                                let raw_host = retry.raw_url_host.unwrap_or("127.0.0.1");
                                 let body = format!(
-                            "{{\"code\":200,\"message\":\"success\",\"data\":{{\"name\":\"a.bin\",\"size\":5,\"is_dir\":false,\"sign\":\"sign\",\"type\":4,\"raw_url\":\"http://127.0.0.1:{port}/d/a.bin\"}}}}"
+                            "{{\"code\":200,\"message\":\"success\",\"data\":{{\"name\":\"a.bin\",\"size\":5,\"is_dir\":false,\"sign\":\"sign\",\"type\":4,\"raw_url\":\"http://{raw_host}:{port}/d/a.bin\"}}}}"
                         );
                                 Ok::<_, Infallible>(Response::new(Body::from(body)))
                             }
@@ -902,6 +937,45 @@ mod test {
                         .name
                         .eq_ignore_ascii_case(reqwest::header::AUTHORIZATION.as_str())
                         && header.value == TEST_TOKEN
+                }));
+            }
+            other => panic!("unexpected resolved playback source: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resolve_playback_source_does_not_forward_auth_to_cross_origin_raw_url() {
+        let server = setup_server_with_retry(RetryConfig {
+            raw_url_host: Some("localhost"),
+            ..RetryConfig::default()
+        })
+        .await;
+
+        let backend = OpenList::new(BuildOpenListArg {
+            addr: server.addr(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            is_anonymous: false,
+            connect_timeout: Duration::from_secs(10),
+        });
+
+        let resolved = backend
+            .resolve_playback_source("/a.bin".to_string())
+            .await
+            .unwrap();
+        match resolved {
+            ResolvedPlaybackSource::DirectHttp(source) => {
+                assert_eq!(
+                    source.url,
+                    format!(
+                        "http://localhost:{}/d/a.bin",
+                        server.addr().split(':').next_back().unwrap()
+                    )
+                );
+                assert!(!source.headers.iter().any(|header| {
+                    header
+                        .name
+                        .eq_ignore_ascii_case(reqwest::header::AUTHORIZATION.as_str())
                 }));
             }
             other => panic!("unexpected resolved playback source: {other:?}"),

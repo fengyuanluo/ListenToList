@@ -24,7 +24,7 @@
 - `Local` -> `LocalFile`
 - `OpenList` -> `DirectHttp`
 - `OneDrive` -> `DirectHttp`
-- `WebDAV` -> `StreamFallback`
+- `WebDAV` -> `DirectHttp`（匿名 / 已知 Basic challenge），其余场景保守 fallback
 
 关键文件：
 
@@ -133,7 +133,8 @@ host 侧文件：
 
 效果：
 
-- `STREAM_FALLBACK` 的 WebDAV 真机 smoke 已恢复稳定通过
+- WebDAV mock server 真机 smoke 已恢复稳定通过
+- 在当前匿名 WebDAV smoke 场景下，resolver 已可直接返回 `DIRECT_HTTP`
 
 ### 2. debug smoke 不再为可选 route 白等 10 秒
 
@@ -170,6 +171,8 @@ host 侧文件：
   - `actualResolverMode == expectedRoute`
   - `resolvedUri` 非空
   - 若 `routeHistory` 中已有 `playback` 记录，则其 `resolverMode` 也必须匹配
+  - 新增对 `next-prefetch` source tag 的强断言
+  - 新增对“当前曲目 / 下一首曲目 metadata duration 已回填”的强断言
 
 ---
 
@@ -196,8 +199,8 @@ host 侧文件：
 
 #### WebDAV
 
-- `actualResolverMode = STREAM_FALLBACK`
-- `resolvedUri = ease://data?music=<id>`
+- `actualResolverMode = DIRECT_HTTP`
+- `resolvedUri = http://127.0.0.1:<port>/webdav/...`
 
 ### C. debug-only 边界
 
@@ -289,7 +292,9 @@ cd android && ./gradlew :app:processReleaseMainManifest
 - 真机上：
   - Local -> `LOCAL_FILE`
   - OpenList -> `DIRECT_HTTP`
-  - WebDAV -> `STREAM_FALLBACK`
+  - WebDAV -> `DIRECT_HTTP`（当前匿名 smoke 场景）
+  - `next-prefetch` 在 Local / OpenList / WebDAV smoke 中均已被强断言
+  - 当前曲目与下一首曲目的 metadata duration 回填已被强断言
 
 ### 尚未纳入本轮真机 smoke 的扩展项
 
@@ -297,7 +302,6 @@ cd android && ./gradlew :app:processReleaseMainManifest
 
 - OneDrive 端到端 smoke
 - folder-prefetch 独立场景 smoke
-- 对 `metadata` / `next-prefetch` 的单独强断言 smoke
 
 ---
 
