@@ -8,8 +8,13 @@ use reqwest::{StatusCode, Url};
 
 use std::cmp::Ordering;
 
+use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::time::Duration;
+
+const WEBDAV_TCP_KEEPALIVE: Duration = Duration::from_secs(60);
+const WEBDAV_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+const WEBDAV_HTTP1_ONLY_COMPAT: bool = true;
 
 pub struct Webdav {
     addr: String,
@@ -18,6 +23,7 @@ pub struct Webdav {
     _is_anonymous: bool,
     last_www_authenticate: RwLock<Option<String>>,
     connect_timeout: Duration,
+    client: OnceLock<reqwest::Client>,
 }
 
 pub struct BuildWebdavArg {
@@ -114,6 +120,7 @@ impl Webdav {
             _is_anonymous: arg.is_anonymous,
             last_www_authenticate: Default::default(),
             connect_timeout: arg.connect_timeout,
+            client: OnceLock::new(),
         }
     }
 
@@ -327,12 +334,22 @@ impl Webdav {
     }
 
     fn build_client(&self) -> StorageBackendResult<reqwest::Client> {
-        let client = reqwest::Client::builder()
+        if let Some(client) = self.client.get() {
+            return Ok(client.clone());
+        }
+        let mut builder = reqwest::Client::builder()
             .connect_timeout(self.connect_timeout)
-            .http1_only()
-            .no_proxy()
-            .build()?;
-        Ok(client)
+            .tcp_keepalive(Some(WEBDAV_TCP_KEEPALIVE))
+            .pool_idle_timeout(Some(WEBDAV_POOL_IDLE_TIMEOUT))
+            .pool_max_idle_per_host(6)
+            .no_proxy();
+        if WEBDAV_HTTP1_ONLY_COMPAT {
+            // Keep HTTP/1.1 for compatibility with older WebDAV servers and proxies.
+            builder = builder.http1_only();
+        }
+        let client = builder.build()?;
+        let _ = self.client.set(client);
+        Ok(self.client.get().expect("webdav client missing").clone())
     }
 }
 
@@ -523,5 +540,31 @@ mod test {
 
         let chunk = file.bytes().await.unwrap();
         assert_eq!(chunk.as_ref(), [51]);
+    }
+
+    #[test]
+    fn test_build_client_is_cached() {
+        let backend = Webdav::new(BuildWebdavArg {
+            addr: "http://127.0.0.1:8080".to_string(),
+            username: Default::default(),
+            password: Default::default(),
+            is_anonymous: true,
+            connect_timeout: Duration::from_secs(10),
+        });
+
+        assert!(backend.client.get().is_none());
+        let _ = backend.build_client().unwrap();
+        let first = backend
+            .client
+            .get()
+            .map(|client| client as *const _)
+            .unwrap();
+        let _ = backend.build_client().unwrap();
+        let second = backend
+            .client
+            .get()
+            .map(|client| client as *const _)
+            .unwrap();
+        assert_eq!(first, second);
     }
 }

@@ -58,6 +58,26 @@ enum SendChunkError {
 
 pub type StorageBackendResult<T> = std::result::Result<T, StorageBackendError>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaybackHttpHeader {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectHttpPlaybackSource {
+    pub url: String,
+    pub headers: Vec<PlaybackHttpHeader>,
+    pub cache_key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedPlaybackSource {
+    DirectHttp(DirectHttpPlaybackSource),
+    LocalFile { absolute_path: String },
+    StreamFallback,
+}
+
 impl StorageBackendError {
     pub fn is_timeout(&self) -> bool {
         if let StorageBackendError::RequestFail(e) = self {
@@ -89,6 +109,12 @@ impl StorageBackendError {
 pub trait StorageBackend {
     fn list(&self, dir: String) -> BoxFuture<'_, StorageBackendResult<Vec<Entry>>>;
     fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>>;
+    fn resolve_playback_source(
+        &self,
+        _p: String,
+    ) -> BoxFuture<'_, StorageBackendResult<ResolvedPlaybackSource>> {
+        Box::pin(async { Ok(ResolvedPlaybackSource::StreamFallback) })
+    }
 }
 
 impl StreamFile {

@@ -1,5 +1,6 @@
 package com.kutedev.easemusicplayer.singleton
 
+import com.kutedev.easemusicplayer.core.PLAY_DIRECTION_NEXT
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +18,10 @@ import uniffi.ease_client_backend.ctRemoveMusicFromPlaylist
 import uniffi.ease_client_backend.ctUpdateMusicLyric
 import uniffi.ease_client_backend.ctsGetPreferencePlaymode
 import uniffi.ease_client_backend.ctsSavePreferencePlaymode
+import uniffi.ease_client_schema.MusicId
+import uniffi.ease_client_schema.PlaylistId
 import uniffi.ease_client_schema.PlayMode
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,6 +30,13 @@ val DEFAULT_COVER_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABGUAAA
 data class SleepModeState(
     val enabled: Boolean = false,
     val expiredMs: Long = 0
+)
+
+data class PlaybackRecoverySeed(
+    val token: Long,
+    val playlistId: PlaylistId,
+    val musicId: MusicId,
+    val direction: Int,
 )
 
 
@@ -49,6 +60,8 @@ class PlayerRepository @Inject constructor(
     private val _durationChanged = MutableSharedFlow<Unit>()
     private val _playMode = MutableStateFlow(PlayMode.SINGLE)
     private val _pauseRequest = MutableSharedFlow<Unit>()
+    private val _recoverySeed = MutableStateFlow<PlaybackRecoverySeed?>(null)
+    private val recoveryToken = AtomicLong(0L)
     val playMode = _playMode.asStateFlow()
     val durationChanged = _durationChanged.asSharedFlow()
     val music = _music.asStateFlow()
@@ -56,6 +69,7 @@ class PlayerRepository @Inject constructor(
     val playing = _playing.asStateFlow()
     val loading = _loading.asStateFlow()
     val pauseRequest = _pauseRequest.asSharedFlow()
+    val recoverySeed = _recoverySeed.asStateFlow()
 
     val previousMusic = combine(playMode, _musicIndex, _playlist) {
         playMode, musicIndex, playlist ->
@@ -124,6 +138,19 @@ class PlayerRepository @Inject constructor(
     fun resetCurrent() {
         _music.value = null
         _playlist.value = null
+    }
+
+    fun seedPlaybackRecovery(
+        playlistId: PlaylistId,
+        musicId: MusicId,
+        direction: Int = PLAY_DIRECTION_NEXT
+    ) {
+        _recoverySeed.value = PlaybackRecoverySeed(
+            token = recoveryToken.incrementAndGet(),
+            playlistId = playlistId,
+            musicId = musicId,
+            direction = direction,
+        )
     }
 
     fun remove() {

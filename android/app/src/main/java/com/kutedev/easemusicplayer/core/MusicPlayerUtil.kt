@@ -12,9 +12,11 @@ import androidx.media3.extractor.metadata.id3.ApicFrame
 import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.DEFAULT_COVER_BASE64
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uniffi.ease_client_backend.ArgUpdateMusicCover
 import uniffi.ease_client_backend.ArgUpdateMusicDuration
 import uniffi.ease_client_backend.Music
@@ -82,7 +84,7 @@ private fun buildMediaItem(cx: BuildMediaContext, music: MusicOrMusicAbstract): 
 
     val mediaItem = MediaItem.Builder()
         .setMediaId(meta.id.value.toString())
-        .setUri("ease://data?music=${meta.id.value}")
+        .setUri(buildPlaybackMusicUri(meta.id))
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(meta.title)
@@ -134,18 +136,39 @@ fun syncMetadataUtil(
 
     val id = MusicId(mediaItem.mediaId.toLong())
     val expectedMediaId = mediaItem.mediaId
-    val coverData = extractCurrentTracksCover(player)
-
     return scope.launch {
         try {
-            var durationMS = player.duration
+            var coverData: ByteArray? = null
+            var playbackStale = false
+            var durationMS = withContext(Dispatchers.Main.immediate) {
+                if (player.currentMediaItem?.mediaId != expectedMediaId) {
+                    playbackStale = true
+                    TIME_UNSET
+                } else {
+                    coverData = extractCurrentTracksCover(player)
+                    player.duration
+                }
+            }
+            if (playbackStale) {
+                return@launch
+            }
             var attempt = 0
             while (durationMS == TIME_UNSET && attempt < 10) {
                 delay(500)
-                if (player.currentMediaItem?.mediaId != expectedMediaId) {
+                durationMS = withContext(Dispatchers.Main.immediate) {
+                    if (player.currentMediaItem?.mediaId != expectedMediaId) {
+                        playbackStale = true
+                        TIME_UNSET
+                    } else {
+                        if (coverData == null) {
+                            coverData = extractCurrentTracksCover(player)
+                        }
+                        player.duration
+                    }
+                }
+                if (playbackStale) {
                     return@launch
                 }
-                durationMS = player.duration
                 attempt += 1
             }
             if (durationMS == TIME_UNSET) {

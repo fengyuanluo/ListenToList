@@ -10,7 +10,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.Player.COMMAND_PLAY_PAUSE
-import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.session.CommandButton
@@ -21,15 +20,16 @@ import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
 import com.kutedev.easemusicplayer.MainActivity
+import com.kutedev.easemusicplayer.singleton.PlaylistRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
+import com.kutedev.easemusicplayer.singleton.ToastRepository
+import java.io.FileNotFoundException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import uniffi.ease_client_backend.Music
 import uniffi.ease_client_backend.Playlist
-import uniffi.ease_client_backend.ctGetAssetStream
 import uniffi.ease_client_backend.ctGetMusic
 import javax.inject.Inject
 import com.kutedev.easemusicplayer.singleton.Bridge
@@ -37,26 +37,32 @@ import dagger.hilt.android.AndroidEntryPoint
 import uniffi.ease_client_backend.MusicAbstract
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_backend.easeLog
-import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_schema.MusicId
+import uniffi.ease_client_schema.PlaylistId
 import uniffi.ease_client_schema.PlayMode
 
 
 const val PLAYER_TO_PREV_COMMAND = "PLAYER_TO_PREV_COMMAND";
 const val PLAYER_TO_NEXT_COMMAND = "PLAYER_TO_NEXT_COMMAND";
 
-private const val PLAY_DIRECTION_NEXT = 1
-private const val PLAY_DIRECTION_PREVIOUS = -1
-
-
+private data class PlaybackRecoveryState(
+    val token: Long,
+    val playlistId: PlaylistId,
+    val direction: Int,
+    val attemptedIds: MutableSet<MusicId>,
+    var skipToastShown: Boolean = false,
+)
 
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
     @Inject lateinit var playerRepository: PlayerRepository
+    @Inject lateinit var playlistRepository: PlaylistRepository
+    @Inject lateinit var toastRepository: ToastRepository
     @Inject lateinit var bridge: Bridge
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var _mediaSession: MediaSession? = null
     private var _prefetcher: PlaybackPrefetcher? = null
+    private var recoveryState: PlaybackRecoveryState? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -69,10 +75,20 @@ class PlaybackService : MediaSessionService() {
         val pendingIntent = PendingIntent.getActivity(this, 0, intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-        val upstreamFactory = DataSource.Factory { MusicPlayerDataSource(bridge, serviceScope) }
         val cache = PlaybackCache.getCache(context)
-        val cacheFactory = PlaybackCache.buildCacheDataSourceFactory(context, upstreamFactory)
-        _prefetcher = PlaybackPrefetcher(cache, cacheFactory, serviceScope)
+        val playerUpstreamFactory = PlaybackDataSourceFactory.create(
+            bridge = bridge,
+            scope = serviceScope,
+            sourceTag = PLAYBACK_SOURCE_TAG_PLAYBACK,
+        )
+        val prefetchUpstreamFactory = PlaybackDataSourceFactory.create(
+            bridge = bridge,
+            scope = serviceScope,
+            sourceTag = PLAYBACK_SOURCE_TAG_NEXT_PREFETCH,
+        )
+        val playerCacheFactory = PlaybackCache.buildCacheDataSourceFactory(context, playerUpstreamFactory)
+        val prefetchCacheFactory = PlaybackCache.buildCacheDataSourceFactory(context, prefetchUpstreamFactory)
+        _prefetcher = PlaybackPrefetcher(cache, prefetchCacheFactory, serviceScope)
 
         val player = ExoPlayer.Builder(context)
             .setAudioAttributes(
@@ -85,7 +101,7 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(WAKE_MODE_NETWORK)
             .setLoadControl(PlaybackLoadControl.build())
-            .setMediaSourceFactory(ProgressiveMediaSource.Factory(cacheFactory))
+            .setMediaSourceFactory(ProgressiveMediaSource.Factory(playerCacheFactory))
             .build()
         _mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(pendingIntent)
@@ -173,10 +189,16 @@ class PlaybackService : MediaSessionService() {
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
+                    recoveryState = null
                     playOnComplete()
                 } else if (playbackState == Player.STATE_READY) {
                     playerRepository.setIsLoading(false)
                     syncCurrentMetadata(player)
+                    prefetchNext()
+                    playlistRepository.primePlaybackMetadata(
+                        currentId = playerRepository.music.value?.meta?.id,
+                        nextId = playerRepository.nextMusic.value?.meta?.id,
+                    )
                 } else if (playbackState == Player.STATE_BUFFERING) {
                     playerRepository.setIsLoading(true)
                 } else if (playbackState == Player.STATE_IDLE) {
@@ -201,11 +223,16 @@ class PlaybackService : MediaSessionService() {
                 playerRepository.setIsLoading(false)
                 _prefetcher?.cancel()
                 easeError("playback error: $error")
-                when (error.errorCode) {
-                    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
-                    PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> {
-                        playNext()
+                if (shouldRecoverFromPlaybackError(error)) {
+                    serviceScope.launch {
+                        recoverFromPlaybackError(player as ExoPlayer)
                     }
+                } else {
+                    recoveryState = null
+                    player.stop()
+                    player.clearMediaItems()
+                    playerRepository.resetCurrent()
+                    toastRepository.emitToast("播放失败")
                 }
             }
         })
@@ -240,57 +267,9 @@ class PlaybackService : MediaSessionService() {
         _mediaSession = null
         _prefetcher?.cancel()
         _prefetcher = null
+        recoveryState = null
         serviceScope.cancel()
     }
-
-    private suspend fun isMusicAvailable(id: MusicId): Boolean {
-        val stream = bridge.run { ctGetAssetStream(it, DataSourceKey.Music(id), 0u) } ?: return false
-        val size = stream.size()?.toLong()
-        return size == null || size > 0L
-    }
-
-    private suspend fun pickPlayableMusic(
-        startId: MusicId,
-        playlist: Playlist,
-        direction: Int
-    ): Music? {
-        val musics = playlist.musics
-        if (musics.isEmpty()) {
-            return null
-        }
-        val startIndex = musics.indexOfFirst { it.meta.id == startId }
-        if (startIndex == -1) {
-            return null
-        }
-
-        val shouldWrap = playerRepository.playMode.value == PlayMode.LIST_LOOP
-        var index = startIndex
-        var steps = 0
-
-        while (steps < musics.size) {
-            val candidate = musics[index]
-            if (isMusicAvailable(candidate.meta.id)) {
-                val music = bridge.run { ctGetMusic(it, candidate.meta.id) }
-                if (music != null) {
-                    return music
-                }
-            }
-            if (direction >= 0) {
-                if (index == musics.lastIndex && !shouldWrap) {
-                    break
-                }
-                index = (index + 1) % musics.size
-            } else {
-                if (index == 0 && !shouldWrap) {
-                    break
-                }
-                index = (index - 1 + musics.size) % musics.size
-            }
-            steps += 1
-        }
-        return null
-    }
-
 
     fun play(
         musicAbstract: MusicAbstract,
@@ -300,19 +279,25 @@ class PlaybackService : MediaSessionService() {
         val player = _mediaSession?.player ?: return
 
         serviceScope.launch {
-            val resolved = pickPlayableMusic(musicAbstract.meta.id, playlist, direction)
-            if (resolved == null) {
+            val targetAbstract = playlist.musics.find { it.meta.id == musicAbstract.meta.id }
+            if (targetAbstract == null) {
                 playerRepository.resetCurrent()
                 playerRepository.setIsLoading(false)
-                easeError("no playable music found in playlist=${playlist.abstr.meta.id.value}")
+                toastRepository.emitToast("歌曲资源不可用")
+                easeError("target music abstract missing in playlist=${playlist.abstr.meta.id.value}, id=${musicAbstract.meta.id.value}")
                 return@launch
             }
-            if (resolved.meta.id != musicAbstract.meta.id) {
-                easeError("skip unavailable music id=${musicAbstract.meta.id.value}, fallback to ${resolved.meta.id.value}")
+            val target = bridge.run { ctGetMusic(it, targetAbstract.meta.id) }
+            if (target == null) {
+                playerRepository.resetCurrent()
+                playerRepository.setIsLoading(false)
+                toastRepository.emitToast("歌曲资源不可用")
+                easeError("target music missing in playlist=${playlist.abstr.meta.id.value}, id=${musicAbstract.meta.id.value}")
+                return@launch
             }
-            playerRepository.setCurrent(resolved, playlist)
-            playUtil(BuildMediaContext(bridge = bridge, scope = serviceScope), resolved, player as ExoPlayer)
-            prefetchNext()
+            playerRepository.seedPlaybackRecovery(playlist.abstr.meta.id, target.meta.id, direction)
+            playerRepository.setCurrent(target, playlist)
+            playUtil(BuildMediaContext(bridge = bridge, scope = serviceScope), target, player as ExoPlayer)
         }
     }
 
@@ -346,7 +331,123 @@ class PlaybackService : MediaSessionService() {
             _prefetcher?.cancel()
             return
         }
-        val uri = android.net.Uri.parse("ease://data?music=${next.meta.id.value}")
+        val uri = buildPlaybackMusicUri(next.meta.id)
         _prefetcher?.prefetch(uri, PlaybackCachePolicy.prefetchBytesForSeconds())
+    }
+
+    private fun shouldRecoverFromPlaybackError(error: PlaybackException): Boolean {
+        if (error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) {
+            return true
+        }
+        return error.findCause<FileNotFoundException>() != null
+    }
+
+    private suspend fun recoverFromPlaybackError(player: ExoPlayer) {
+        val playlist = playerRepository.playlist.value
+        val current = playerRepository.music.value
+        val seed = playerRepository.recoverySeed.value
+        if (playlist == null || current == null || seed == null) {
+            player.stop()
+            player.clearMediaItems()
+            playerRepository.resetCurrent()
+            toastRepository.emitToast("播放失败")
+            recoveryState = null
+            return
+        }
+
+        val active = if (
+            recoveryState?.token != seed.token ||
+            recoveryState?.playlistId != playlist.abstr.meta.id
+        ) {
+            PlaybackRecoveryState(
+                token = seed.token,
+                playlistId = playlist.abstr.meta.id,
+                direction = seed.direction,
+                attemptedIds = mutableSetOf(seed.musicId, current.meta.id),
+            ).also { recoveryState = it }
+        } else {
+            recoveryState!!.also { it.attemptedIds.add(current.meta.id) }
+        }
+
+        val candidateAbstract = findRecoveryCandidate(playlist, current.meta.id, active.direction, active.attemptedIds)
+        if (candidateAbstract == null) {
+            recoveryState = null
+            toastRepository.emitToast("歌曲资源不可用")
+            player.stop()
+            player.clearMediaItems()
+            playerRepository.resetCurrent()
+            return
+        }
+        val candidate = bridge.run { ctGetMusic(it, candidateAbstract.meta.id) }
+        if (candidate == null) {
+            active.attemptedIds.add(candidateAbstract.meta.id)
+            recoverFromPlaybackError(player)
+            return
+        }
+
+        if (!active.skipToastShown) {
+            toastRepository.emitToast("歌曲资源不可用，已跳过")
+            active.skipToastShown = true
+        }
+        active.attemptedIds.add(candidate.meta.id)
+        playerRepository.setCurrent(candidate, playlist)
+        playUtil(BuildMediaContext(bridge = bridge, scope = serviceScope), candidate, player)
+    }
+
+    private fun findRecoveryCandidate(
+        playlist: Playlist,
+        currentId: MusicId,
+        direction: Int,
+        attemptedIds: Set<MusicId>
+    ): MusicAbstract? {
+        val musics = playlist.musics
+        if (musics.isEmpty()) {
+            return null
+        }
+        val startIndex = musics.indexOfFirst { it.meta.id == currentId }
+        if (startIndex == -1) {
+            return null
+        }
+        val shouldWrap = playerRepository.playMode.value == PlayMode.LIST_LOOP
+        var index = startIndex
+        var steps = 0
+        while (steps < musics.size - 1) {
+            index = if (direction >= 0) {
+                if (index == musics.lastIndex) {
+                    if (!shouldWrap) {
+                        return null
+                    }
+                    0
+                } else {
+                    index + 1
+                }
+            } else {
+                if (index == 0) {
+                    if (!shouldWrap) {
+                        return null
+                    }
+                    musics.lastIndex
+                } else {
+                    index - 1
+                }
+            }
+            val candidate = musics[index]
+            if (!attemptedIds.contains(candidate.meta.id)) {
+                return candidate
+            }
+            steps += 1
+        }
+        return null
+    }
+
+    private inline fun <reified T : Throwable> Throwable.findCause(): T? {
+        var cursor: Throwable? = this
+        while (cursor != null) {
+            if (cursor is T) {
+                return cursor
+            }
+            cursor = cursor.cause
+        }
+        return null
     }
 }

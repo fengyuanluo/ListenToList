@@ -4,11 +4,12 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.datasource.DataSource
 import com.kutedev.easemusicplayer.core.FolderPrefetcher
-import com.kutedev.easemusicplayer.core.MusicPlayerDataSource
 import com.kutedev.easemusicplayer.core.PlaybackCache
 import com.kutedev.easemusicplayer.core.PlaybackCachePolicy
+import com.kutedev.easemusicplayer.core.PlaybackDataSourceFactory
+import com.kutedev.easemusicplayer.core.PLAYBACK_SOURCE_TAG_FOLDER_PREFETCH
+import com.kutedev.easemusicplayer.core.buildPlaybackMusicUri
 import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.PermissionRepository
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
@@ -98,7 +99,11 @@ class StorageBrowserVM @Inject constructor(
         prefetchCache,
         PlaybackCache.buildCacheDataSourceFactory(
             appContext,
-            DataSource.Factory { MusicPlayerDataSource(bridge, viewModelScope) }
+            PlaybackDataSourceFactory.create(
+                bridge = bridge,
+                scope = viewModelScope,
+                sourceTag = PLAYBACK_SOURCE_TAG_FOLDER_PREFETCH,
+            )
         ),
         viewModelScope
     )
@@ -278,8 +283,12 @@ class StorageBrowserVM @Inject constructor(
                     toastRepository.emitToast("播放列表为空")
                     return@launch
                 }
-                prefetchFolderSongs(songs, created.musicIds, index)
-                playlistRepository.requestTotalDuration(appContext, created.musicIds)
+                folderPrefetcher.cancel()
+                prefetchFolderSongs(
+                    songs = songs,
+                    musicIds = created.musicIds,
+                    startIndex = index,
+                )
                 playlistRepository.reload()
                 playerControllerRepository.play(musicId, created.id)
             } finally {
@@ -388,7 +397,7 @@ class StorageBrowserVM @Inject constructor(
                 continue
             }
             val id = musicIds[index].id.value
-            val uri = android.net.Uri.parse("ease://data?music=$id")
+            val uri = buildPlaybackMusicUri(musicIds[index].id)
             tasks.add(uri to bytes)
         }
         folderPrefetcher.prefetch(tasks)
