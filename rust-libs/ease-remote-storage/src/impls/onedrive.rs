@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, time::Duration};
+use std::{cmp::Ordering, sync::OnceLock, time::Duration};
 
 use ease_client_tokio::tokio_runtime;
 use futures_util::future::BoxFuture;
@@ -6,8 +6,8 @@ use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 
 use crate::{
-    env::EASEM_ONEDRIVE_ID, Entry, StorageBackend, StorageBackendError, StorageBackendResult,
-    StreamFile,
+    env::EASEM_ONEDRIVE_ID, DirectHttpPlaybackSource, Entry, PlaybackHttpHeader,
+    ResolvedPlaybackSource, StorageBackend, StorageBackendError, StorageBackendResult, StreamFile,
 };
 
 pub struct BuildOneDriveArg {
@@ -80,6 +80,12 @@ mod onedrive_types {
 const ONEDRIVE_ROOT_API: &str = "https://graph.microsoft.com/v1.0/me/drive";
 const ONEDRIVE_API_BASE: &str = "https://login.microsoftonline.com/common/oauth2/v2.0";
 const ONEDRIVE_REDIRECT_URI: &str = "easem://oauth2redirect/";
+const ONEDRIVE_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const ONEDRIVE_TCP_KEEPALIVE: Duration = Duration::from_secs(60);
+const ONEDRIVE_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+const ONEDRIVE_HTTP1_ONLY_COMPAT: bool = true;
+
+static ONEDRIVE_SHARED_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 fn is_auth_error<T>(r: &StorageBackendResult<T>) -> bool {
     if let Err(e) = r {
@@ -93,12 +99,25 @@ fn is_auth_error<T>(r: &StorageBackendResult<T>) -> bool {
 }
 
 fn build_client() -> StorageBackendResult<reqwest::Client> {
-    let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(10))
-        .http1_only()
-        .no_proxy()
-        .build()?;
-    Ok(client)
+    if let Some(client) = ONEDRIVE_SHARED_CLIENT.get() {
+        return Ok(client.clone());
+    }
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(ONEDRIVE_CONNECT_TIMEOUT)
+        .tcp_keepalive(Some(ONEDRIVE_TCP_KEEPALIVE))
+        .pool_idle_timeout(Some(ONEDRIVE_POOL_IDLE_TIMEOUT))
+        .pool_max_idle_per_host(6)
+        .no_proxy();
+    if ONEDRIVE_HTTP1_ONLY_COMPAT {
+        // Keep HTTP/1.1 as a compatibility fallback until Graph/redirect chains are revalidated for H2.
+        builder = builder.http1_only();
+    }
+    let client = builder.build()?;
+    let _ = ONEDRIVE_SHARED_CLIENT.set(client);
+    Ok(ONEDRIVE_SHARED_CLIENT
+        .get()
+        .expect("onedrive client missing")
+        .clone())
 }
 
 async fn refresh_token_by_code_impl(code: String) -> StorageBackendResult<Auth> {
@@ -328,6 +347,30 @@ impl OneDriveBackend {
         Ok(res)
     }
 
+    async fn resolve_playback_source_impl(
+        &self,
+        p: &str,
+    ) -> StorageBackendResult<ResolvedPlaybackSource> {
+        let url = format!("{ONEDRIVE_ROOT_API}/root:{p}:/content");
+        let base_headers = self.build_base_header_map().await;
+        let headers = base_headers
+            .iter()
+            .filter_map(|(name, value)| {
+                let name = name.to_string();
+                let value = value.to_str().ok()?.to_string();
+                Some(PlaybackHttpHeader { name, value })
+            })
+            .collect::<Vec<_>>();
+
+        Ok(ResolvedPlaybackSource::DirectHttp(
+            DirectHttpPlaybackSource {
+                url,
+                headers,
+                cache_key: Some(p.to_string()),
+            },
+        ))
+    }
+
     async fn get_with_retry_impl(
         &self,
         p: String,
@@ -340,6 +383,19 @@ impl OneDriveBackend {
         }
         self.refresh_token_by_refresh_token().await?;
         return self.get_impl(p.as_str(), byte_offset).await;
+    }
+
+    async fn resolve_playback_source_with_retry_impl(
+        &self,
+        p: String,
+    ) -> StorageBackendResult<ResolvedPlaybackSource> {
+        self.try_ensure_refresh_token_by_refresh_token().await?;
+        let r = self.resolve_playback_source_impl(p.as_str()).await;
+        if !is_auth_error(&r) {
+            return r;
+        }
+        self.refresh_token_by_refresh_token().await?;
+        self.resolve_playback_source_impl(p.as_str()).await
     }
 
     fn build_client(&self) -> StorageBackendResult<reqwest::Client> {
@@ -355,11 +411,67 @@ impl StorageBackend for OneDriveBackend {
     fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>> {
         Box::pin(self.get_with_retry_impl(p, byte_offset))
     }
+
+    fn resolve_playback_source(
+        &self,
+        p: String,
+    ) -> BoxFuture<'_, StorageBackendResult<ResolvedPlaybackSource>> {
+        Box::pin(self.resolve_playback_source_with_retry_impl(p))
+    }
 }
 
 impl OneDriveBackend {
     pub async fn request_refresh_token(code: String) -> StorageBackendResult<String> {
         let authed = refresh_token_by_code_impl(code).await?;
         Ok(authed.refresh_token)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{build_client, Auth, OneDriveBackend, ONEDRIVE_SHARED_CLIENT};
+    use crate::{ResolvedPlaybackSource, StorageBackend};
+
+    #[test]
+    fn test_build_client_is_cached() {
+        assert!(build_client().is_ok());
+        assert!(ONEDRIVE_SHARED_CLIENT.get().is_some());
+        assert!(build_client().is_ok());
+        assert!(ONEDRIVE_SHARED_CLIENT.get().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_playback_source_returns_direct_http() {
+        let backend = OneDriveBackend::new(super::BuildOneDriveArg {
+            code: "refresh-token".to_string(),
+        });
+        {
+            let mut auth = backend.auth.write().await;
+            *auth = Some(Auth {
+                access_token: "access-token".to_string(),
+                refresh_token: "refresh-token".to_string(),
+            });
+        }
+
+        let resolved = backend
+            .resolve_playback_source("/music/test.wav".to_string())
+            .await
+            .unwrap();
+        match resolved {
+            ResolvedPlaybackSource::DirectHttp(source) => {
+                assert_eq!(
+                    source.url,
+                    "https://graph.microsoft.com/v1.0/me/drive/root:/music/test.wav:/content"
+                );
+                assert_eq!(source.cache_key.as_deref(), Some("/music/test.wav"));
+                assert!(source.headers.iter().any(|header| {
+                    header
+                        .name
+                        .eq_ignore_ascii_case(reqwest::header::AUTHORIZATION.as_str())
+                        && header.value == "bearer access-token"
+                }));
+            }
+            other => panic!("unexpected resolved playback source: {other:?}"),
+        }
     }
 }

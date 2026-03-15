@@ -4,11 +4,11 @@ import kotlin.math.max
 import kotlin.math.min
 
 object PlaybackCachePolicy {
-    const val PREFETCH_SECONDS = 30
+    const val PREFETCH_SECONDS = 20
 
-    private const val ASSUMED_BITRATE_KBPS = 640
-    private const val MIN_PREFETCH_BYTES = 512L * 1024
-    private const val MAX_PREFETCH_BYTES = 20L * 1024 * 1024
+    private const val ASSUMED_BITRATE_KBPS = 320
+    private const val MIN_PREFETCH_BYTES = 256L * 1024
+    private const val MAX_PREFETCH_BYTES = 8L * 1024 * 1024
 
     fun prefetchBytesForSeconds(seconds: Int = PREFETCH_SECONDS): Long {
         val safeSeconds = max(seconds, 1)

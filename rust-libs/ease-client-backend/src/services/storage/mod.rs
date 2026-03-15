@@ -8,12 +8,14 @@ use crate::{
     ctx::BackendContext,
     error::BResult,
     objects::{ArgUpsertStorage, Storage},
-    services::{get_music, get_music_cover_bytes},
+    services::{get_music, get_music_cover_bytes, get_music_storage_entry_loc},
 };
-use ease_client_schema::{DataSourceKey, StorageEntryLoc, StorageId, StorageModel, StorageType};
+use ease_client_schema::{
+    DataSourceKey, MusicId, StorageEntryLoc, StorageId, StorageModel, StorageType,
+};
 use ease_remote_storage::{
     BuildOneDriveArg, BuildOpenListArg, BuildWebdavArg, LocalBackend, OneDriveBackend, OpenList,
-    StorageBackend, StreamFile, Webdav,
+    ResolvedPlaybackSource, StorageBackend, StreamFile, Webdav,
 };
 use tracing::instrument;
 
@@ -213,4 +215,33 @@ pub(crate) async fn get_asset_file(
         }
         DataSourceKey::AnyEntry { entry } => get_asset_file_by_loc(cx, entry, byte_offset).await,
     }
+}
+
+async fn resolve_playback_source_by_loc(
+    cx: &BackendContext,
+    entry: StorageEntryLoc,
+) -> BResult<Option<ResolvedPlaybackSource>> {
+    let storage_backend = get_storage_backend(cx, entry.storage_id)?;
+    let Some(storage_backend) = storage_backend else {
+        return Ok(None);
+    };
+
+    let resolved = storage_backend.resolve_playback_source(entry.path).await;
+    if let Err(error) = &resolved {
+        if error.is_not_found() {
+            return Ok(None);
+        }
+    }
+    Ok(Some(resolved?))
+}
+
+pub(crate) async fn resolve_music_playback_source(
+    cx: &BackendContext,
+    id: MusicId,
+) -> BResult<Option<ResolvedPlaybackSource>> {
+    let loc = get_music_storage_entry_loc(cx, id)?;
+    let Some(loc) = loc else {
+        return Ok(None);
+    };
+    resolve_playback_source_by_loc(cx, loc).await
 }

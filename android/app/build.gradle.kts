@@ -137,6 +137,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
     implementation(libs.reorderable)
     testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.14.1")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

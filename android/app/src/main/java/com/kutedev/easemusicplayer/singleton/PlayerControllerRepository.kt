@@ -8,6 +8,8 @@ import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
 import androidx.media3.common.Player.COMMAND_STOP
 import androidx.media3.session.MediaController
 import com.kutedev.easemusicplayer.core.BuildMediaContext
+import com.kutedev.easemusicplayer.core.PLAY_DIRECTION_NEXT
+import com.kutedev.easemusicplayer.core.PLAY_DIRECTION_PREVIOUS
 import com.kutedev.easemusicplayer.core.playUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,25 +20,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.ArgRemoveMusicFromPlaylist
-import uniffi.ease_client_backend.Music
 import uniffi.ease_client_backend.Playlist
-import uniffi.ease_client_backend.ctGetAssetStream
 import uniffi.ease_client_backend.ctGetMusic
 import uniffi.ease_client_backend.ctGetPlaylist
 import uniffi.ease_client_backend.ctRemoveMusicFromPlaylist
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_backend.easeLog
-import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_schema.PlaylistId
-import uniffi.ease_client_schema.PlayMode
 import java.time.Duration
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
-
-private const val PLAY_DIRECTION_NEXT = 1
-private const val PLAY_DIRECTION_PREVIOUS = -1
 
 @Singleton
 class PlayerControllerRepository @Inject constructor(
@@ -83,15 +78,16 @@ class PlayerControllerRepository @Inject constructor(
     }
 
     fun setupMediaController(mediaController: MediaController) {
+        if (_mediaController === mediaController) {
+            return
+        }
+        _mediaController?.release()
         _mediaController = mediaController
 
         mediaController.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 super.onPlayerError(error)
-
-                _scope.launch {
-                    toastRepository.emitToast(error.toString())
-                }
+                easeError("media controller error: $error")
             }
         })
         _scope.launch {
@@ -105,6 +101,10 @@ class PlayerControllerRepository @Inject constructor(
         _mediaController = null
 
         easeLog("media controller destroy")
+    }
+
+    fun hasMediaController(): Boolean {
+        return _mediaController != null
     }
 
     fun getCurrentPosition(): Long {
@@ -121,54 +121,6 @@ class PlayerControllerRepository @Inject constructor(
             return null
         }
         return duration
-    }
-
-    private suspend fun isMusicAvailable(id: MusicId): Boolean {
-        val stream = bridge.run { ctGetAssetStream(it, DataSourceKey.Music(id), 0u) } ?: return false
-        val size = stream.size()?.toLong()
-        return size == null || size > 0L
-    }
-
-    private suspend fun pickPlayableMusic(
-        startId: MusicId,
-        playlist: Playlist,
-        direction: Int
-    ): Music? {
-        val musics = playlist.musics
-        if (musics.isEmpty()) {
-            return null
-        }
-        val startIndex = musics.indexOfFirst { it.meta.id == startId }
-        if (startIndex == -1) {
-            return null
-        }
-
-        val shouldWrap = playerRepository.playMode.value == PlayMode.LIST_LOOP
-        var index = startIndex
-        var steps = 0
-
-        while (steps < musics.size) {
-            val candidate = musics[index]
-            if (isMusicAvailable(candidate.meta.id)) {
-                val music = bridge.run { ctGetMusic(it, candidate.meta.id) }
-                if (music != null) {
-                    return music
-                }
-            }
-            if (direction >= 0) {
-                if (index == musics.lastIndex && !shouldWrap) {
-                    break
-                }
-                index = (index + 1) % musics.size
-            } else {
-                if (index == 0 && !shouldWrap) {
-                    break
-                }
-                index = (index - 1 + musics.size) % musics.size
-            }
-            steps += 1
-        }
-        return null
     }
 
     fun play(id: MusicId, playlistId: PlaylistId, direction: Int = PLAY_DIRECTION_NEXT) {
@@ -188,17 +140,21 @@ class PlayerControllerRepository @Inject constructor(
                 return@launch
             }
 
-            val resolved = pickPlayableMusic(id, playlist, direction)
-            if (resolved == null) {
+            val targetAbstract = playlist.musics.find { it.meta.id == id }
+            if (targetAbstract == null) {
                 toastRepository.emitToast("歌曲资源不可用")
                 playerRepository.resetCurrent()
                 return@launch
             }
-            if (resolved.meta.id != id) {
-                toastRepository.emitToast("歌曲资源不可用，已跳过")
+            val target = bridge.run { ctGetMusic(it, targetAbstract.meta.id) }
+            if (target == null) {
+                toastRepository.emitToast("歌曲资源不可用")
+                playerRepository.resetCurrent()
+                return@launch
             }
-            playerRepository.setCurrent(resolved, playlist)
-            playUtil(BuildMediaContext(bridge = bridge, scope = _scope), resolved, mediaController)
+            playerRepository.seedPlaybackRecovery(playlistId, id, direction)
+            playerRepository.setCurrent(target, playlist)
+            playUtil(BuildMediaContext(bridge = bridge, scope = _scope), target, mediaController)
         }
     }
 

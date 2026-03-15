@@ -124,7 +124,7 @@ class PlaylistVM @Inject constructor(
                                 )
                             }
                     ))} ?: emptyList()
-                    playlistRepository.requestTotalDuration(context, added)
+                    playlistRepository.requestTotalDuration(added)
                     playlistRepository.reload()
                 }
         }

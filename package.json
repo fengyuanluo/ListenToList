@@ -4,8 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "doctor:android-env": "bash ./scripts/doctor-android-env.sh",
     "build:jni": "bun run ./scripts/build-jni-libs.ts",
     "build:apk": "EBUILD=1 bun run build:jni && bun run ./scripts/build-apk.ts",
+    "smoke:android": "bun run ./scripts/smoke-android.ts",
     "test": "cd ./rust-libs && cargo nextest run"
   },
   "keywords": [],
