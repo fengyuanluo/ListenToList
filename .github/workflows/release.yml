@@ -64,7 +64,11 @@ jobs:
       - name: Run tests
         run: bun run test
       - name: Build APK
-        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/pre-v') || inputs.build_apk == true
+        if: |
+          github.ref == 'refs/heads/master' ||
+          startsWith(github.ref, 'refs/tags/v') ||
+          startsWith(github.ref, 'refs/tags/pre-v') ||
+          (github.event_name == 'workflow_dispatch' && inputs.build_apk == true)
         run: |
           mkdir -p ~/.gradle
           echo "ANDROID_NDK=$ANDROID_NDK_HOME" >> ~/.gradle/gradle.properties
@@ -74,7 +78,11 @@ jobs:
           ANDROID_SIGN_JKS: ${{ secrets.ANDROID_SIGN_JKS }}
           ANDROID_SIGN_PASSWORD: ${{ secrets.ANDROID_SIGN_PASSWORD }}
       - name: Upload binaries to artifacts
-        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/pre-v') || inputs.build_apk == true
+        if: |
+          github.ref == 'refs/heads/master' ||
+          startsWith(github.ref, 'refs/tags/v') ||
+          startsWith(github.ref, 'refs/tags/pre-v') ||
+          (github.event_name == 'workflow_dispatch' && inputs.build_apk == true)
         uses: actions/upload-artifact@v4
         with:
           name: apk
