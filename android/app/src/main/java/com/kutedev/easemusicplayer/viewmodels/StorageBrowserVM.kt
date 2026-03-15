@@ -27,7 +27,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.ArgCreatePlaylist
@@ -127,17 +129,13 @@ class StorageBrowserVM @Inject constructor(
 
     init {
         viewModelScope.launch {
-            storageRepository.storages.collect {
-                reload()
-            }
-        }
-        viewModelScope.launch {
-            permissionRepository.havePermission.collect {
-                reload()
-            }
-        }
-        viewModelScope.launch {
             reload()
+            merge(
+                storageRepository.storages.drop(1).map { Unit },
+                permissionRepository.havePermission.drop(1).map { Unit },
+            ).collect {
+                reload()
+            }
         }
     }
 

@@ -27,6 +27,7 @@ bytes = "1.5.0"
 obfstr = "0.4.4"
 once_cell = "1.18.0"
 urlencoding = "2.1.3"
+base64 = "0.22.1"
 ease-client-tokio = { workspace = true }
 async-channel = { workspace = true }
 

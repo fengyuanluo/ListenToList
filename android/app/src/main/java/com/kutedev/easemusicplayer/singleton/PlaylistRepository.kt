@@ -10,6 +10,7 @@ import com.kutedev.easemusicplayer.core.PlaybackDataSourceFactory
 import com.kutedev.easemusicplayer.core.PlaybackCache
 import com.kutedev.easemusicplayer.core.PLAYBACK_SOURCE_TAG_METADATA
 import com.kutedev.easemusicplayer.core.buildMediaItem
+import com.kutedev.easemusicplayer.core.probeMusicMetadataDirectly
 import com.kutedev.easemusicplayer.core.syncMetadataUtil
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -36,6 +37,8 @@ import uniffi.ease_client_backend.AddedMusic
 import uniffi.ease_client_backend.ArgCreatePlaylist
 import uniffi.ease_client_backend.ArgRemoveMusicFromPlaylist
 import uniffi.ease_client_backend.ArgReorderPlaylist
+import uniffi.ease_client_backend.ArgUpdateMusicCover
+import uniffi.ease_client_backend.ArgUpdateMusicDuration
 import uniffi.ease_client_backend.ArgUpdatePlaylist
 import uniffi.ease_client_backend.MusicAbstract
 import uniffi.ease_client_backend.PlaylistAbstract
@@ -46,6 +49,8 @@ import uniffi.ease_client_backend.ctRemovePlaylist
 import uniffi.ease_client_backend.ctUpdatePlaylist
 import uniffi.ease_client_backend.ctsGetMusicAbstract
 import uniffi.ease_client_backend.ctsReorderPlaylist
+import uniffi.ease_client_backend.ctsUpdateMusicCover
+import uniffi.ease_client_backend.ctsUpdateMusicDuration
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_backend.easeLog
 import uniffi.ease_client_schema.MusicId
@@ -267,12 +272,61 @@ class PlaylistRepository @Inject constructor(
 
     private suspend fun syncMetadataFor(id: MusicId) {
         val musicAbstract = bridge.runSync { ctsGetMusicAbstract(it, id) } ?: return
-        if (musicAbstract.meta.duration != null) {
+        val missingDuration = musicAbstract.meta.duration == null
+        val missingCover = musicAbstract.cover == null
+        if (!missingDuration && !missingCover) {
             return
         }
         easeLog("metadata sync start: music=${id.value}")
+        val directProbe = probeMusicMetadataDirectly(bridge, id)
+        if (directProbe != null) {
+            val updated = persistMetadataProbe(id, musicAbstract, directProbe.duration, directProbe.cover)
+            val durationSatisfied = !missingDuration || directProbe.duration != null
+            val coverSatisfied = !missingCover || directProbe.cover != null
+            if (updated) {
+                _syncedTotalDuration.emit(id)
+                reload()
+            }
+            if (durationSatisfied && coverSatisfied) {
+                return
+            }
+        }
         val player = getMetadataPlayer()
         runMetadataSync(player, musicAbstract)
+    }
+
+    private fun persistMetadataProbe(
+        id: MusicId,
+        musicAbstract: MusicAbstract,
+        duration: java.time.Duration?,
+        cover: ByteArray?,
+    ): Boolean {
+        var updated = false
+        if (musicAbstract.meta.duration == null && duration != null) {
+            bridge.runSync { backend: uniffi.ease_client_backend.Backend ->
+                uniffi.ease_client_backend.ctsUpdateMusicDuration(
+                    backend,
+                    uniffi.ease_client_backend.ArgUpdateMusicDuration(
+                        id = id,
+                        duration = duration,
+                    )
+                )
+            }
+            updated = true
+        }
+        if (musicAbstract.cover == null && cover != null) {
+            bridge.runSync { backend: uniffi.ease_client_backend.Backend ->
+                uniffi.ease_client_backend.ctsUpdateMusicCover(
+                    backend,
+                    uniffi.ease_client_backend.ArgUpdateMusicCover(
+                        id = id,
+                        cover = cover,
+                    )
+                )
+            }
+            updated = true
+        }
+        return updated
     }
 
     private suspend fun getMetadataPlayer(): ExoPlayer = withContext(Dispatchers.Main) {
@@ -285,7 +339,7 @@ class PlaylistRepository @Inject constructor(
         val player = ExoPlayer.Builder(appContext)
             .setMediaSourceFactory(
                 ProgressiveMediaSource.Factory(
-                    PlaybackCache.buildCacheDataSourceFactory(appContext, upstreamFactory)
+                    PlaybackCache.buildReadOnlyCacheDataSourceFactory(appContext, upstreamFactory)
                 )
             )
             .build()
