@@ -77,8 +77,10 @@ class FolderPrefetcher(
     }
 
     fun cancel() {
-        writers.forEach { it.cancel() }
-        writers.clear()
+        synchronized(writers) {
+            writers.forEach { it.cancel() }
+            writers.clear()
+        }
         prefetchJob?.cancel()
         prefetchJob = null
     }

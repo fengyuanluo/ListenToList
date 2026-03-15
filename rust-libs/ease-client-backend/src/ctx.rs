@@ -1,9 +1,6 @@
 use std::{
     fmt::Debug,
-    sync::{
-        atomic::AtomicU32,
-        Arc, RwLock, Weak,
-    },
+    sync::{atomic::AtomicU32, Arc, RwLock, Weak},
     time::Duration,
 };
 
@@ -44,7 +41,9 @@ impl Debug for BackendContext {
 
 impl WeakBackendContext {
     pub fn upgrade(&self) -> Option<BackendContext> {
-        self.internal.upgrade().map(|internal| BackendContext { internal })
+        self.internal
+            .upgrade()
+            .map(|internal| BackendContext { internal })
     }
 }
 

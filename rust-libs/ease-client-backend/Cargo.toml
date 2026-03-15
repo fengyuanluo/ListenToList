@@ -38,3 +38,7 @@ ease-client-schema = { workspace = true }
 ease-order-key = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
+
+[dev-dependencies]
+ease-client-tokio = { workspace = true }
+tempfile = "3.17.1"

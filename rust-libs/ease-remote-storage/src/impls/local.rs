@@ -1,7 +1,10 @@
 use ease_client_tokio::tokio_runtime;
 use futures_util::future::BoxFuture;
 
-use crate::{Entry, StorageBackend, StorageBackendError, StorageBackendResult, StreamFile};
+use crate::{
+    Entry, ResolvedPlaybackSource, StorageBackend, StorageBackendError, StorageBackendResult,
+    StreamFile,
+};
 
 pub struct LocalBackend;
 
@@ -18,14 +21,34 @@ impl LocalBackend {
         Self
     }
 
-    async fn list_impl(&self, dir: String) -> StorageBackendResult<Vec<Entry>> {
-        let dir = if std::env::consts::OS == "windows" {
-            dir.replace('/', "\\")
+    fn normalize_input_path(&self, p: &str) -> String {
+        if std::env::consts::OS == "windows" {
+            p.replace('/', "\\")
         } else if std::env::consts::OS == "android" {
-            ANDROID_PREFIX_PATH.to_string() + dir.as_str()
+            ANDROID_PREFIX_PATH.to_string() + p
         } else {
-            dir.to_string()
+            p.to_string()
+        }
+    }
+
+    async fn resolve_absolute_path_impl(&self, p: String) -> StorageBackendResult<(String, usize)> {
+        let p = self.normalize_input_path(&p);
+        let (path, total) = {
+            let p = p.clone();
+            tokio_runtime()
+                .spawn(async move {
+                    let path = tokio::fs::canonicalize(&p).await?;
+                    let meta = tokio::fs::metadata(&path).await?;
+                    Ok::<_, StorageBackendError>((path, meta.len() as usize))
+                })
+                .await??
         };
+        let absolute_path = path.to_string_lossy().to_string().replace("\\\\?\\", "");
+        Ok((absolute_path, total))
+    }
+
+    async fn list_impl(&self, dir: String) -> StorageBackendResult<Vec<Entry>> {
+        let dir = self.normalize_input_path(&dir);
 
         let mut ret = tokio_runtime()
             .spawn(async move {
@@ -63,31 +86,7 @@ impl LocalBackend {
     }
 
     async fn get_impl(&self, p: String, byte_offset: u64) -> StorageBackendResult<StreamFile> {
-        let p = if std::env::consts::OS == "windows" {
-            p.replace('/', "\\")
-        } else if std::env::consts::OS == "android" {
-            ANDROID_PREFIX_PATH.to_string() + p.as_str()
-        } else {
-            p.to_string()
-        };
-
-        let (path, total) = {
-            let p = p.clone();
-            tokio_runtime()
-                .spawn(async move {
-                    let path = tokio::fs::canonicalize(&p).await?;
-                    let meta = tokio::fs::metadata(&path).await?;
-                    Ok::<_, StorageBackendError>((path, meta.len() as usize))
-                })
-                .await??
-        };
-        let mut path = path.to_string_lossy().to_string().replace("\\\\?\\", "");
-        if std::env::consts::OS == "android" {
-            if let Some(strip_path) = path.strip_prefix(ANDROID_PREFIX_PATH) {
-                path = strip_path.to_string();
-            }
-        }
-
+        let (path, total) = self.resolve_absolute_path_impl(p).await?;
         Ok(StreamFile::new_from_file(path, total, byte_offset))
     }
 }
@@ -99,11 +98,20 @@ impl StorageBackend for LocalBackend {
     fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>> {
         Box::pin(self.get_impl(p, byte_offset))
     }
+    fn resolve_playback_source(
+        &self,
+        p: String,
+    ) -> BoxFuture<'_, StorageBackendResult<ResolvedPlaybackSource>> {
+        Box::pin(async move {
+            let (absolute_path, _) = self.resolve_absolute_path_impl(p).await?;
+            Ok(ResolvedPlaybackSource::LocalFile { absolute_path })
+        })
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{LocalBackend, StorageBackend};
+    use crate::{LocalBackend, ResolvedPlaybackSource, StorageBackend};
 
     #[tokio::test]
     async fn test_list_dir() {
@@ -163,5 +171,23 @@ mod test {
         assert!(chunk.is_ok());
         let chunk = chunk.unwrap().unwrap();
         assert_eq!(String::from_utf8_lossy(chunk.as_ref()), "og.txt");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_playback_source_returns_absolute_path() {
+        let backend = LocalBackend::new();
+
+        let cwd = std::env::current_dir()
+            .unwrap()
+            .join("test/assets/case_list/a.txt");
+        let cwd = cwd.to_string_lossy().to_string().replace("\\", "/");
+        let resolved = backend.resolve_playback_source(cwd).await.unwrap();
+        match resolved {
+            ResolvedPlaybackSource::LocalFile { absolute_path } => {
+                assert!(absolute_path.ends_with("a.txt"));
+                assert!(absolute_path.contains("case_list"));
+            }
+            other => panic!("unexpected resolved playback source: {other:?}"),
+        }
     }
 }

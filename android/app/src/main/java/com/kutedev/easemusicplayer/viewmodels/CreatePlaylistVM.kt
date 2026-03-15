@@ -128,7 +128,7 @@ class CreatePlaylistVM @Inject constructor(
     fun finish(context: Context) {
         val entries = _entries.value.map { entry -> ToAddMusicEntry(entry, entry.name) }
 
-        playlistRepository.createPlaylist(context, ArgCreatePlaylist(
+        playlistRepository.createPlaylist(ArgCreatePlaylist(
             title = _name.value,
             cover = _cover.value,
             entries = entries

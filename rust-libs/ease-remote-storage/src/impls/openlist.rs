@@ -1,8 +1,11 @@
-use crate::backend::{Entry, StorageBackend, StorageBackendError, StorageBackendResult, StreamFile};
+use crate::backend::{
+    DirectHttpPlaybackSource, Entry, PlaybackHttpHeader, ResolvedPlaybackSource, StorageBackend,
+    StorageBackendError, StorageBackendResult, StreamFile,
+};
 
 use ease_client_tokio::tokio_runtime;
 use futures_util::future::BoxFuture;
-use reqwest::header::HeaderValue;
+use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::StatusCode;
 use reqwest::Url;
 use serde::de::DeserializeOwned;
@@ -224,6 +227,18 @@ impl OpenList {
             .map_err(|e| StorageBackendError::UrlParseError(e.to_string()))
     }
 
+    fn header_map_to_playback_headers(headers: &HeaderMap) -> Vec<PlaybackHttpHeader> {
+        headers
+            .iter()
+            .filter_map(|(name, value)| {
+                Some(PlaybackHttpHeader {
+                    name: name.as_str().to_string(),
+                    value: value.to_str().ok()?.to_string(),
+                })
+            })
+            .collect()
+    }
+
     async fn post_api<T: DeserializeOwned>(
         &self,
         api_path: &str,
@@ -238,19 +253,21 @@ impl OpenList {
             let token = self.token.read().await.clone();
             let body = body.clone();
             let url = url.clone();
-            let resp = tokio_runtime().spawn(async move {
-                let mut req = client
-                    .post(url)
-                    .header(reqwest::header::CONTENT_TYPE, "application/json")
-                    .header(reqwest::header::USER_AGENT, "EaseMusicPlayer/1.0")
-                    .body(body);
-                if let Some(token) = token {
-                    let mut val = HeaderValue::from_str(token.as_str()).unwrap();
-                    val.set_sensitive(true);
-                    req = req.header(reqwest::header::AUTHORIZATION, val);
-                }
-                req.send().await
-            }).await;
+            let resp = tokio_runtime()
+                .spawn(async move {
+                    let mut req = client
+                        .post(url)
+                        .header(reqwest::header::CONTENT_TYPE, "application/json")
+                        .header(reqwest::header::USER_AGENT, "EaseMusicPlayer/1.0")
+                        .body(body);
+                    if let Some(token) = token {
+                        let mut val = HeaderValue::from_str(token.as_str()).unwrap();
+                        val.set_sensitive(true);
+                        req = req.header(reqwest::header::AUTHORIZATION, val);
+                    }
+                    req.send().await
+                })
+                .await;
 
             let resp = match resp {
                 Ok(Ok(resp)) => resp,
@@ -411,17 +428,11 @@ impl OpenList {
         Ok(ret)
     }
 
-    async fn list_with_retry_impl(&self, dir: String) -> StorageBackendResult<Vec<Entry>> {
-        self.ensure_token().await?;
-        let r = self.list_impl(dir.as_str()).await;
-        if !is_auth_error(&r) {
-            return r;
-        }
-        self.refresh_token().await?;
-        self.list_impl(dir.as_str()).await
-    }
-
-    async fn get_impl(&self, p: &str, byte_offset: u64) -> StorageBackendResult<StreamFile> {
+    async fn resolve_direct_http_request_impl(
+        &self,
+        p: &str,
+        byte_offset: u64,
+    ) -> StorageBackendResult<(Url, HeaderMap)> {
         let data: FsObject = self
             .post_api(
                 "/api/fs/get",
@@ -438,7 +449,7 @@ impl OpenList {
             self.build_download_url(p, Some(data.sign.as_str()))?
         };
 
-        let mut headers = reqwest::header::HeaderMap::new();
+        let mut headers = HeaderMap::new();
         headers.insert(
             reqwest::header::USER_AGENT,
             HeaderValue::from_str("EaseMusicPlayer/1.0").unwrap(),
@@ -459,6 +470,36 @@ impl OpenList {
                 }
             }
         }
+
+        Ok((url, headers))
+    }
+
+    async fn resolve_direct_playback_source_impl(
+        &self,
+        p: &str,
+    ) -> StorageBackendResult<DirectHttpPlaybackSource> {
+        let (url, headers) = self.resolve_direct_http_request_impl(p, 0).await?;
+        Ok(DirectHttpPlaybackSource {
+            url: url.to_string(),
+            headers: Self::header_map_to_playback_headers(&headers),
+            cache_key: Some(normalize_path(p)),
+        })
+    }
+
+    async fn list_with_retry_impl(&self, dir: String) -> StorageBackendResult<Vec<Entry>> {
+        self.ensure_token().await?;
+        let r = self.list_impl(dir.as_str()).await;
+        if !is_auth_error(&r) {
+            return r;
+        }
+        self.refresh_token().await?;
+        self.list_impl(dir.as_str()).await
+    }
+
+    async fn get_impl(&self, p: &str, byte_offset: u64) -> StorageBackendResult<StreamFile> {
+        let (url, headers) = self
+            .resolve_direct_http_request_impl(p, byte_offset)
+            .await?;
 
         let mut attempt = 0;
         let resp = loop {
@@ -508,6 +549,15 @@ impl OpenList {
         Ok(res)
     }
 
+    async fn resolve_direct_http_impl(
+        &self,
+        p: &str,
+    ) -> StorageBackendResult<ResolvedPlaybackSource> {
+        self.resolve_direct_playback_source_impl(p)
+            .await
+            .map(ResolvedPlaybackSource::DirectHttp)
+    }
+
     async fn get_with_retry_impl(
         &self,
         p: String,
@@ -521,6 +571,19 @@ impl OpenList {
         self.refresh_token().await?;
         self.get_impl(p.as_str(), byte_offset).await
     }
+
+    async fn resolve_playback_source_with_retry_impl(
+        &self,
+        p: String,
+    ) -> StorageBackendResult<ResolvedPlaybackSource> {
+        self.ensure_token().await?;
+        let r = self.resolve_direct_http_impl(p.as_str()).await;
+        if !is_auth_error(&r) {
+            return r;
+        }
+        self.refresh_token().await?;
+        self.resolve_direct_http_impl(p.as_str()).await
+    }
 }
 
 impl StorageBackend for OpenList {
@@ -530,6 +593,13 @@ impl StorageBackend for OpenList {
 
     fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>> {
         Box::pin(self.get_with_retry_impl(p, byte_offset))
+    }
+
+    fn resolve_playback_source(
+        &self,
+        p: String,
+    ) -> BoxFuture<'_, StorageBackendResult<ResolvedPlaybackSource>> {
+        Box::pin(self.resolve_playback_source_with_retry_impl(p))
     }
 }
 
@@ -550,7 +620,7 @@ mod test {
     use reqwest::header::HeaderValue;
     use tokio::task::JoinHandle;
 
-    use crate::backend::StorageBackend;
+    use crate::{backend::StorageBackend, ResolvedPlaybackSource};
 
     use super::{BuildOpenListArg, OpenList};
 
@@ -610,93 +680,100 @@ mod test {
             let file_calls = file_calls_server.clone();
             async move {
                 let func = move |req: Request<Body>| {
-                let list_calls = list_calls.clone();
-                let get_calls = get_calls.clone();
-                let file_calls = file_calls.clone();
-                async move {
-                let path = req.uri().path().to_string();
-                match (req.method().as_str(), path.as_str()) {
-                    ("POST", "/api/auth/login") => {
-                        let body =
-                            r#"{"code":200,"message":"success","data":{"token":"token-123"}}"#;
-                        Ok::<_, Infallible>(Response::new(Body::from(body)))
-                    }
-                    ("POST", "/api/fs/list") => {
-                        let auth = req.headers().get(reqwest::header::AUTHORIZATION);
-                        if auth.map(|v| v.to_str().ok()) != Some(Some(TEST_TOKEN)) {
-                            let mut resp = Response::new(Body::from(
-                                r#"{"code":401,"message":"unauthorized","data":null}"#,
-                            ));
-                            *resp.status_mut() = StatusCode::UNAUTHORIZED;
-                            return Ok::<_, Infallible>(resp);
-                        }
-                        let attempt = list_calls.fetch_add(1, Ordering::SeqCst);
-                        if attempt < retry.list_failures {
-                            let mut resp = Response::new(Body::from("temporary failure"));
-                            *resp.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
-                            return Ok::<_, Infallible>(resp);
-                        }
-                        let body = r#"{"code":200,"message":"success","data":{"content":[{"name":"a.bin","size":5,"is_dir":false,"sign":"sign","type":4}],"total":1}}"#;
-                        Ok::<_, Infallible>(Response::new(Body::from(body)))
-                    }
-                    ("POST", "/api/fs/get") => {
-                        let attempt = get_calls.fetch_add(1, Ordering::SeqCst);
-                        if attempt < retry.get_failures {
-                            let mut resp = Response::new(Body::from("temporary failure"));
-                            *resp.status_mut() = StatusCode::BAD_GATEWAY;
-                            return Ok::<_, Infallible>(resp);
-                        }
-                        let body = format!(
+                    let list_calls = list_calls.clone();
+                    let get_calls = get_calls.clone();
+                    let file_calls = file_calls.clone();
+                    async move {
+                        let path = req.uri().path().to_string();
+                        match (req.method().as_str(), path.as_str()) {
+                            ("POST", "/api/auth/login") => {
+                                let body = r#"{"code":200,"message":"success","data":{"token":"token-123"}}"#;
+                                Ok::<_, Infallible>(Response::new(Body::from(body)))
+                            }
+                            ("POST", "/api/fs/list") => {
+                                let auth = req.headers().get(reqwest::header::AUTHORIZATION);
+                                if auth.map(|v| v.to_str().ok()) != Some(Some(TEST_TOKEN)) {
+                                    let mut resp = Response::new(Body::from(
+                                        r#"{"code":401,"message":"unauthorized","data":null}"#,
+                                    ));
+                                    *resp.status_mut() = StatusCode::UNAUTHORIZED;
+                                    return Ok::<_, Infallible>(resp);
+                                }
+                                let attempt = list_calls.fetch_add(1, Ordering::SeqCst);
+                                if attempt < retry.list_failures {
+                                    let mut resp = Response::new(Body::from("temporary failure"));
+                                    *resp.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+                                    return Ok::<_, Infallible>(resp);
+                                }
+                                let body = r#"{"code":200,"message":"success","data":{"content":[{"name":"a.bin","size":5,"is_dir":false,"sign":"sign","type":4}],"total":1}}"#;
+                                Ok::<_, Infallible>(Response::new(Body::from(body)))
+                            }
+                            ("POST", "/api/fs/get") => {
+                                let attempt = get_calls.fetch_add(1, Ordering::SeqCst);
+                                if attempt < retry.get_failures {
+                                    let mut resp = Response::new(Body::from("temporary failure"));
+                                    *resp.status_mut() = StatusCode::BAD_GATEWAY;
+                                    return Ok::<_, Infallible>(resp);
+                                }
+                                let body = format!(
                             "{{\"code\":200,\"message\":\"success\",\"data\":{{\"name\":\"a.bin\",\"size\":5,\"is_dir\":false,\"sign\":\"sign\",\"type\":4,\"raw_url\":\"http://127.0.0.1:{port}/d/a.bin\"}}}}"
                         );
-                        Ok::<_, Infallible>(Response::new(Body::from(body)))
-                    }
-                    ("GET", "/d/a.bin") => {
-                        let attempt = file_calls.fetch_add(1, Ordering::SeqCst);
-                        if attempt < retry.file_failures {
-                            let mut resp = Response::new(Body::from("temporary failure"));
-                            *resp.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
-                            return Ok::<_, Infallible>(resp);
+                                Ok::<_, Infallible>(Response::new(Body::from(body)))
+                            }
+                            ("GET", "/d/a.bin") => {
+                                let attempt = file_calls.fetch_add(1, Ordering::SeqCst);
+                                if attempt < retry.file_failures {
+                                    let mut resp = Response::new(Body::from("temporary failure"));
+                                    *resp.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+                                    return Ok::<_, Infallible>(resp);
+                                }
+                                let full = b"12345";
+                                let range = req
+                                    .headers()
+                                    .get(reqwest::header::RANGE)
+                                    .and_then(|v| v.to_str().ok());
+                                let (body, status, content_range) = if let Some(range) = range {
+                                    let start = range
+                                        .strip_prefix("bytes=")
+                                        .and_then(|v| v.trim_end_matches('-').parse::<usize>().ok())
+                                        .unwrap_or(0);
+                                    let slice = &full[start..];
+                                    let content_range = format!(
+                                        "bytes {}-{}/{}",
+                                        start,
+                                        full.len() - 1,
+                                        full.len()
+                                    );
+                                    (
+                                        slice.to_vec(),
+                                        StatusCode::PARTIAL_CONTENT,
+                                        Some(content_range),
+                                    )
+                                } else {
+                                    (full.to_vec(), StatusCode::OK, None)
+                                };
+                                let body_len = body.len();
+                                let mut resp = Response::new(Body::from(body));
+                                *resp.status_mut() = status;
+                                resp.headers_mut().insert(
+                                    reqwest::header::CONTENT_LENGTH,
+                                    HeaderValue::from_str(body_len.to_string().as_str()).unwrap(),
+                                );
+                                if let Some(content_range) = content_range {
+                                    resp.headers_mut().insert(
+                                        reqwest::header::CONTENT_RANGE,
+                                        HeaderValue::from_str(content_range.as_str()).unwrap(),
+                                    );
+                                }
+                                Ok::<_, Infallible>(resp)
+                            }
+                            _ => {
+                                let mut resp = Response::new(Body::from("not found"));
+                                *resp.status_mut() = StatusCode::NOT_FOUND;
+                                Ok::<_, Infallible>(resp)
+                            }
                         }
-                        let full = b"12345";
-                        let range = req
-                            .headers()
-                            .get(reqwest::header::RANGE)
-                            .and_then(|v| v.to_str().ok());
-                        let (body, status, content_range) = if let Some(range) = range {
-                            let start = range
-                                .strip_prefix("bytes=")
-                                .and_then(|v| v.trim_end_matches('-').parse::<usize>().ok())
-                                .unwrap_or(0);
-                            let slice = &full[start..];
-                            let content_range =
-                                format!("bytes {}-{}/{}", start, full.len() - 1, full.len());
-                            (slice.to_vec(), StatusCode::PARTIAL_CONTENT, Some(content_range))
-                        } else {
-                            (full.to_vec(), StatusCode::OK, None)
-                        };
-                        let body_len = body.len();
-                        let mut resp = Response::new(Body::from(body));
-                        *resp.status_mut() = status;
-                        resp.headers_mut().insert(
-                            reqwest::header::CONTENT_LENGTH,
-                            HeaderValue::from_str(body_len.to_string().as_str()).unwrap(),
-                        );
-                        if let Some(content_range) = content_range {
-                            resp.headers_mut().insert(
-                                reqwest::header::CONTENT_RANGE,
-                                HeaderValue::from_str(content_range.as_str()).unwrap(),
-                            );
-                        }
-                        Ok::<_, Infallible>(resp)
                     }
-                    _ => {
-                        let mut resp = Response::new(Body::from("not found"));
-                        *resp.status_mut() = StatusCode::NOT_FOUND;
-                        Ok::<_, Infallible>(resp)
-                    }
-                }
-                }
                 };
                 Ok::<_, Infallible>(hyper::service::service_fn(func))
             }
@@ -792,5 +869,42 @@ mod test {
         let bytes = file.bytes().await.unwrap();
         assert_eq!(bytes.as_ref(), b"12345");
         assert!(server.file_calls() >= 2);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_playback_source_returns_direct_http() {
+        let server = setup_server().await;
+
+        let backend = OpenList::new(BuildOpenListArg {
+            addr: server.addr(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            is_anonymous: false,
+            connect_timeout: Duration::from_secs(10),
+        });
+
+        let resolved = backend
+            .resolve_playback_source("/a.bin".to_string())
+            .await
+            .unwrap();
+        match resolved {
+            ResolvedPlaybackSource::DirectHttp(source) => {
+                assert_eq!(source.url, format!("{}/d/a.bin", server.addr()));
+                assert_eq!(source.cache_key.as_deref(), Some("/a.bin"));
+                assert!(source.headers.iter().any(|header| {
+                    header
+                        .name
+                        .eq_ignore_ascii_case(reqwest::header::USER_AGENT.as_str())
+                        && header.value == "EaseMusicPlayer/1.0"
+                }));
+                assert!(source.headers.iter().any(|header| {
+                    header
+                        .name
+                        .eq_ignore_ascii_case(reqwest::header::AUTHORIZATION.as_str())
+                        && header.value == TEST_TOKEN
+                }));
+            }
+            other => panic!("unexpected resolved playback source: {other:?}"),
+        }
     }
 }

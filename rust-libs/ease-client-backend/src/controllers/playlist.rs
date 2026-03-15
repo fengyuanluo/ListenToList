@@ -37,8 +37,8 @@ pub async fn ct_list_playlist(cx: Arc<Backend>) -> BResult<Vec<PlaylistAbstract>
 
 #[derive(uniffi::Record)]
 pub struct RetCreatePlaylist {
-    id: PlaylistId,
-    music_ids: Vec<AddedMusic>,
+    pub id: PlaylistId,
+    pub music_ids: Vec<AddedMusic>,
 }
 
 #[uniffi::export]
