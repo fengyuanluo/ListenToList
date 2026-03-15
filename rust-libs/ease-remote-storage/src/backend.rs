@@ -1,4 +1,4 @@
-use std::io::ErrorKind;
+use std::{io::ErrorKind, time::Duration};
 
 use bytes::Bytes;
 use ease_client_tokio::tokio_runtime;
@@ -26,12 +26,18 @@ pub struct StreamFile {
     content_type: Option<String>,
     name: String,
     byte_offset: u64,
+    chunk_timeout: Option<Duration>,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum StorageBackendError {
     #[error(transparent)]
     RequestFail(#[from] reqwest::Error),
+    #[error("{operation} timed out after {timeout_ms}ms")]
+    Timeout {
+        operation: &'static str,
+        timeout_ms: u64,
+    },
     #[error("Parse XML Fail")]
     ParseXMLFail,
     #[error(transparent)]
@@ -40,6 +46,8 @@ pub enum StorageBackendError {
     TokioJoinError(#[from] tokio::task::JoinError),
     #[error("Url Parse Error")]
     UrlParseError(String),
+    #[error("Unsupported auth challenge: {0}")]
+    UnsupportedAuthChallenge(String),
     #[error("Serde Json Error: {0}")]
     SerdeJsonError(#[from] serde_json::Error),
     #[error("QuickXML De Error: {0}")]
@@ -51,7 +59,7 @@ pub enum StorageBackendError {
 #[derive(thiserror::Error, Debug)]
 enum SendChunkError {
     #[error(transparent)]
-    RequestFail(#[from] reqwest::Error),
+    Backend(#[from] StorageBackendError),
     #[error("mpsc send error: {0}")]
     MpscSendError(#[from] async_channel::SendError<StorageBackendResult<Bytes>>),
 }
@@ -80,10 +88,11 @@ pub enum ResolvedPlaybackSource {
 
 impl StorageBackendError {
     pub fn is_timeout(&self) -> bool {
-        if let StorageBackendError::RequestFail(e) = self {
-            return e.is_timeout();
+        match self {
+            StorageBackendError::RequestFail(e) => e.is_timeout(),
+            StorageBackendError::Timeout { .. } => true,
+            _ => false,
         }
-        false
     }
 
     pub fn is_unauthorized(&self) -> bool {
@@ -117,8 +126,65 @@ pub trait StorageBackend {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use std::{convert::Infallible, net::SocketAddr, time::Duration};
+
+    use bytes::Bytes;
+    use hyper::{Body, Response, StatusCode};
+
+    use super::{StorageBackendError, StreamFile};
+
+    #[tokio::test]
+    async fn stream_file_chunk_timeout_surfaces_timeout_error() {
+        let addr: SocketAddr = ([127, 0, 0, 1], 0).into();
+        let make_service = hyper::service::make_service_fn(|_| async move {
+            Ok::<_, Infallible>(hyper::service::service_fn(|_| async move {
+                let (mut tx, body) = Body::channel();
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(120)).await;
+                    let _ = tx.send_data(Bytes::from_static(b"delayed")).await;
+                });
+                let mut resp = Response::new(body);
+                *resp.status_mut() = StatusCode::OK;
+                Ok::<_, Infallible>(resp)
+            }))
+        });
+        let server = hyper::Server::bind(&addr).serve(make_service);
+        let port = server.local_addr().port();
+        let handle = tokio::spawn(async move {
+            server.await.unwrap();
+        });
+
+        let response = reqwest::get(format!("http://127.0.0.1:{port}/stream"))
+            .await
+            .expect("request")
+            .error_for_status()
+            .expect("status");
+        let file = StreamFile::new_with_chunk_timeout(response, 0, Some(Duration::from_millis(40)));
+        let rx = file.into_rx();
+        let item = rx.recv().await.expect("stream result");
+        match item {
+            Err(StorageBackendError::Timeout { operation, .. }) => {
+                assert_eq!(operation, "stream chunk read");
+            }
+            other => panic!("expected timeout error, got {other:?}"),
+        }
+
+        handle.abort();
+    }
+}
+
 impl StreamFile {
     pub fn new(resp: reqwest::Response, byte_offset: u64) -> Self {
+        Self::new_with_chunk_timeout(resp, byte_offset, None)
+    }
+
+    pub fn new_with_chunk_timeout(
+        resp: reqwest::Response,
+        byte_offset: u64,
+        chunk_timeout: Option<Duration>,
+    ) -> Self {
         let url = resp.url().to_string();
         let name = url.split('/').next_back().unwrap();
         let header_map = resp.headers();
@@ -135,6 +201,7 @@ impl StreamFile {
             content_type,
             name: name.to_string(),
             byte_offset,
+            chunk_timeout,
         }
     }
     pub fn new_from_bytes(buf: &[u8], name: &str, byte_offset: u64) -> Self {
@@ -147,6 +214,7 @@ impl StreamFile {
             content_type: None,
             name: name.to_string(),
             byte_offset,
+            chunk_timeout: None,
         }
     }
     pub fn new_from_file(path: String, total: usize, byte_offset: u64) -> Self {
@@ -161,6 +229,7 @@ impl StreamFile {
             content_type: None,
             name,
             byte_offset,
+            chunk_timeout: None,
         }
     }
     pub fn size(&self) -> Option<usize> {
@@ -182,7 +251,25 @@ impl StreamFile {
                     StreamFileInner::Response(mut response) => {
                         let mut remaining = self.byte_offset as usize;
 
-                        while let Some(chunk) = response.chunk().await? {
+                        loop {
+                            let next_chunk = if let Some(timeout) = self.chunk_timeout {
+                                match tokio::time::timeout(timeout, response.chunk()).await {
+                                    Ok(result) => result.map_err(StorageBackendError::from)?,
+                                    Err(_) => {
+                                        return Err(StorageBackendError::Timeout {
+                                            operation: "stream chunk read",
+                                            timeout_ms: timeout.as_millis() as u64,
+                                        }
+                                        .into());
+                                    }
+                                }
+                            } else {
+                                response.chunk().await.map_err(StorageBackendError::from)?
+                            };
+
+                            let Some(chunk) = next_chunk else {
+                                break;
+                            };
                             if chunk.len() <= remaining {
                                 remaining -= chunk.len();
                             } else if remaining > 0 {
@@ -236,11 +323,7 @@ impl StreamFile {
 
             let res: Result<(), SendChunkError> = f().await;
             if let Err(e) = res {
-                let e: Option<StorageBackendError> = match e {
-                    SendChunkError::RequestFail(e) => Some(e.into()),
-                    _ => None,
-                };
-                if let Some(e) = e {
+                if let SendChunkError::Backend(e) = e {
                     let _ = tx.send(Err(e)).await;
                 }
             }

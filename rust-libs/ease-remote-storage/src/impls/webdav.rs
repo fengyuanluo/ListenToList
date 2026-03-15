@@ -1,6 +1,10 @@
-use crate::backend::{Entry, StorageBackend, StorageBackendResult, StreamFile};
+use crate::backend::{
+    DirectHttpPlaybackSource, Entry, PlaybackHttpHeader, ResolvedPlaybackSource, StorageBackend,
+    StorageBackendResult, StreamFile,
+};
 use crate::StorageBackendError;
 
+use base64::Engine;
 use ease_client_tokio::tokio_runtime;
 use futures_util::future::BoxFuture;
 use reqwest::header::HeaderValue;
@@ -15,6 +19,8 @@ use std::time::Duration;
 const WEBDAV_TCP_KEEPALIVE: Duration = Duration::from_secs(60);
 const WEBDAV_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 const WEBDAV_HTTP1_ONLY_COMPAT: bool = true;
+const WEBDAV_DOWNLOAD_RESPONSE_TIMEOUT: Duration = Duration::from_secs(20);
+const WEBDAV_DOWNLOAD_CHUNK_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct Webdav {
     addr: String,
@@ -83,11 +89,12 @@ fn build_authorization_header_value(
     password: &str,
     uri: &str,
     method: &str,
-) -> Option<String> {
+) -> StorageBackendResult<Option<String>> {
     if www_authenticate.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let mut pw_client = http_auth::PasswordClient::try_from(www_authenticate).unwrap();
+    let mut pw_client = http_auth::PasswordClient::try_from(www_authenticate)
+        .map_err(|e| StorageBackendError::UnsupportedAuthChallenge(e.to_string()))?;
     let ret = pw_client
         .respond(&http_auth::PasswordParams {
             username,
@@ -96,8 +103,14 @@ fn build_authorization_header_value(
             method,
             body: Some(&[]),
         })
-        .unwrap();
-    Some(ret)
+        .map_err(|e| StorageBackendError::UnsupportedAuthChallenge(e.to_string()))?;
+    Ok(Some(ret))
+}
+
+fn build_basic_authorization_header_value(username: &str, password: &str) -> String {
+    let encoded =
+        base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"));
+    format!("Basic {encoded}")
 }
 
 fn is_auth_error<T>(r: &StorageBackendResult<T>) -> bool {
@@ -142,7 +155,7 @@ impl Webdav {
         &self,
         method: reqwest::Method,
         uri: &reqwest::Url,
-    ) -> reqwest::header::HeaderMap {
+    ) -> StorageBackendResult<reqwest::header::HeaderMap> {
         let mut header_map = reqwest::header::HeaderMap::new();
         header_map.append(
             reqwest::header::CONTENT_TYPE,
@@ -162,15 +175,17 @@ impl Webdav {
                     &self.password,
                     uri.as_str(),
                     method.as_str(),
-                );
-                if auth.is_some() {
-                    let mut val = HeaderValue::from_str(auth.as_ref().unwrap()).unwrap();
+                )?;
+                if let Some(auth) = auth {
+                    let mut val = HeaderValue::from_str(auth.as_str()).map_err(|e| {
+                        StorageBackendError::UnsupportedAuthChallenge(e.to_string())
+                    })?;
                     val.set_sensitive(true);
                     header_map.append(reqwest::header::AUTHORIZATION, val);
                 }
             }
         }
-        header_map
+        Ok(header_map)
     }
 
     fn get_url<const IS_DIR: bool>(&self, p: &str) -> StorageBackendResult<Url> {
@@ -200,7 +215,7 @@ impl Webdav {
         let method = reqwest::Method::from_bytes(b"PROPFIND").unwrap();
         let resp = {
             let client = self.build_client()?;
-            let headers = self.build_base_header_map(method.clone(), &url);
+            let headers = self.build_base_header_map(method.clone(), &url)?;
 
             tokio_runtime()
                 .spawn(async move {
@@ -296,7 +311,7 @@ impl Webdav {
     async fn get_impl(&self, p: &str, byte_offset: u64) -> StorageBackendResult<StreamFile> {
         let url = self.get_url::<false>(p)?;
 
-        let mut headers = self.build_base_header_map(reqwest::Method::GET, &url);
+        let mut headers = self.build_base_header_map(reqwest::Method::GET, &url)?;
         headers.insert(
             reqwest::header::RANGE,
             HeaderValue::from_str(format!("bytes={byte_offset}-").as_str()).unwrap(),
@@ -305,8 +320,23 @@ impl Webdav {
         let resp = {
             let client = self.build_client()?;
             tokio_runtime()
-                .spawn(async move { client.get(url.clone()).headers(headers).send().await })
-                .await??
+                .spawn(async move {
+                    tokio::time::timeout(
+                        WEBDAV_DOWNLOAD_RESPONSE_TIMEOUT,
+                        client.get(url.clone()).headers(headers).send(),
+                    )
+                    .await
+                })
+                .await?
+        };
+        let resp = match resp {
+            Ok(resp) => resp?,
+            Err(_) => {
+                return Err(StorageBackendError::Timeout {
+                    operation: "webdav download response",
+                    timeout_ms: WEBDAV_DOWNLOAD_RESPONSE_TIMEOUT.as_millis() as u64,
+                });
+            }
         };
         let byte_offset = if resp.headers().get(reqwest::header::CONTENT_RANGE).is_some() {
             0
@@ -315,9 +345,13 @@ impl Webdav {
         };
         self.post_handle_response(&resp);
 
-        let res = resp
-            .error_for_status()
-            .map(|resp| StreamFile::new(resp, byte_offset))?;
+        let res = resp.error_for_status().map(|resp| {
+            StreamFile::new_with_chunk_timeout(
+                resp,
+                byte_offset,
+                Some(WEBDAV_DOWNLOAD_CHUNK_TIMEOUT),
+            )
+        })?;
         Ok(res)
     }
 
@@ -351,6 +385,37 @@ impl Webdav {
         let _ = self.client.set(client);
         Ok(self.client.get().expect("webdav client missing").clone())
     }
+
+    fn build_direct_playback_source(
+        &self,
+        p: &str,
+    ) -> StorageBackendResult<Option<DirectHttpPlaybackSource>> {
+        let url = self.get_url::<false>(p)?;
+        if self._is_anonymous {
+            return Ok(Some(DirectHttpPlaybackSource {
+                url: url.to_string(),
+                headers: vec![],
+                cache_key: Some(p.to_string()),
+            }));
+        }
+
+        let challenge = self.last_www_authenticate.read().unwrap().clone();
+        let Some(challenge) = challenge else {
+            return Ok(None);
+        };
+        if !challenge.to_ascii_lowercase().starts_with("basic") {
+            return Ok(None);
+        }
+
+        Ok(Some(DirectHttpPlaybackSource {
+            url: url.to_string(),
+            headers: vec![PlaybackHttpHeader {
+                name: reqwest::header::AUTHORIZATION.as_str().to_string(),
+                value: build_basic_authorization_header_value(&self.username, &self.password),
+            }],
+            cache_key: Some(p.to_string()),
+        }))
+    }
 }
 
 impl StorageBackend for Webdav {
@@ -360,6 +425,18 @@ impl StorageBackend for Webdav {
 
     fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>> {
         Box::pin(self.get_with_retry_impl(p, byte_offset))
+    }
+
+    fn resolve_playback_source(
+        &self,
+        p: String,
+    ) -> BoxFuture<'_, StorageBackendResult<ResolvedPlaybackSource>> {
+        Box::pin(async move {
+            Ok(self
+                .build_direct_playback_source(p.as_str())?
+                .map(ResolvedPlaybackSource::DirectHttp)
+                .unwrap_or(ResolvedPlaybackSource::StreamFallback))
+        })
     }
 }
 
@@ -371,6 +448,7 @@ mod test {
     use tokio::task::JoinHandle;
 
     use crate::backend::StorageBackend;
+    use crate::{ResolvedPlaybackSource, StorageBackendError};
 
     use super::{BuildWebdavArg, Webdav};
 
@@ -540,6 +618,69 @@ mod test {
 
         let chunk = file.bytes().await.unwrap();
         assert_eq!(chunk.as_ref(), [51]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_playback_source_returns_direct_http_for_anonymous_webdav() {
+        let server = setup_server("test/assets/case_content").await;
+
+        let backend = Webdav::new(BuildWebdavArg {
+            addr: server.addr(),
+            username: Default::default(),
+            password: Default::default(),
+            is_anonymous: true,
+            connect_timeout: Duration::from_secs(10),
+        });
+        let resolved = backend
+            .resolve_playback_source("/a.bin".to_string())
+            .await
+            .unwrap();
+        match resolved {
+            ResolvedPlaybackSource::DirectHttp(source) => {
+                assert_eq!(source.url, format!("{}/a.bin", server.addr()));
+                assert!(source.headers.is_empty());
+                assert_eq!(source.cache_key.as_deref(), Some("/a.bin"));
+            }
+            other => panic!("unexpected resolved playback source: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_playback_source_returns_basic_auth_header_when_challenge_is_basic() {
+        let backend = Webdav::new(BuildWebdavArg {
+            addr: "http://127.0.0.1:8080".to_string(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            is_anonymous: false,
+            connect_timeout: Duration::from_secs(10),
+        });
+        *backend.last_www_authenticate.write().unwrap() = Some("Basic realm=\"dav\"".to_string());
+
+        let resolved = ease_client_tokio::tokio_runtime()
+            .block_on(backend.resolve_playback_source("/a.bin".to_string()))
+            .unwrap();
+        match resolved {
+            ResolvedPlaybackSource::DirectHttp(source) => {
+                assert!(source.headers.iter().any(|header| {
+                    header
+                        .name
+                        .eq_ignore_ascii_case(reqwest::header::AUTHORIZATION.as_str())
+                        && header.value.starts_with("Basic ")
+                }));
+            }
+            other => panic!("unexpected resolved playback source: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_build_authorization_header_value_returns_error_for_invalid_challenge() {
+        let err =
+            super::build_authorization_header_value("Digest", "user", "pass", "/a.bin", "GET")
+                .expect_err("invalid challenge should fail");
+        assert!(matches!(
+            err,
+            StorageBackendError::UnsupportedAuthChallenge(_)
+        ));
     }
 
     #[test]

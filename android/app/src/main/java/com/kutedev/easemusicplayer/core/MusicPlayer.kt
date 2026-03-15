@@ -10,6 +10,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.Player.COMMAND_PLAY_PAUSE
+import androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
+import androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.session.CommandButton
@@ -182,6 +184,16 @@ class PlaybackService : MediaSessionService() {
             )
         }
 
+        serviceScope.launch(Dispatchers.Main.immediate) {
+            playerRepository.playMode.collect { playMode ->
+                syncQueueForPlayMode(
+                    player = player,
+                    playMode = playMode,
+                    preservePosition = true,
+                )
+            }
+        }
+
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playerRepository.setIsPlaying(isPlaying)
@@ -190,7 +202,7 @@ class PlaybackService : MediaSessionService() {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
                     recoveryState = null
-                    playOnComplete()
+                    playerRepository.setIsLoading(false)
                 } else if (playbackState == Player.STATE_READY) {
                     playerRepository.setIsLoading(false)
                     syncCurrentMetadata(player)
@@ -209,6 +221,12 @@ class PlaybackService : MediaSessionService() {
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                 syncCurrentMetadata(player)
+            }
+
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                serviceScope.launch {
+                    syncRepositoryCurrentFromPlayer(player)
+                }
             }
 
             override fun onPositionDiscontinuity(
@@ -297,19 +315,20 @@ class PlaybackService : MediaSessionService() {
             }
             playerRepository.seedPlaybackRecovery(playlist.abstr.meta.id, target.meta.id, direction)
             playerRepository.setCurrent(target, playlist)
-            playUtil(BuildMediaContext(bridge = bridge, scope = serviceScope), target, player as ExoPlayer)
-        }
-    }
-
-    private fun playOnComplete() {
-        val m = playerRepository.onCompleteMusic.value
-        val p = playerRepository.playlist.value
-        if (m != null && p != null) {
-            play(m, p, PLAY_DIRECTION_NEXT)
+            playQueueUtil(
+                playlist = playlist,
+                targetId = target.meta.id,
+                playMode = playerRepository.playMode.value,
+                player = player as ExoPlayer,
+            )
         }
     }
 
     private fun playNext() {
+        val player = _mediaSession?.player ?: return
+        if (seekAdjacent(player, PLAY_DIRECTION_NEXT)) {
+            return
+        }
         val m = playerRepository.nextMusic.value
         val p = playerRepository.playlist.value
         if (m != null && p != null) {
@@ -318,6 +337,10 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun playPrevious() {
+        val player = _mediaSession?.player ?: return
+        if (seekAdjacent(player, PLAY_DIRECTION_PREVIOUS)) {
+            return
+        }
         val m = playerRepository.previousMusic.value
         val p = playerRepository.playlist.value
         if (m != null && p != null) {
@@ -391,7 +414,87 @@ class PlaybackService : MediaSessionService() {
         }
         active.attemptedIds.add(candidate.meta.id)
         playerRepository.setCurrent(candidate, playlist)
-        playUtil(BuildMediaContext(bridge = bridge, scope = serviceScope), candidate, player)
+        playQueueUtil(
+            playlist = playlist,
+            targetId = candidate.meta.id,
+            playMode = playerRepository.playMode.value,
+            player = player,
+        )
+    }
+
+    private suspend fun syncRepositoryCurrentFromPlayer(player: Player) {
+        val playlist = playerRepository.playlist.value ?: return
+        val mediaId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+        val musicId = MusicId(mediaId)
+        val direction = when {
+            playerRepository.nextMusic.value?.meta?.id == musicId -> PLAY_DIRECTION_NEXT
+            playerRepository.previousMusic.value?.meta?.id == musicId -> PLAY_DIRECTION_PREVIOUS
+            else -> PLAY_DIRECTION_NEXT
+        }
+        playerRepository.seedPlaybackRecovery(playlist.abstr.meta.id, musicId, direction)
+        if (playerRepository.music.value?.meta?.id == musicId) {
+            return
+        }
+        val music = bridge.run { ctGetMusic(it, musicId) } ?: return
+        playerRepository.setCurrent(music, playlist)
+    }
+
+    private fun seekAdjacent(player: Player, direction: Int): Boolean {
+        val playlist = playerRepository.playlist.value ?: return false
+        val target = if (direction >= 0) {
+            playerRepository.nextMusic.value
+        } else {
+            playerRepository.previousMusic.value
+        } ?: return false
+
+        val command = if (direction >= 0) {
+            COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
+        } else {
+            COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
+        }
+        if (!player.isCommandAvailable(command)) {
+            return false
+        }
+        playerRepository.seedPlaybackRecovery(playlist.abstr.meta.id, target.meta.id, direction)
+        if (direction >= 0) {
+            player.seekToNextMediaItem()
+        } else {
+            player.seekToPreviousMediaItem()
+        }
+        player.play()
+        return true
+    }
+
+    private fun syncQueueForPlayMode(
+        player: Player,
+        playMode: PlayMode,
+        preservePosition: Boolean,
+    ) {
+        player.repeatMode = repeatModeFor(playMode)
+        val playlist = playerRepository.playlist.value ?: return
+        val current = playerRepository.music.value ?: return
+        val plan = buildPlaybackQueuePlan(
+            playlist = playlist,
+            targetId = current.meta.id,
+            playMode = playMode,
+        ) ?: return
+
+        val desiredIds = plan.mediaItems.map { it.mediaId }
+        val currentIds = (0 until player.mediaItemCount).map { index -> player.getMediaItemAt(index).mediaId }
+        if (desiredIds == currentIds && player.currentMediaItemIndex == plan.startIndex) {
+            return
+        }
+        val currentPosition = if (preservePosition) player.currentPosition else 0L
+        val shouldResume = player.playWhenReady
+        player.stop()
+        player.clearMediaItems()
+        player.setMediaItems(plan.mediaItems, plan.startIndex, currentPosition.coerceAtLeast(0L))
+        player.prepare()
+        if (shouldResume) {
+            player.play()
+        } else {
+            player.pause()
+        }
     }
 
     private fun findRecoveryCandidate(

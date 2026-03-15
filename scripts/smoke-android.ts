@@ -35,6 +35,8 @@ type DebugSmokeResult = {
     sourceTag?: string | null;
     resolverMode?: string | null;
   }>;
+  currentMetadataDurationSynced?: boolean | null;
+  nextMetadataDurationSynced?: boolean | null;
 };
 
 type ServerHandle = {
@@ -178,6 +180,49 @@ function assertScenarioResult(result: DebugSmokeResult, scenario: Scenario, logc
         `\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
     );
   }
+  if (
+    "assertions" in scenario.payload &&
+    typeof scenario.payload.assertions === "object" &&
+    scenario.payload.assertions &&
+    Array.isArray((scenario.payload.assertions as any).requiredSourceTags)
+  ) {
+    const requiredSourceTags = (scenario.payload.assertions as any).requiredSourceTags as string[];
+    const actualTags = new Set((result.routeHistory ?? []).map((entry) => entry.sourceTag).filter(Boolean));
+    for (const tag of requiredSourceTags) {
+      if (!actualTags.has(tag)) {
+        throw new Error(
+          `${scenario.name} 缺少 sourceTag=${tag}` +
+            `\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
+        );
+      }
+    }
+  }
+  if (
+    "assertions" in scenario.payload &&
+    typeof scenario.payload.assertions === "object" &&
+    scenario.payload.assertions &&
+    "requireCurrentMetadataDuration" in scenario.payload.assertions &&
+    (scenario.payload.assertions as any).requireCurrentMetadataDuration === true &&
+    result.currentMetadataDurationSynced !== true
+  ) {
+    throw new Error(
+      `${scenario.name} 当前曲目 metadata duration 未回填` +
+        `\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
+    );
+  }
+  if (
+    "assertions" in scenario.payload &&
+    typeof scenario.payload.assertions === "object" &&
+    scenario.payload.assertions &&
+    "requireNextMetadataDuration" in scenario.payload.assertions &&
+    (scenario.payload.assertions as any).requireNextMetadataDuration === true &&
+    result.nextMetadataDurationSynced !== true
+  ) {
+    throw new Error(
+      `${scenario.name} 下一首曲目 metadata duration 未回填` +
+        `\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
+    );
+  }
 }
 
 async function runScenario(device: string, scenario: Scenario, artifactsDir: string): Promise<void> {
@@ -278,6 +323,10 @@ async function main(): Promise<void> {
           },
           assertions: {
             expectedResolverMode: "LOCAL_FILE",
+            requiredSourceTags: ["next-prefetch"],
+            requireCurrentMetadataDuration: true,
+            requireNextMetadataDuration: true,
+            metadataWaitTimeoutMs: 15_000,
           },
         },
       },
@@ -298,7 +347,7 @@ async function main(): Promise<void> {
           },
           playlist: {
             folderPath: "/music",
-            targetEntryPath: "/music/test-openlist.wav",
+            targetEntryPath: "/music/test-openlist-next.wav",
             playlistName: "Smoke /music openlist",
           },
           play: {
@@ -308,12 +357,16 @@ async function main(): Promise<void> {
           },
           assertions: {
             expectedResolverMode: "DIRECT_HTTP",
+            requiredSourceTags: ["next-prefetch"],
+            requireCurrentMetadataDuration: true,
+            requireNextMetadataDuration: true,
+            metadataWaitTimeoutMs: 15_000,
           },
         },
       },
       {
         name: "webdav",
-        expectedRoute: "STREAM_FALLBACK",
+        expectedRoute: "DIRECT_HTTP",
         payload: {
           requestId: "smoke-webdav-001",
           resetBefore: true,
@@ -328,7 +381,7 @@ async function main(): Promise<void> {
           },
           playlist: {
             folderPath: "/music",
-            targetEntryPath: "/music/test-webdav.wav",
+            targetEntryPath: "/music/test-webdav-next.wav",
             playlistName: "Smoke /music webdav",
           },
           play: {
@@ -337,7 +390,11 @@ async function main(): Promise<void> {
             awaitReadyTimeoutMs: 15000,
           },
           assertions: {
-            expectedResolverMode: "STREAM_FALLBACK",
+            expectedResolverMode: "DIRECT_HTTP",
+            requiredSourceTags: ["next-prefetch"],
+            requireCurrentMetadataDuration: true,
+            requireNextMetadataDuration: true,
+            metadataWaitTimeoutMs: 15_000,
           },
         },
       },

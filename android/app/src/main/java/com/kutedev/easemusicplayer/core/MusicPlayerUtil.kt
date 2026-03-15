@@ -1,12 +1,12 @@
 package com.kutedev.easemusicplayer.core
 
+import android.media.MediaMetadataRetriever
 import androidx.core.net.toUri
 import androidx.core.text.isDigitsOnly
 import androidx.media3.common.C.TIME_UNSET
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.metadata.flac.PictureFrame
 import androidx.media3.extractor.metadata.id3.ApicFrame
 import com.kutedev.easemusicplayer.singleton.Bridge
@@ -17,14 +17,17 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runBlocking
 import uniffi.ease_client_backend.ArgUpdateMusicCover
 import uniffi.ease_client_backend.ArgUpdateMusicDuration
 import uniffi.ease_client_backend.Music
 import uniffi.ease_client_backend.MusicAbstract
+import uniffi.ease_client_backend.Playlist
 import uniffi.ease_client_backend.ctGetMusic
 import uniffi.ease_client_backend.ctsUpdateMusicCover
 import uniffi.ease_client_backend.ctsUpdateMusicDuration
 import uniffi.ease_client_schema.MusicId
+import uniffi.ease_client_schema.PlayMode
 import java.time.Duration
 
 
@@ -66,7 +69,26 @@ data class BuildMediaContext(
     val scope: CoroutineScope
 )
 
-private fun buildMediaItem(cx: BuildMediaContext, music: MusicOrMusicAbstract): MediaItem {
+internal data class PlaybackQueuePlan(
+    val mediaItems: List<MediaItem>,
+    val startIndex: Int,
+    val repeatMode: Int,
+)
+
+data class ProbedMusicMetadata(
+    val duration: Duration?,
+    val cover: ByteArray?,
+)
+
+internal fun repeatModeFor(playMode: PlayMode): Int {
+    return when (playMode) {
+        PlayMode.SINGLE, PlayMode.LIST -> Player.REPEAT_MODE_OFF
+        PlayMode.SINGLE_LOOP -> Player.REPEAT_MODE_ONE
+        PlayMode.LIST_LOOP -> Player.REPEAT_MODE_ALL
+    }
+}
+
+private fun buildMediaItemInternal(music: MusicOrMusicAbstract): MediaItem {
     val cover = when(music) {
         is MusicOrMusicAbstract.VMusic -> music.v1.cover
         is MusicOrMusicAbstract.VMusicAbstract -> music.v1.cover
@@ -82,7 +104,7 @@ private fun buildMediaItem(cx: BuildMediaContext, music: MusicOrMusicAbstract): 
         DEFAULT_COVER_BASE64.toUri()
     }
 
-    val mediaItem = MediaItem.Builder()
+    return MediaItem.Builder()
         .setMediaId(meta.id.value.toString())
         .setUri(buildPlaybackMusicUri(meta.id))
         .setMediaMetadata(
@@ -92,19 +114,65 @@ private fun buildMediaItem(cx: BuildMediaContext, music: MusicOrMusicAbstract): 
                 .build()
         )
         .build()
-
-    return mediaItem
 }
 
 fun buildMediaItem(cx: BuildMediaContext, music: Music): MediaItem {
-    return buildMediaItem(cx, MusicOrMusicAbstract.VMusic(music))
+    return buildMediaItemInternal(MusicOrMusicAbstract.VMusic(music))
 }
 fun buildMediaItem(cx: BuildMediaContext, music: MusicAbstract): MediaItem {
-    return buildMediaItem(cx, MusicOrMusicAbstract.VMusicAbstract(music))
+    return buildMediaItemInternal(MusicOrMusicAbstract.VMusicAbstract(music))
+}
+
+internal fun buildPlaybackQueuePlan(
+    playlist: Playlist,
+    targetId: MusicId,
+    playMode: PlayMode,
+): PlaybackQueuePlan? {
+    val targetIndex = playlist.musics.indexOfFirst { it.meta.id == targetId }
+    if (targetIndex < 0) {
+        return null
+    }
+
+    val queueMusics = when (playMode) {
+        PlayMode.SINGLE, PlayMode.SINGLE_LOOP -> listOf(playlist.musics[targetIndex])
+        PlayMode.LIST, PlayMode.LIST_LOOP -> playlist.musics
+    }
+    val repeatMode = repeatModeFor(playMode)
+    val startIndex = when (playMode) {
+        PlayMode.SINGLE, PlayMode.SINGLE_LOOP -> 0
+        PlayMode.LIST, PlayMode.LIST_LOOP -> targetIndex
+    }
+
+    return PlaybackQueuePlan(
+        mediaItems = queueMusics.map { buildMediaItemInternal(MusicOrMusicAbstract.VMusicAbstract(it)) },
+        startIndex = startIndex,
+        repeatMode = repeatMode,
+    )
+}
+
+fun playQueueUtil(
+    playlist: Playlist,
+    targetId: MusicId,
+    playMode: PlayMode,
+    player: Player,
+    startPositionMs: Long = 0L,
+    playWhenReady: Boolean = true,
+) {
+    val plan = buildPlaybackQueuePlan(playlist, targetId, playMode) ?: return
+    player.repeatMode = plan.repeatMode
+    player.stop()
+    player.clearMediaItems()
+    player.setMediaItems(plan.mediaItems, plan.startIndex, startPositionMs.coerceAtLeast(0L))
+    player.prepare()
+    if (playWhenReady) {
+        player.play()
+    } else {
+        player.pause()
+    }
 }
 
 private fun playUtil(cx: BuildMediaContext, music: MusicOrMusicAbstract, player: Player) {
-    val mediaItem = buildMediaItem(cx, music)
+    val mediaItem = buildMediaItemInternal(music)
     player.stop()
     player.setMediaItem(mediaItem)
     player.prepare()
@@ -115,6 +183,51 @@ fun playUtil(cx: BuildMediaContext, music: Music, player: Player) {
 }
 fun playUtil(cx: BuildMediaContext, music: MusicAbstract, player: Player) {
     playUtil(cx, MusicOrMusicAbstract.VMusicAbstract(music), player)
+}
+
+private fun extractDuration(metadataRetriever: MediaMetadataRetriever): Duration? {
+    val durationMs = metadataRetriever
+        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+        ?.toLongOrNull()
+        ?: return null
+    return Duration.ofMillis(durationMs)
+}
+
+suspend fun probeMusicMetadataDirectly(
+    bridge: Bridge,
+    musicId: MusicId,
+): ProbedMusicMetadata? = withContext(Dispatchers.IO) {
+    val resolved = runCatching {
+        resolveMusicPlaybackSourceWithBridge(bridge, musicId)
+    }.getOrNull() ?: return@withContext null
+
+    val metadataRetriever = MediaMetadataRetriever()
+    try {
+        when (resolved) {
+            is ResolvedMusicPlaybackSource.DirectHttp -> {
+                metadataRetriever.setDataSource(
+                    resolved.url,
+                    resolved.headers.associate { it.name to it.value },
+                )
+            }
+            is ResolvedMusicPlaybackSource.LocalFile -> {
+                metadataRetriever.setDataSource(resolved.absolutePath)
+            }
+            ResolvedMusicPlaybackSource.StreamFallback -> {
+                return@withContext null
+            }
+        }
+        val duration = extractDuration(metadataRetriever)
+        val cover = metadataRetriever.embeddedPicture
+        if (duration == null && cover == null) {
+            return@withContext null
+        }
+        ProbedMusicMetadata(duration = duration, cover = cover)
+    } catch (_: Throwable) {
+        null
+    } finally {
+        runCatching { metadataRetriever.release() }
+    }
 }
 
 fun syncMetadataUtil(

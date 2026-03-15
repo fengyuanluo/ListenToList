@@ -11,6 +11,7 @@ import com.kutedev.easemusicplayer.singleton.Bridge
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.util.LinkedHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
@@ -27,6 +28,10 @@ const val PLAYBACK_SOURCE_TAG_METADATA = "metadata"
 
 private const val PLAYBACK_HTTP_USER_AGENT = "EaseMusicPlayer/1.0"
 private const val MAX_DIRECT_HTTP_OPEN_RETRIES = 1
+private const val PLAYBACK_RESOLVER_CACHE_MAX_ENTRIES = 256
+private const val PLAYBACK_RESOLVER_DIRECT_HTTP_TTL_MS = 60_000L
+private const val PLAYBACK_RESOLVER_STREAM_FALLBACK_TTL_MS = 15_000L
+private const val PLAYBACK_RESOLVER_LOCAL_FILE_TTL_MS = 5 * 60_000L
 
 data class MusicPlaybackHttpHeader(
     val name: String,
@@ -50,6 +55,76 @@ sealed class ResolvedMusicPlaybackSource {
 fun interface MusicPlaybackSourceResolver {
     @Throws(IOException::class)
     fun resolve(musicId: MusicId): ResolvedMusicPlaybackSource?
+}
+
+internal object PlaybackSourceResolverCache {
+    private data class CacheEntry(
+        val resolved: ResolvedMusicPlaybackSource?,
+        val expiresAtMs: Long,
+    )
+
+    private val lock = Any()
+    private val entries = object : LinkedHashMap<Long, CacheEntry>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, CacheEntry>?): Boolean {
+            return size > PLAYBACK_RESOLVER_CACHE_MAX_ENTRIES
+        }
+    }
+
+    fun resolve(
+        musicId: MusicId,
+        loader: () -> ResolvedMusicPlaybackSource?,
+    ): ResolvedMusicPlaybackSource? {
+        val now = System.currentTimeMillis()
+        synchronized(lock) {
+            val cached = entries[musicId.value]
+            if (cached != null && cached.expiresAtMs > now) {
+                return cached.resolved
+            }
+            if (cached != null) {
+                entries.remove(musicId.value)
+            }
+        }
+
+        val resolved = loader()
+        val ttlMs = when (resolved) {
+            is ResolvedMusicPlaybackSource.DirectHttp -> PLAYBACK_RESOLVER_DIRECT_HTTP_TTL_MS
+            is ResolvedMusicPlaybackSource.LocalFile -> PLAYBACK_RESOLVER_LOCAL_FILE_TTL_MS
+            ResolvedMusicPlaybackSource.StreamFallback, null -> PLAYBACK_RESOLVER_STREAM_FALLBACK_TTL_MS
+        }
+        synchronized(lock) {
+            entries[musicId.value] = CacheEntry(
+                resolved = resolved,
+                expiresAtMs = now + ttlMs,
+            )
+        }
+        return resolved
+    }
+
+    fun invalidate(musicId: MusicId) {
+        synchronized(lock) {
+            entries.remove(musicId.value)
+        }
+    }
+
+    internal fun resetForTest() {
+        synchronized(lock) {
+            entries.clear()
+        }
+    }
+}
+
+internal fun resolveMusicPlaybackSourceWithBridge(
+    bridge: Bridge,
+    musicId: MusicId,
+): ResolvedMusicPlaybackSource? {
+    return PlaybackSourceResolverCache.resolve(musicId) {
+        runBlocking {
+            bridge.runRaw { backend ->
+                ctResolveMusicPlaybackSource(backend, musicId)
+                    ?.toResolvedMusicPlaybackSource()
+            }
+        }
+    }
 }
 
 class MusicPlaybackDataSource(
@@ -125,21 +200,23 @@ class MusicPlaybackDataSource(
                 return delegate.open(delegateSpec)
             } catch (error: HttpDataSource.InvalidResponseCodeException) {
                 closeQuietly()
-                if (error.responseCode == 404) {
-                    throw FileNotFoundException("music ${musicId.value} not found").apply {
-                        initCause(error)
-                    }
-                }
                 if (
                     resolved is ResolvedMusicPlaybackSource.DirectHttp &&
-                    (error.responseCode == 401 || error.responseCode == 403) &&
+                    (error.responseCode == 401 || error.responseCode == 403 || error.responseCode == 404) &&
                     attempt < MAX_DIRECT_HTTP_OPEN_RETRIES
                 ) {
                     attempt += 1
+                    PlaybackSourceResolverCache.invalidate(musicId)
                     safeEaseError(
                         "PLAYBACK_ROUTE_RETRY source=$sourceTag music=${musicId.value} code=${error.responseCode} attempt=$attempt"
                     )
                     continue
+                }
+                if (error.responseCode == 404) {
+                    PlaybackSourceResolverCache.invalidate(musicId)
+                    throw FileNotFoundException("music ${musicId.value} not found").apply {
+                        initCause(error)
+                    }
                 }
                 throw error
             } catch (error: Exception) {
@@ -193,12 +270,7 @@ fun buildMusicPlaybackDataSourceFactory(
 
     val resolver = MusicPlaybackSourceResolver { musicId: MusicId ->
         try {
-            runBlocking {
-                bridge.runRaw { backend ->
-                    ctResolveMusicPlaybackSource(backend, musicId)
-                        ?.toResolvedMusicPlaybackSource()
-                }
-            }
+            resolveMusicPlaybackSourceWithBridge(bridge, musicId)
         } catch (error: CancellationException) {
             throw IOException("resolve playback source cancelled for music=${musicId.value}", error)
         } catch (error: FileNotFoundException) {

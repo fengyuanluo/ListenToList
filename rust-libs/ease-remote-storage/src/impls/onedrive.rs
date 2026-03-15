@@ -14,14 +14,16 @@ pub struct BuildOneDriveArg {
     pub code: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Auth {
     access_token: String,
     refresh_token: String,
 }
 
 pub struct OneDriveBackend {
-    refresh_token: String,
+    refresh_token: tokio::sync::RwLock<String>,
     auth: tokio::sync::RwLock<Option<Auth>>,
+    refresh_lock: tokio::sync::Mutex<()>,
 }
 
 mod onedrive_types {
@@ -81,6 +83,8 @@ const ONEDRIVE_ROOT_API: &str = "https://graph.microsoft.com/v1.0/me/drive";
 const ONEDRIVE_API_BASE: &str = "https://login.microsoftonline.com/common/oauth2/v2.0";
 const ONEDRIVE_REDIRECT_URI: &str = "easem://oauth2redirect/";
 const ONEDRIVE_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const ONEDRIVE_DOWNLOAD_RESPONSE_TIMEOUT: Duration = Duration::from_secs(20);
+const ONEDRIVE_DOWNLOAD_CHUNK_TIMEOUT: Duration = Duration::from_secs(30);
 const ONEDRIVE_TCP_KEEPALIVE: Duration = Duration::from_secs(60);
 const ONEDRIVE_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 const ONEDRIVE_HTTP1_ONLY_COMPAT: bool = true;
@@ -147,9 +151,22 @@ async fn refresh_token_by_code_impl(code: String) -> StorageBackendResult<Auth> 
 impl OneDriveBackend {
     pub fn new(arg: BuildOneDriveArg) -> Self {
         Self {
-            refresh_token: arg.code,
+            refresh_token: tokio::sync::RwLock::new(arg.code),
             auth: Default::default(),
+            refresh_lock: Default::default(),
         }
+    }
+
+    async fn current_refresh_token(&self) -> String {
+        if let Some(auth) = self.auth.read().await.as_ref() {
+            return auth.refresh_token.clone();
+        }
+        self.refresh_token.read().await.clone()
+    }
+
+    async fn store_auth(&self, auth: Auth) {
+        *self.refresh_token.write().await = auth.refresh_token.clone();
+        *self.auth.write().await = Some(auth);
     }
 
     async fn build_base_header_map(&self) -> reqwest::header::HeaderMap {
@@ -168,19 +185,20 @@ impl OneDriveBackend {
     }
 
     async fn try_ensure_refresh_token_by_refresh_token(&self) -> StorageBackendResult<()> {
-        let mut w = self.auth.write().await;
-        if w.is_none() {
-            self.refresh_token_by_refresh_token_impl(&mut w).await?;
+        if self.auth.read().await.is_some() {
+            return Ok(());
+        }
+        let _guard = self.refresh_lock.lock().await;
+        if self.auth.read().await.is_none() {
+            let auth = self.refresh_token_by_refresh_token_impl().await?;
+            self.store_auth(auth).await;
         }
         Ok(())
     }
 
-    async fn refresh_token_by_refresh_token_impl(
-        &self,
-        w: &mut Option<Auth>,
-    ) -> StorageBackendResult<()> {
+    async fn refresh_token_by_refresh_token_impl(&self) -> StorageBackendResult<Auth> {
         let client_id = EASEM_ONEDRIVE_ID;
-        let refresh_token = self.refresh_token.clone();
+        let refresh_token = self.current_refresh_token().await;
         let body =
             format!("client_id={client_id}&redirect_uri={ONEDRIVE_REDIRECT_URI}&refresh_token={refresh_token}&grant_type=refresh_token");
 
@@ -201,16 +219,16 @@ impl OneDriveBackend {
         let resp_text = resp.text().await?;
         let value = serde_json::from_str::<onedrive_types::RedeemCodeResp>(&resp_text)?;
 
-        *w = Some(Auth {
+        Ok(Auth {
             access_token: value.access_token,
             refresh_token: value.refresh_token,
-        });
-        Ok(())
+        })
     }
 
     async fn refresh_token_by_refresh_token(&self) -> StorageBackendResult<()> {
-        let mut w = self.auth.write().await;
-        self.refresh_token_by_refresh_token_impl(&mut w).await?;
+        let _guard = self.refresh_lock.lock().await;
+        let auth = self.refresh_token_by_refresh_token_impl().await?;
+        self.store_auth(auth).await;
         Ok(())
     }
 
@@ -333,17 +351,36 @@ impl OneDriveBackend {
             let client = self.build_client()?;
 
             tokio_runtime()
-                .spawn(async move { client.get(url.clone()).headers(headers).send().await })
-                .await??
+                .spawn(async move {
+                    tokio::time::timeout(
+                        ONEDRIVE_DOWNLOAD_RESPONSE_TIMEOUT,
+                        client.get(url.clone()).headers(headers).send(),
+                    )
+                    .await
+                })
+                .await?
+        };
+        let resp = match resp {
+            Ok(resp) => resp?,
+            Err(_) => {
+                return Err(StorageBackendError::Timeout {
+                    operation: "onedrive download response",
+                    timeout_ms: ONEDRIVE_DOWNLOAD_RESPONSE_TIMEOUT.as_millis() as u64,
+                });
+            }
         };
         let byte_offset = if resp.headers().get(reqwest::header::CONTENT_RANGE).is_some() {
             0
         } else {
             byte_offset
         };
-        let res = resp
-            .error_for_status()
-            .map(|resp| StreamFile::new(resp, byte_offset))?;
+        let res = resp.error_for_status().map(|resp| {
+            StreamFile::new_with_chunk_timeout(
+                resp,
+                byte_offset,
+                Some(ONEDRIVE_DOWNLOAD_CHUNK_TIMEOUT),
+            )
+        })?;
         Ok(res)
     }
 
@@ -473,5 +510,23 @@ mod test {
             }
             other => panic!("unexpected resolved playback source: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_current_refresh_token_prefers_rotated_auth_token() {
+        let backend = OneDriveBackend::new(super::BuildOneDriveArg {
+            code: "stale-refresh-token".to_string(),
+        });
+        backend
+            .store_auth(Auth {
+                access_token: "access-token".to_string(),
+                refresh_token: "rotated-refresh-token".to_string(),
+            })
+            .await;
+
+        assert_eq!(
+            backend.current_refresh_token().await,
+            "rotated-refresh-token"
+        );
     }
 }
