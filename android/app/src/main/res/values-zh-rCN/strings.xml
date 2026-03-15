@@ -98,4 +98,6 @@
         <item quantity="other">找到 %d 个日志文件</item>
     </plurals>
     <string name="debug_trigger_rs_panic">Trigger Rust panic!</string>
+    <string name="import_musics_empty_storage_title">暂无可用设备</string>
+    <string name="import_musics_empty_storage_desc">请先添加设备或重新连接现有设备，再继续导入曲目。</string>
 </resources>

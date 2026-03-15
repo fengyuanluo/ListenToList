@@ -108,6 +108,8 @@
     <string name="storage_browser_toggle_all_label">全选</string>
     <string name="storage_browser_mode_select">选择</string>
     <string name="storage_browser_mode_done">完成</string>
+    <string name="import_musics_empty_storage_title">No storage available</string>
+    <string name="import_musics_empty_storage_desc">Please add or reconnect a storage device before importing musics.</string>
     <string name="log_action_share">分享日志</string>
     <string name="log_action_copy">复制路径</string>
     <string name="log_action_open">打开</string>

@@ -20,16 +20,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,11 +53,15 @@ import com.kutedev.easemusicplayer.components.EaseCheckbox
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.core.LocalNavController
+import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
+import com.kutedev.easemusicplayer.viewmodels.BrowserScrollSnapshot
 import com.kutedev.easemusicplayer.viewmodels.ImportVM
 import com.kutedev.easemusicplayer.viewmodels.StoragesVM
 import com.kutedev.easemusicplayer.viewmodels.VImportStorageEntry
 import com.kutedev.easemusicplayer.viewmodels.entryTyp
-import com.kutedev.easemusicplayer.core.LocalNavController
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import uniffi.ease_client_backend.CurrentStorageStateType
 import uniffi.ease_client_backend.StorageEntry
 import uniffi.ease_client_backend.StorageEntryType
@@ -189,14 +198,37 @@ private fun ImportEntry(
 
 @Composable
 private fun ImportEntries(
-    importVM: ImportVM = hiltViewModel()
+    currentPath: String,
+    splitPaths: List<BrowserPathItem>,
+    entries: List<StorageEntry>,
+    selected: Set<String>,
+    selectedCount: Int,
+    allowTypes: List<StorageEntryType>,
+    isRefreshing: Boolean,
+    scrollSnapshot: BrowserScrollSnapshot,
+    onNavigateDir: (String) -> Unit,
+    onClickEntry: (StorageEntry) -> Unit,
+    onFinish: () -> Unit,
+    onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
 ) {
     val navController = LocalNavController.current
-    val splitPaths by importVM.splitPaths.collectAsState()
-    val entries by importVM.entries.collectAsState()
-    val selectedCount by importVM.selectedCount.collectAsState()
-    val allowTypes by importVM.allowTypes.collectAsState()
-    val selected by importVM.selected.collectAsState()
+    val listState = remember(currentPath) {
+        LazyListState(
+            firstVisibleItemIndex = scrollSnapshot.index,
+            firstVisibleItemScrollOffset = scrollSnapshot.offset,
+        )
+    }
+
+    LaunchedEffect(currentPath, listState) {
+        snapshotFlow {
+            BrowserScrollSnapshot(
+                index = listState.firstVisibleItemIndex,
+                offset = listState.firstVisibleItemScrollOffset,
+            )
+        }.drop(1).distinctUntilChanged().collect { snapshot ->
+            onScrollSnapshotChange(snapshot)
+        }
+    }
 
     @Composable
     fun PathTab(
@@ -223,7 +255,7 @@ private fun ImportEntries(
                 .clickable(
                     enabled = !disabled,
                     onClick = {
-                        importVM.navigateDir(path)
+                        onNavigateDir(path)
                     }
                 )
                 .clip(RoundedCornerShape(2.dp))
@@ -236,6 +268,11 @@ private fun ImportEntries(
         modifier = Modifier.fillMaxSize()
     ) {
         Column {
+            if (isRefreshing) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -265,6 +302,7 @@ private fun ImportEntries(
             }
         }
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .padding(28.dp, 0.dp)
             ) {
@@ -273,9 +311,7 @@ private fun ImportEntries(
                         entry = it,
                         checked = selected.contains(it.path),
                         allowTypes = allowTypes,
-                        onClickEntry = { entry ->
-                            importVM.clickEntry(entry)
-                        },
+                        onClickEntry = onClickEntry,
                     )
                 }
                 item {
@@ -289,7 +325,7 @@ private fun ImportEntries(
                 contentColor = MaterialTheme.colorScheme.surface,
                 onClick = {
                     navController.popBackStack()
-                    importVM.finish()
+                    onFinish()
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -431,11 +467,51 @@ private fun ImportMusicsWarningImpl(
 }
 
 @Composable
-private fun ImportMusicsError(
-    importVM: ImportVM = hiltViewModel()
-) {
-    val type by importVM.loadState.collectAsState()
+private fun ImportNoStorageState() {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .padding(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.icon_info),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+            Text(
+                text = stringResource(id = R.string.import_musics_empty_storage_title),
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(id = R.string.import_musics_empty_storage_desc),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.widthIn(0.dp, 220.dp)
+            )
+        }
+    }
+}
 
+@Composable
+private fun ImportMusicsError(
+    type: CurrentStorageStateType,
+    onRequestPermission: () -> Unit,
+    onReload: () -> Unit,
+) {
     val title = when (type) {
         CurrentStorageStateType.AUTHENTICATION_FAILED -> stringResource(id = R.string.import_musics_error_authentication_title)
         CurrentStorageStateType.TIMEOUT -> stringResource(id = R.string.import_musics_error_timeout_title)
@@ -462,9 +538,9 @@ private fun ImportMusicsError(
         iconPainter = painterResource(id = R.drawable.icon_warning),
         onClick = {
             if (type == CurrentStorageStateType.NEED_PERMISSION) {
-                importVM.requestPermission()
+                onRequestPermission()
             } else {
-                importVM.reload()
+                onReload()
             }
         }
     )
@@ -476,26 +552,41 @@ fun ImportMusicsPage(
     storagesVM: StoragesVM = hiltViewModel()
 ) {
     val navController = LocalNavController.current
+    val currentPath by importVM.currentPath.collectAsState()
+    val currentScrollSnapshot by importVM.currentScrollSnapshot.collectAsState()
+    val entries by importVM.entries.collectAsState()
+    val selected by importVM.selected.collectAsState()
+    val allowTypes by importVM.allowTypes.collectAsState()
     val selectedCount by importVM.selectedCount.collectAsState()
-    val canUndo by importVM.canUndo.collectAsState()
+    val splitPaths by importVM.splitPaths.collectAsState()
+    val canNavigateUp by importVM.canNavigateUp.collectAsState()
     val disabledToggleAll by importVM.disabledToggleAll.collectAsState()
+    val hasAvailableStorage by importVM.hasAvailableStorage.collectAsState()
+    val isRefreshing by importVM.isRefreshing.collectAsState()
     val loadState by importVM.loadState.collectAsState()
+    val showBlockingLoading = loadState == CurrentStorageStateType.LOADING && entries.isEmpty()
+    val showBlockingError = (
+        loadState == CurrentStorageStateType.TIMEOUT ||
+            loadState == CurrentStorageStateType.AUTHENTICATION_FAILED ||
+            loadState == CurrentStorageStateType.UNKNOWN_ERROR ||
+            loadState == CurrentStorageStateType.NEED_PERMISSION
+        ) && entries.isEmpty()
 
     val titleText = when (selectedCount) {
         0 -> stringResource(id = R.string.import_musics_title_default)
         1 -> "${selectedCount} ${stringResource(id = R.string.import_musics_title_single_suffix)}"
         else -> "${selectedCount} ${stringResource(id = R.string.import_musics_title_multi_suffix)}"
     }
-    fun doUndo() {
-        if (canUndo) {
-            importVM.undo()
+    fun navigateBack() {
+        if (canNavigateUp) {
+            importVM.navigateUp()
         } else {
             navController.popBackStack()
         }
     }
 
-    BackHandler(enabled = canUndo) {
-        doUndo()
+    BackHandler(enabled = canNavigateUp) {
+        navigateBack()
     }
     Column(
         modifier = Modifier
@@ -517,7 +608,7 @@ fun ImportMusicsPage(
                     buttonType = EaseIconButtonType.Default,
                     painter = painterResource(id = R.drawable.icon_back),
                     onClick = {
-                        doUndo()
+                        navigateBack()
                     }
                 )
                 Text(
@@ -536,15 +627,32 @@ fun ImportMusicsPage(
                 )
             }
         }
-        ImportStorages()
-        when (loadState) {
-            CurrentStorageStateType.LOADING -> ImportEntriesSkeleton()
-            CurrentStorageStateType.TIMEOUT,
-            CurrentStorageStateType.AUTHENTICATION_FAILED,
-            CurrentStorageStateType.UNKNOWN_ERROR,
-            CurrentStorageStateType.NEED_PERMISSION -> ImportMusicsError()
+        ImportStorages(storagesVM = storagesVM, importVM = importVM)
+        when {
+            !hasAvailableStorage -> ImportNoStorageState()
+            showBlockingLoading -> ImportEntriesSkeleton()
+            showBlockingError -> ImportMusicsError(
+                type = loadState,
+                onRequestPermission = { importVM.requestPermission() },
+                onReload = { importVM.reload() },
+            )
             else -> {
-                ImportEntries()
+                ImportEntries(
+                    currentPath = currentPath,
+                    splitPaths = splitPaths,
+                    entries = entries,
+                    selected = selected,
+                    selectedCount = selectedCount,
+                    allowTypes = allowTypes,
+                    isRefreshing = isRefreshing,
+                    scrollSnapshot = currentScrollSnapshot,
+                    onNavigateDir = { path -> importVM.navigateDir(path) },
+                    onClickEntry = { entry -> importVM.clickEntry(entry) },
+                    onFinish = { importVM.finish() },
+                    onScrollSnapshotChange = { snapshot ->
+                        importVM.updateCurrentScrollSnapshot(snapshot.index, snapshot.offset)
+                    },
+                )
             }
         }
     }
