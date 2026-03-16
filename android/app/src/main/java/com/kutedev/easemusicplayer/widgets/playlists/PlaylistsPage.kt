@@ -6,13 +6,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,7 +36,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -46,54 +51,95 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseSearchField
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
-import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
-import com.kutedev.easemusicplayer.viewmodels.PlaylistsVM
-import com.kutedev.easemusicplayer.viewmodels.durationStr
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RoutePlaylist
+import com.kutedev.easemusicplayer.core.RouteStorageSearch
+import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.PlaylistsMode
+import com.kutedev.easemusicplayer.viewmodels.PlaylistsVM
+import com.kutedev.easemusicplayer.viewmodels.durationStr
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ScrollMoveMode
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import uniffi.ease_client_backend.PlaylistAbstract
 
+private val playlistsPaddingX = 24.dp
+
+@Composable
+internal fun PlaylistHomeSearchEntry(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onClearQuery: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    EaseSearchField(
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = stringResource(id = R.string.storage_search_placeholder_home),
+        elevated = false,
+        onSearch = onSearch,
+        onClear = onClearQuery,
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("playlist_home_search_entry")
+    )
+}
+
 @Composable
 fun PlaylistsSubpage(
     playlistsVM: PlaylistsVM = hiltViewModel(),
     editPlaylistVM: CreatePlaylistVM = hiltViewModel()
 ) {
+    val navController = LocalNavController.current
     val playlists by playlistsVM.playlists.collectAsState()
     val playlistsMode by playlistsVM.mode.collectAsState()
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     if (playlists.isEmpty()) {
-        Box(
-            contentAlignment = Alignment.Center,
+        Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            Spacer(modifier = Modifier.height(20.dp))
+            PlaylistHomeSearchEntry(
+                query = searchQuery,
+                onQueryChange = { value -> searchQuery = value },
+                onSearch = { navController.navigate(RouteStorageSearch(searchQuery)) },
+                onClearQuery = { searchQuery = "" },
+                modifier = Modifier.padding(horizontal = playlistsPaddingX)
+            )
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .padding(24.dp, 24.dp),
+                    .fillMaxWidth()
+                    .weight(1f)
             ) {
-                Image(painter = painterResource(id = R.drawable.empty_playlists), contentDescription = null)
-                Box(modifier = Modifier.height(20.dp))
-                Text(
-                    text = stringResource(id = R.string.playlist_empty),
-                )
-                Box(modifier = Modifier.height(12.dp))
-                EaseTextButton(
-                    text = stringResource(id = R.string.playlist_empty_action),
-                    type = EaseTextButtonType.Primary,
-                    size = EaseTextButtonSize.Medium,
-                    onClick = {
-                        editPlaylistVM.openModal()
-                    }
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .padding(24.dp, 24.dp),
+                ) {
+                    Image(painter = painterResource(id = R.drawable.empty_playlists), contentDescription = null)
+                    Box(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = stringResource(id = R.string.playlist_empty),
+                    )
+                    Box(modifier = Modifier.height(12.dp))
+                    EaseTextButton(
+                        text = stringResource(id = R.string.playlist_empty_action),
+                        type = EaseTextButtonType.Primary,
+                        size = EaseTextButtonSize.Medium,
+                        onClick = {
+                            editPlaylistVM.openModal()
+                        }
+                    )
+                }
             }
         }
     } else {
@@ -102,9 +148,17 @@ fun PlaylistsSubpage(
                 modifier = Modifier
                     .fillMaxSize()
             ) {
+                Spacer(modifier = Modifier.height(20.dp))
+                PlaylistHomeSearchEntry(
+                    query = searchQuery,
+                    onQueryChange = { value -> searchQuery = value },
+                    onSearch = { navController.navigate(RouteStorageSearch(searchQuery)) },
+                    onClearQuery = { searchQuery = "" },
+                    modifier = Modifier.padding(horizontal = playlistsPaddingX)
+                )
                 Row(
                     modifier = Modifier
-                        .padding(24.dp, 8.dp)
+                        .padding(start = playlistsPaddingX, end = playlistsPaddingX, top = 10.dp, bottom = 8.dp)
                         .fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
@@ -127,7 +181,9 @@ fun PlaylistsSubpage(
                         }
                     )
                 }
-                GridPlaylists()
+                GridPlaylists(
+                    modifier = Modifier.weight(1f)
+                )
             }
             if (playlistsMode == PlaylistsMode.Adjust) {
                 FloatingActionButton(
@@ -152,6 +208,7 @@ fun PlaylistsSubpage(
 
 @Composable
 private fun GridPlaylists(
+    modifier: Modifier = Modifier,
     playlistsVM: PlaylistsVM = hiltViewModel()
 ) {
     val playlists by playlistsVM.playlists.collectAsState()
@@ -162,7 +219,7 @@ private fun GridPlaylists(
     }
 
     LazyVerticalGrid(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxWidth(),
         columns = GridCells.Adaptive(minSize = 160.dp),
         horizontalArrangement = Arrangement.Center,
         state = lazyGridState

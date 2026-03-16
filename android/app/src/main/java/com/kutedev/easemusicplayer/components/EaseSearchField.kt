@@ -38,6 +38,7 @@ fun EaseSearchField(
     placeholder: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    elevated: Boolean = true,
     onSearch: () -> Unit = {},
     onClear: () -> Unit = {},
 ) {
@@ -47,17 +48,29 @@ fun EaseSearchField(
     val backgroundColor = if (focused) {
         MaterialTheme.colorScheme.surface
     } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.94f)
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (elevated) 0.94f else 0.88f)
     }
     val borderColor = if (focused) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.36f)
     } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (elevated) 0.58f else 0.48f)
     }
     val textStyle = TextStyle(
         color = MaterialTheme.colorScheme.onSurface,
         fontSize = 15.sp,
     )
+    val containerModifier = if (elevated) {
+        Modifier.dropShadow(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            offsetX = 0.dp,
+            offsetY = 6.dp,
+            blurRadius = 18.dp,
+        )
+    } else {
+        Modifier
+    }
+    val horizontalPadding = if (elevated) 18.dp else 16.dp
+    val verticalPadding = if (elevated) 14.dp else 12.dp
 
     BasicTextField(
         value = value,
@@ -74,16 +87,11 @@ fun EaseSearchField(
         interactionSource = interactionSource,
         modifier = modifier
             .fillMaxWidth()
-            .dropShadow(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                offsetX = 0.dp,
-                offsetY = 6.dp,
-                blurRadius = 18.dp,
-            )
+            .then(containerModifier)
             .clip(shape)
             .background(backgroundColor)
             .border(width = 1.dp, color = borderColor, shape = shape)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         decorationBox = { innerTextField ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
