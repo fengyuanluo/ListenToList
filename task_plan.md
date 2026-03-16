@@ -1,83 +1,64 @@
-# ListenToList playlist / queue 语义修复计划（官方最佳实践对照 + 实施）
+# ListenToList 搜索/目录/播放/设置页交互重构计划（2026-03-16）
 
 ## 目标
-
-先基于 Android 官方一手资料确认 Media3 / ExoPlayer 关于 playlist、queue、media item、MediaSession、MediaLibrary 的最佳实践，
-再把结论落实到当前仓库，实现并验证以下修复：
-- 文件夹播放改为临时 runtime queue，不再创建真实歌单
-- playlist 内顺序从全局 `MusicModel.order` 迁到 membership relation
-- 播放页删除动作按上下文分流（歌单成员 vs 当前临时队列项）
-- 临时 queue 跨重启恢复
-- 播放运行态以 queue-first 模型驱动，并补齐关键验证
+在 `/root/Coding/General/ListenToList` 中完成 4 组 UI/交互修改，并基于 Android / Material 官方最佳实践完成实现、验证与交付：
+1. 搜索结果页去掉类型文字与定位按钮，仅保留左侧图标区分类型；长按后提供定位、加入播放队列、加入歌单等操作。
+2. 目录页移除右上角“选择”入口，仅保留搜索；改为长按进入选择态；选择态新增批量加入歌单、加入播放队列、下载等动作。
+3. 播放页重排层级：封面轻微上移，上一首/播放暂停/下一首上移至进度条下方，底部次级动作重组为 5 个按钮并新增下载。
+4. 设置页新增“下载管理”页面与入口。
 
 ## 当前阶段
-
-Phase 6
+Phase 4
 
 ## 阶段
-
-### Phase 1: 边界确认与上下文准备
-- [x] 读取 AGENTS.md 与用户约束
-- [x] 读取 planning-with-files skill 说明
-- [x] 执行轻量 memory quick pass，确认 ListenToList 最近已有 queue 语义背景
-- [x] 将本轮目标重写到 planning files
+### Phase 1: 代码与最佳实践调研
+- [x] 读取根级 AGENTS.md 与仓库结构真相源
+- [x] 快速检索 memory，恢复 ListenToList 最近的播放/目录上下文
+- [x] 定位搜索页、目录页、播放页、设置页相关 Kotlin/Compose/ViewModel/Route 文件
+- [x] 检索 Android / Material 官方最佳实践（长按选择、动态 top app bar、search bar、menus / bottom sheets）
 - **Status:** complete
 
-### Phase 2: 官方资料收集
-- [x] 仅检索 Android 官方一手资料
-- [x] 收集 Media3 / ExoPlayer 关于 Player playlist API、MediaItem、MediaSession、MediaLibraryService、browse tree 的原始页面
-- [x] 记录每页能直接支持的概念结论
+### Phase 2: 方案冻结
+- [x] 明确搜索结果长按动作与目录页选择态动作的最小实现路径
+- [x] 明确“加入播放队列”需要的 runtime queue 扩展点
+- [x] 确认下载基础设施真实状态，并决定接入现有下载仓库而非自建平行实现
 - **Status:** complete
 
-### Phase 3: 原则提炼
-- [x] 提炼 6-10 条概念建模原则
-- [x] 区分“官方直接表述”与“跨文档推论”
-- [x] 为每条原则整理页面标题与链接
+### Phase 3: 实现交互与页面
+- [x] 搜索结果页：去 badge / 去定位按钮 / 加长按动作
+- [x] 目录页：去选择按钮 / 长按进入选择态 / 选择态动作重构
+- [x] 播放页：重排封面与控制区层级 / 新增下载按钮
+- [x] 设置页：新增下载管理入口与页面
+- [x] 必要时补充播放队列 / 下载任务 supporting repository / VM / route
 - **Status:** complete
 
-### Phase 4: 交付整理
-- [x] 复核只引用官方来源
-- [x] 输出中文结论，明确证据边界与推论边界
+### Phase 4: 测试与验收
+- [x] 更新受影响的 unit/androidTest 渲染 smoke
+- [x] 运行 `cd android && ./gradlew testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin --warning-mode all`
+- [x] 运行 `cd android && ./gradlew connectedDebugAndroidTest`
+- [x] 运行 `bun run smoke:android --device=172.26.121.48:34327 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`
 - **Status:** complete
 
-### Phase 5: 概念对照后的实现设计冻结
-- [x] 与用户确认文件夹播放=临时 queue、membership order 正式迁移、删除按上下文、临时 queue 要恢复
-- [x] 将实现切到 queue-first 方案，而不是继续扩展“playlist 即播放上下文”的旧模型
-- **Status:** complete
-
-### Phase 6: 逐项修复与验证
-- [x] Rust schema 升级到 v4，并把 playlist membership order 迁移到关系层
-- [x] backend 改为按 membership order 读取/重排 playlist，并新增 ensure musics 能力供 folder queue 使用
-- [x] Android 引入 runtime queue / session persistence / queue-first controller
-- [x] 文件夹播放改为临时 queue，不再创建“文件夹播放-xxx”真实歌单
-- [x] 播放页删除改为按上下文分流
-- [x] 修复 queue 当前项状态分裂、边界 next/previous 回播当前项、失败播放遗留旧 player 等运行态问题
-- [x] 跑 Rust 单测、Android unit test、assembleDebug、JNI 构建、真机 smoke
-- **Status:** complete
-
-## 关键问题
-1. 如何把“用户歌单”和“播放运行时队列”彻底拆开，不再用 `Playlist` 直接充当当前播放上下文？
-2. 如何在保留现有数据的前提下，把 playlist 顺序迁到 membership relation？
-3. 文件夹播放怎样改成临时 queue，同时不破坏 metadata probe / prefetch / smoke 路径？
-4. 当前项删除、边界切歌、恢复与 playlist 刷新，怎样避免 queue 状态分裂？
-
-## 已做决策
+## 已确认决策
 | Decision | Rationale |
 |----------|-----------|
-| 官方资料只用一手来源 | 用户明确要求对照官方最佳实践 |
-| 文件夹播放改为临时 runtime queue，不创建真实歌单 | 用户已明确锁定产品语义 |
-| playlist 内顺序迁到 membership relation，并走正式迁移 | 避免全局 `MusicModel.order` 污染多个歌单 |
-| 删除当前项按上下文分流 | 用户已明确锁定产品语义 |
-| 临时 queue 需要跨重启恢复 | 用户已明确锁定产品语义 |
+| 搜索结果项只保留图标区分类型，不再显示“目录/音频/文件”badge | 与 Material 列表的 leading icon 模式一致，也符合用户明确要求 |
+| 搜索结果项的扩展动作改为长按触发 | Android 官方 tap-and-press + contextual actions 模式更贴近移动端列表交互 |
+| 目录页常态右上角只保留搜索 | 用户明确要求，选择态改为长按进入 |
+| 目录页选择态采用“动态 top app bar + overflow actions” | Android 官方 dynamic top app bar with selection 更适合作为多选上下文工具栏 |
+| 新增“临时/手动播放队列”上下文承接外部加入队列动作 | 不能把外部追加动作继续绑定到用户歌单上下文，否则 remove/refresh 语义会错乱 |
+| 下载管理优先接入现有 `DownloadRepository + DownloadWorker` | 编译阶段已确认仓库真实存在下载任务仓库与 Worker，只是此前未接入搜索/目录/播放/设置页入口 |
+
+## 风险与注意事项
+1. 目录页当前“下载”FAB 实际代码路径是 `CreatePlaylistVM.importFromEntries(...)`，与用户感知语义不一致，必须纠正。
+2. 搜索页与目录页内部搜索共用 `StorageSearchResultRow`，去 badge / 去按钮 / 加长按时要同步兼顾两个入口。
+3. “加入播放队列”若直接追加到 `USER_PLAYLIST` 上下文，会把运行时队列和持久歌单重新耦合，需新建临时上下文。
+4. 播放页视觉调整不仅是按钮位置变化，还要避免破坏现有 queue sheet、歌词切换与 slider 交互。
+5. 长按交互需要尽量贴近 Android 官方 tap-and-press 习惯，最好补上触感反馈而不是只弹菜单。
+6. 下载页并非从零开始；真正的风险是把 UI 再做一套平行任务模型，导致与现有 WorkManager 下载状态脱节。
 
 ## 错误记录
 | Error | Attempt | Resolution |
 |-------|---------|------------|
-| 既有 planning files 仍偏向“仓库概念审计”而非“官方资料调研” | 1 | 重写为本轮仅官方一手资料研究计划 |
-| Rust v4 upgrader 新增测试初次失败（作用域/借用/断言顺序） | 1 | 修正 `super::upgrade_v3_to_v4(...)` 调用、缩小表借用作用域、按 membership order 排序后断言 |
-| `PlaybackSessionStoreTest` 初次失败（`ApplicationProvider` / `commit()` 未解析） | 1 | 改为 Robolectric `RuntimeEnvironment.getApplication()`，使用 `apply()` 清空 prefs |
-| queue-first Android 改造后存在当前项状态分裂与边界切歌回播当前项风险 | 1 | 同步 `_queue.currentQueueEntryId` 与 `_currentQueueEntryId`，并修正 next/previous fallback 逻辑 |
-
-## 备注
-- 外部网页内容一律写入 `findings.md`，不把网页原文塞进 `task_plan.md`。
-- 本轮已从“只研究”推进到“按已确认方案实施修复并验证”；后续若继续扩展，应以当前源码与验证结果为准。
+| 目录页页面文件初看误以为在 `widgets/musics/` 下 | 1 | 复查 Root 导航后确认实际页面为 `widgets/devices/StorageBrowserPage.kt` |
+| 当前 planning files 仍是旧任务内容 | 1 | 已重写为本轮 UI/交互改造计划 |

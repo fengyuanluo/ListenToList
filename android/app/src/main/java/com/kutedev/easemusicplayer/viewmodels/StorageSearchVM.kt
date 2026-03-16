@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kutedev.easemusicplayer.singleton.DownloadRepository
+import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.StorageRepository
 import com.kutedev.easemusicplayer.singleton.StorageSearchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +39,8 @@ private const val STATE_SELECTED_STORAGE_ID = "storage_search_selected_storage_i
 class StorageSearchVM @Inject constructor(
     private val storageRepository: StorageRepository,
     private val storageSearchRepository: StorageSearchRepository,
+    private val playerControllerRepository: PlayerControllerRepository,
+    private val downloadRepository: DownloadRepository,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val initialQuery = savedStateHandle.get<String>(STATE_QUERY)
@@ -176,6 +180,20 @@ class StorageSearchVM @Inject constructor(
         viewModelScope.launch {
             storageSearchRepository.playSearchEntry(entry)
         }
+    }
+
+    fun addEntryToQueue(entry: StorageSearchEntry) {
+        if (entry.entryTyp() != uniffi.ease_client_backend.StorageEntryType.MUSIC) {
+            return
+        }
+        playerControllerRepository.appendEntriesToQueue(listOf(entry.toStorageEntry()))
+    }
+
+    fun downloadEntry(entry: StorageSearchEntry) {
+        if (entry.isDir) {
+            return
+        }
+        downloadRepository.enqueueEntries(listOf(entry.toStorageEntry()))
     }
 
     private suspend fun refreshAllSections(

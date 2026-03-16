@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.kutedev.easemusicplayer.R
 import uniffi.ease_client_backend.SearchStorageEntriesResp
 import uniffi.ease_client_backend.Storage
+import uniffi.ease_client_backend.StorageEntry
 import uniffi.ease_client_backend.StorageSearchEntry
 import uniffi.ease_client_backend.StorageSearchPage
 import uniffi.ease_client_backend.StorageSearchScope
@@ -90,6 +91,16 @@ fun StorageSearchEntry.entryTyp(): uniffi.ease_client_backend.StorageEntryType {
         LYRIC_EXTS.any { lowerPath.endsWith(it) } -> uniffi.ease_client_backend.StorageEntryType.LYRIC
         else -> uniffi.ease_client_backend.StorageEntryType.OTHER
     }
+}
+
+fun StorageSearchEntry.toStorageEntry(): StorageEntry {
+    return StorageEntry(
+        storageId = storageId,
+        name = name,
+        path = path,
+        size = size,
+        isDir = isDir,
+    )
 }
 
 fun SearchStorageEntriesResp.pageOrNull(): StorageSearchPage? {

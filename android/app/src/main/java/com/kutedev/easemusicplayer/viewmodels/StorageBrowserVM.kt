@@ -12,6 +12,7 @@ import com.kutedev.easemusicplayer.core.PlaybackCachePolicy
 import com.kutedev.easemusicplayer.core.PlaybackDataSourceFactory
 import com.kutedev.easemusicplayer.core.buildPlaybackMusicUri
 import com.kutedev.easemusicplayer.singleton.Bridge
+import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import com.kutedev.easemusicplayer.singleton.PermissionRepository
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
@@ -79,6 +80,7 @@ class StorageBrowserVM @Inject constructor(
     private val storageSearchRepository: StorageSearchRepository,
     private val playlistRepository: PlaylistRepository,
     private val playerControllerRepository: PlayerControllerRepository,
+    private val downloadRepository: DownloadRepository,
     private val permissionRepository: PermissionRepository,
     private val toastRepository: ToastRepository,
     private val bridge: Bridge,
@@ -348,8 +350,9 @@ class StorageBrowserVM @Inject constructor(
 
     fun locateSearchEntry(entry: StorageSearchEntry) {
         collapseSearch(clearQuery = true)
-        if (entry.parentPath != browser.currentPathValue()) {
-            navigateDir(entry.parentPath)
+        val targetPath = if (entry.isDir) entry.path else entry.parentPath
+        if (targetPath != browser.currentPathValue()) {
+            navigateDir(targetPath)
         } else {
             toastRepository.emitToastRes(com.kutedev.easemusicplayer.R.string.storage_search_located_current_dir)
         }
@@ -454,6 +457,21 @@ class StorageBrowserVM @Inject constructor(
         persistSelectedPaths()
     }
 
+    fun startSelection(entry: StorageEntry) {
+        if (!(entry.isDir || entry.entryTyp() == StorageEntryType.MUSIC)) {
+            return
+        }
+        if (!_selectMode.value) {
+            _selectMode.value = true
+            persistSelectMode()
+        }
+        if (_selected.value.contains(entry.path)) {
+            return
+        }
+        _selected.value = _selected.value.add(entry.path)
+        persistSelectedPaths()
+    }
+
     fun toggleAll() {
         if (!_selectMode.value) {
             return
@@ -516,6 +534,54 @@ class StorageBrowserVM @Inject constructor(
         } finally {
             _working.value = false
         }
+    }
+
+    suspend fun collectSelectedDownloadEntries(): List<StorageEntry> {
+        if (_selected.value.isEmpty()) {
+            return emptyList()
+        }
+        _working.value = true
+        try {
+            return StorageBrowserUtils.resolveSelectedDownloadEntries(
+                selectedPaths = _selected.value,
+                currentEntries = entries.value,
+                listChildren = { dir -> listEntries(dir) }
+            )
+        } finally {
+            _working.value = false
+        }
+    }
+
+    suspend fun addSelectedToQueue(): Boolean {
+        val selectedEntries = collectSelectedMusicEntries()
+        if (selectedEntries.isEmpty()) {
+            return false
+        }
+        playerControllerRepository.appendEntriesToQueue(selectedEntries)
+        return true
+    }
+
+    suspend fun enqueueSelectedDownloads(): Boolean {
+        val selectedEntries = collectSelectedDownloadEntries()
+        if (selectedEntries.isEmpty()) {
+            return false
+        }
+        downloadRepository.enqueueEntries(selectedEntries)
+        return true
+    }
+
+    fun addSearchEntryToQueue(entry: StorageSearchEntry) {
+        if (entry.entryTyp() != StorageEntryType.MUSIC) {
+            return
+        }
+        playerControllerRepository.appendEntriesToQueue(listOf(entry.toStorageEntry()))
+    }
+
+    fun enqueueSearchEntryDownload(entry: StorageSearchEntry) {
+        if (entry.isDir) {
+            return
+        }
+        downloadRepository.enqueueEntries(listOf(entry.toStorageEntry()))
     }
 
     fun playFromFolder(entry: StorageEntry) {

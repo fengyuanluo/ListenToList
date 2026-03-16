@@ -26,6 +26,7 @@ import com.kutedev.easemusicplayer.ui.theme.EaseMusicPlayerTheme
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
 import com.kutedev.easemusicplayer.core.RouteDebugMore
+import com.kutedev.easemusicplayer.core.RouteDownloadManager
 import com.kutedev.easemusicplayer.core.RouteHome
 import com.kutedev.easemusicplayer.core.RouteImport
 import com.kutedev.easemusicplayer.core.RouteLog
@@ -50,6 +51,7 @@ import com.kutedev.easemusicplayer.widgets.playlists.EditPlaylistsDialog
 import com.kutedev.easemusicplayer.widgets.playlists.PlaylistPage
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchPage
 import com.kutedev.easemusicplayer.widgets.settings.DebugMorePage
+import com.kutedev.easemusicplayer.widgets.settings.DownloadManagerPage
 import com.kutedev.easemusicplayer.widgets.settings.LogPage
 import com.kutedev.easemusicplayer.widgets.settings.ThemeSettingsPage
 
@@ -182,6 +184,9 @@ fun Root() {
                                 }
                                 composable(RouteThemeSettings()) {
                                     ThemeSettingsPage()
+                                }
+                                composable(RouteDownloadManager()) {
+                                    DownloadManagerPage()
                                 }
                             }
                         }

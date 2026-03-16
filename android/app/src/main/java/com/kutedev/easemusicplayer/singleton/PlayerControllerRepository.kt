@@ -12,6 +12,7 @@ import androidx.media3.session.MediaController
 import com.kutedev.easemusicplayer.core.PLAY_DIRECTION_NEXT
 import com.kutedev.easemusicplayer.core.PLAY_DIRECTION_PREVIOUS
 import com.kutedev.easemusicplayer.core.playQueueUtil
+import com.kutedev.easemusicplayer.viewmodels.entryTyp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,6 +26,7 @@ import uniffi.ease_client_backend.ArgEnsureMusics
 import uniffi.ease_client_backend.AddedMusic
 import uniffi.ease_client_backend.Playlist
 import uniffi.ease_client_backend.StorageEntry
+import uniffi.ease_client_backend.StorageEntryType
 import uniffi.ease_client_backend.ToAddMusicEntry
 import uniffi.ease_client_backend.ctEnsureMusics
 import uniffi.ease_client_backend.ctGetMusic
@@ -203,7 +205,8 @@ class PlayerControllerRepository @Inject constructor(
         }
         when (queue.context.type) {
             PlaybackContextType.USER_PLAYLIST -> removeNonCurrentPlaylistEntry(queue, queueEntryId)
-            PlaybackContextType.FOLDER -> removeNonCurrentQueueEntry(queue, queueEntryId)
+            PlaybackContextType.FOLDER,
+            PlaybackContextType.TEMPORARY -> removeNonCurrentQueueEntry(queue, queueEntryId)
         }
     }
 
@@ -255,6 +258,13 @@ class PlayerControllerRepository @Inject constructor(
             PlaybackContextType.FOLDER -> {
                 applyEditedQueueSnapshot(
                     snapshot = nextSnapshot,
+                    requestedQueueEntryId = currentEntryId,
+                )
+            }
+
+            PlaybackContextType.TEMPORARY -> {
+                applyEditedQueueSnapshot(
+                    snapshot = nextSnapshot.copy(context = PlaybackContext(type = PlaybackContextType.TEMPORARY)),
                     requestedQueueEntryId = currentEntryId,
                 )
             }
@@ -326,6 +336,103 @@ class PlayerControllerRepository @Inject constructor(
                 currentMusic = target,
                 currentQueueEntryId = targetEntry.queueEntryId,
             )
+        }
+    }
+
+    fun appendEntriesToQueue(entries: List<StorageEntry>) {
+        val mediaController = _mediaController
+        val songs = entries
+            .filter { entry -> entry.entryTyp() == StorageEntryType.MUSIC }
+            .distinctBy { entry -> "${entry.storageId.value}:${entry.path}" }
+        if (songs.isEmpty()) {
+            toastRepository.emitToast("当前没有可加入播放队列的音乐")
+            return
+        }
+
+        _scope.launch(Dispatchers.Main) {
+            val ensured = bridge.run {
+                ctEnsureMusics(
+                    it,
+                    ArgEnsureMusics(
+                        entries = songs.map { song -> ToAddMusicEntry(song, song.name) },
+                    )
+                )
+            } ?: emptyList()
+            if (ensured.isEmpty()) {
+                toastRepository.emitToast("当前没有可加入播放队列的音乐")
+                return@launch
+            }
+            playlistRepository.requestTotalDuration(ensured)
+            val appendedEntries = buildTemporaryEntries(songs = songs, ensured = ensured)
+            if (appendedEntries.isEmpty()) {
+                toastRepository.emitToast("当前没有可加入播放队列的音乐")
+                return@launch
+            }
+
+            val activeQueue = playerRepository.playbackQueueValue()
+            val activeMusic = playerRepository.music.value
+            if (activeQueue == null || activeMusic == null) {
+                val targetEntry = appendedEntries.first()
+                val targetMusic = bridge.run { ctGetMusic(it, targetEntry.musicId) } ?: run {
+                    toastRepository.emitToast("歌曲资源不可用")
+                    return@launch
+                }
+                val snapshot = PlaybackQueueSnapshot(
+                    context = PlaybackContext(type = PlaybackContextType.TEMPORARY),
+                    entries = appendedEntries,
+                    currentQueueEntryId = targetEntry.queueEntryId,
+                )
+                if (mediaController != null) {
+                    playResolvedQueue(
+                        player = mediaController,
+                        snapshot = snapshot,
+                        currentMusic = targetMusic,
+                        currentQueueEntryId = targetEntry.queueEntryId,
+                        playWhenReady = false,
+                    )
+                } else {
+                    playerRepository.setPlaybackSession(
+                        music = targetMusic,
+                        queueSnapshot = snapshot,
+                        currentQueueEntryId = targetEntry.queueEntryId,
+                    )
+                    persistCurrentSession(
+                        playWhenReadyOverride = false,
+                        currentQueueEntryIdOverride = targetEntry.queueEntryId,
+                    )
+                }
+                toastRepository.emitToast("已加入播放队列")
+                return@launch
+            }
+
+            val currentQueueEntryId = playerRepository.currentQueueEntryIdValue() ?: activeQueue.currentQueueEntryId
+            val combinedSnapshot = PlaybackQueueSnapshot(
+                context = PlaybackContext(type = PlaybackContextType.TEMPORARY),
+                entries = activeQueue.entries + appendedEntries,
+                currentQueueEntryId = currentQueueEntryId,
+            )
+            if (mediaController != null) {
+                playResolvedQueue(
+                    player = mediaController,
+                    snapshot = combinedSnapshot,
+                    currentMusic = activeMusic,
+                    currentQueueEntryId = currentQueueEntryId,
+                    startPositionMs = getCurrentPosition(),
+                    playWhenReady = mediaController.playWhenReady,
+                )
+            } else {
+                playerRepository.setPlaybackSession(
+                    music = activeMusic,
+                    queueSnapshot = combinedSnapshot,
+                    currentQueueEntryId = currentQueueEntryId,
+                )
+                persistCurrentSession(
+                    positionOverrideMs = getCurrentPosition(),
+                    playWhenReadyOverride = playerRepository.playing.value,
+                    currentQueueEntryIdOverride = currentQueueEntryId,
+                )
+            }
+            toastRepository.emitToast("已加入播放队列")
         }
     }
 
@@ -485,7 +592,8 @@ class PlayerControllerRepository @Inject constructor(
         val queue = playerRepository.playbackQueueValue() ?: return
         when (queue.context.type) {
             PlaybackContextType.USER_PLAYLIST -> removeCurrentFromPlaylist(queue)
-            PlaybackContextType.FOLDER -> removeCurrentFromQueue(queue)
+            PlaybackContextType.FOLDER,
+            PlaybackContextType.TEMPORARY -> removeCurrentFromQueue(queue)
         }
     }
 
@@ -695,6 +803,37 @@ class PlayerControllerRepository @Inject constructor(
         )
     }
 
+    private fun buildTemporaryEntries(
+        songs: List<StorageEntry>,
+        ensured: List<AddedMusic>,
+    ): List<PlaybackQueueEntry> {
+        val nonce = System.currentTimeMillis()
+        return buildList {
+            ensured.forEachIndexed { index, added ->
+                val song = songs.getOrNull(index) ?: return@forEachIndexed
+                val musicAbstract = bridge.runSync { backend -> ctsGetMusicAbstract(backend, added.id) } ?: return@forEachIndexed
+                add(
+                    PlaybackQueueEntry(
+                        queueEntryId = buildTemporaryQueueEntryId(
+                            storageId = song.storageId,
+                            path = song.path,
+                            musicId = added.id,
+                            nonce = nonce,
+                            index = index,
+                        ),
+                        musicId = added.id,
+                        musicAbstract = musicAbstract,
+                        sourceContext = PlaybackContext(
+                            type = PlaybackContextType.TEMPORARY,
+                            storageId = song.storageId,
+                            folderPath = song.path.substringBeforeLast('/', "/"),
+                        ),
+                    )
+                )
+            }
+        }
+    }
+
     private fun applyEditedQueueSnapshot(
         snapshot: PlaybackQueueSnapshot,
         requestedQueueEntryId: String,
@@ -818,7 +957,56 @@ class PlayerControllerRepository @Inject constructor(
                     playWhenReady = persisted.playWhenReady,
                 )
             }
+            PlaybackContextType.TEMPORARY.name -> {
+                val context = PlaybackContext(type = PlaybackContextType.TEMPORARY)
+                val entries = buildList {
+                    persisted.entries.forEach { persistedEntry ->
+                        val musicId = MusicId(persistedEntry.musicId)
+                        val musicAbstract = bridge.runSync { backend -> ctsGetMusicAbstract(backend, musicId) } ?: return@forEach
+                        add(
+                            PlaybackQueueEntry(
+                                queueEntryId = persistedEntry.queueEntryId,
+                                musicId = musicId,
+                                musicAbstract = musicAbstract,
+                                sourceContext = buildPersistedSourceContext(persistedEntry),
+                            )
+                        )
+                    }
+                }
+                if (entries.isEmpty()) {
+                    playbackSessionStore.clear()
+                    return
+                }
+                val snapshot = PlaybackQueueSnapshot(
+                    context = context,
+                    entries = entries,
+                    currentQueueEntryId = persisted.currentQueueEntryId,
+                )
+                val entry = snapshot.currentEntry() ?: entries.firstOrNull() ?: return
+                val music = bridge.run { ctGetMusic(it, entry.musicId) } ?: return
+                playResolvedQueue(
+                    player = mediaController,
+                    snapshot = snapshot.copy(currentQueueEntryId = entry.queueEntryId),
+                    currentMusic = music,
+                    currentQueueEntryId = entry.queueEntryId,
+                    startPositionMs = persisted.positionMs,
+                    playWhenReady = persisted.playWhenReady,
+                )
+            }
         }
+    }
+
+    private fun buildPersistedSourceContext(
+        persistedEntry: PersistedPlaybackQueueEntry,
+    ): PlaybackContext {
+        val type = runCatching { PlaybackContextType.valueOf(persistedEntry.sourceType) }
+            .getOrDefault(PlaybackContextType.TEMPORARY)
+        return PlaybackContext(
+            type = type,
+            playlistId = persistedEntry.playlistId?.let(::PlaylistId),
+            storageId = persistedEntry.storageId?.let(::StorageId),
+            folderPath = persistedEntry.folderPath,
+        )
     }
 
     private fun buildPlaylistSnapshot(

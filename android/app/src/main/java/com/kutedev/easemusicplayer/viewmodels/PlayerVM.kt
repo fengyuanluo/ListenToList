@@ -2,6 +2,7 @@ package com.kutedev.easemusicplayer.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
 import com.kutedev.easemusicplayer.utils.formatDuration
@@ -26,7 +27,8 @@ import kotlin.time.toJavaDuration
 @HiltViewModel
 class PlayerVM @Inject constructor(
     private val playerRepository: PlayerRepository,
-    private val playerControllerRepository: PlayerControllerRepository
+    private val playerControllerRepository: PlayerControllerRepository,
+    private val downloadRepository: DownloadRepository,
 ) : ViewModel() {
     private val _currentDuration = MutableStateFlow(Duration.ZERO)
     private val _bufferDuration = MutableStateFlow(Duration.ZERO)
@@ -120,6 +122,11 @@ class PlayerVM @Inject constructor(
 
     fun removeLyric() {
         playerRepository.removeLyric()
+    }
+
+    fun downloadCurrent() {
+        val currentMusic = music.value ?: return
+        downloadRepository.enqueueCurrentMusic(currentMusic)
     }
 
     fun syncPosition() {

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteDebugMore
+import com.kutedev.easemusicplayer.core.RouteDownloadManager
 import com.kutedev.easemusicplayer.core.RouteLog
 import com.kutedev.easemusicplayer.core.RouteThemeSettings
 
@@ -131,6 +132,14 @@ fun SettingSubpage() {
             content = stringResource(id = R.string.setting_theme_entry_desc),
             onClick = {
                 navController.navigate(RouteThemeSettings())
+            }
+        )
+        Item(
+            iconPainter = painterResource(R.drawable.icon_download),
+            title = stringResource(id = R.string.setting_downloads_title),
+            content = stringResource(id = R.string.setting_downloads_desc),
+            onClick = {
+                navController.navigate(RouteDownloadManager())
             }
         )
         Title(title = stringResource(id = R.string.setting_debug))

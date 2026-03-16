@@ -58,11 +58,14 @@ import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.components.EaseSearchField
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteStorageBrowser
+import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.StorageSearchErrorType
 import com.kutedev.easemusicplayer.viewmodels.StorageSearchSectionUiState
 import com.kutedev.easemusicplayer.viewmodels.StorageSearchVM
 import com.kutedev.easemusicplayer.viewmodels.entryTyp
 import com.kutedev.easemusicplayer.viewmodels.labelRes
+import com.kutedev.easemusicplayer.viewmodels.toStorageEntry
+import com.kutedev.easemusicplayer.widgets.playlists.CreatePlaylistsDialog
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_backend.StorageEntryType
@@ -259,7 +262,7 @@ private fun InstanceSearchResultsPage(
     scope: StorageSearchScope,
     section: StorageSearchSectionUiState?,
     onResultClick: (StorageSearchEntry) -> Unit,
-    onLocate: (StorageSearchEntry) -> Unit,
+    onResultLongClick: (StorageSearchEntry) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -341,7 +344,7 @@ private fun InstanceSearchResultsPage(
                         entry = entry,
                         subtitle = entry.parentPath,
                         onClick = { onResultClick(entry) },
-                        onLocate = { onLocate(entry) },
+                        onLongClick = { onResultLongClick(entry) },
                     )
                 }
                 if (pageState.loadingMore) {
@@ -375,7 +378,7 @@ fun StorageSearchContent(
     onClearQuery: () -> Unit,
     onSelectStorage: (StorageId) -> Unit,
     onResultClick: (StorageSearchEntry) -> Unit,
-    onLocate: (StorageSearchEntry) -> Unit,
+    onResultLongClick: (StorageSearchEntry) -> Unit,
     onLoadMore: (StorageId) -> Unit,
     onRetryStorage: (StorageId) -> Unit,
 ) {
@@ -461,7 +464,7 @@ fun StorageSearchContent(
                         scope = scope,
                         section = section,
                         onResultClick = onResultClick,
-                        onLocate = onLocate,
+                        onResultLongClick = onResultLongClick,
                         onLoadMore = { onLoadMore(storage.id) },
                         onRetry = { onRetryStorage(storage.id) },
                     )
@@ -474,6 +477,7 @@ fun StorageSearchContent(
 @Composable
 fun StorageSearchPage(
     storageSearchVM: StorageSearchVM = hiltViewModel(),
+    createPlaylistVM: CreatePlaylistVM = hiltViewModel(),
 ) {
     val navController = LocalNavController.current
     val query by storageSearchVM.query.collectAsState()
@@ -481,6 +485,7 @@ fun StorageSearchPage(
     val sections by storageSearchVM.sections.collectAsState()
     val searchableStorages by storageSearchVM.searchableStorages.collectAsState()
     val selectedStorageId by storageSearchVM.selectedStorageId.collectAsState()
+    var actionEntry by remember { mutableStateOf<StorageSearchEntry?>(null) }
 
     fun openEntry(entry: StorageSearchEntry) {
         when {
@@ -512,10 +517,78 @@ fun StorageSearchPage(
         onClearQuery = { storageSearchVM.clearQuery() },
         onSelectStorage = { storageId -> storageSearchVM.selectStorage(storageId) },
         onResultClick = { entry -> openEntry(entry) },
-        onLocate = { entry ->
-            navController.navigate(RouteStorageBrowser(entry.storageId.value.toString(), entry.parentPath))
-        },
+        onResultLongClick = { entry -> actionEntry = entry },
         onLoadMore = { storageId -> storageSearchVM.loadMore(storageId) },
         onRetryStorage = { storageId -> storageSearchVM.retryStorage(storageId) },
     )
+
+    val sheetEntry = actionEntry
+    if (sheetEntry != null) {
+        val actions = buildList {
+            add(
+                StorageSearchActionItem(
+                    label = stringResource(id = R.string.storage_search_action_locate),
+                    onClick = {
+                        actionEntry = null
+                        navController.navigate(
+                            RouteStorageBrowser(
+                                sheetEntry.storageId.value.toString(),
+                                if (sheetEntry.isDir) sheetEntry.path else sheetEntry.parentPath,
+                            )
+                        )
+                    }
+                )
+            )
+            if (sheetEntry.entryTyp() == StorageEntryType.MUSIC) {
+                add(
+                    StorageSearchActionItem(
+                        label = stringResource(id = R.string.common_add_to_queue),
+                        onClick = {
+                            actionEntry = null
+                            storageSearchVM.addEntryToQueue(sheetEntry)
+                        }
+                    )
+                )
+                add(
+                    StorageSearchActionItem(
+                        label = stringResource(id = R.string.common_add_to_playlist),
+                        onClick = {
+                            actionEntry = null
+                            createPlaylistVM.importFromEntries(listOf(sheetEntry.toStorageEntry()))
+                        }
+                    )
+                )
+            }
+            if (!sheetEntry.isDir) {
+                add(
+                    StorageSearchActionItem(
+                        label = stringResource(id = R.string.common_download),
+                        onClick = {
+                            actionEntry = null
+                            storageSearchVM.downloadEntry(sheetEntry)
+                        }
+                    )
+                )
+            }
+            if (!sheetEntry.isDir) {
+                add(
+                    StorageSearchActionItem(
+                        label = stringResource(id = R.string.common_download),
+                        onClick = {
+                            actionEntry = null
+                            storageSearchVM.downloadEntry(sheetEntry)
+                        }
+                    )
+                )
+            }
+        }
+        StorageSearchActionSheet(
+            title = sheetEntry.name,
+            subtitle = sheetEntry.parentPath,
+            items = actions,
+            onDismiss = { actionEntry = null },
+        )
+    }
+
+    CreatePlaylistsDialog()
 }

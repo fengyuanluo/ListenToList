@@ -134,9 +134,6 @@
     <string name="storage_search_idle_desc">Type a keyword above to search all connected AList / OpenList instances with the official API.</string>
     <string name="storage_search_load_more">Load more</string>
     <string name="storage_search_action_locate">Locate</string>
-    <string name="storage_search_badge_directory">Folder</string>
-    <string name="storage_search_badge_audio">Audio</string>
-    <string name="storage_search_badge_file">File</string>
     <string name="storage_search_retry">Retry</string>
     <string name="storage_search_current_scope_hint">Current search scope: %1$s</string>
     <string name="storage_search_empty_title">No result in this directory</string>
@@ -156,5 +153,21 @@
     <string name="storage_search_play_timeout">Cannot open the containing directory: request timed out.</string>
     <string name="storage_search_target_missing">The target audio is no longer present in its containing directory.</string>
     <string name="storage_search_located_current_dir">Already in the containing directory.</string>
+    <string name="common_add_to_queue">Add to queue</string>
+    <string name="common_add_to_playlist">Add to playlist</string>
+    <string name="common_download">Download</string>
+    <string name="setting_downloads_title">Download Manager</string>
+    <string name="setting_downloads_desc">Review active, failed, and completed downloads</string>
+    <string name="setting_downloads_dir">Downloaded files are stored under: %1$s</string>
+    <string name="download_empty_title">No downloads yet</string>
+    <string name="download_empty_desc">Add tracks from the player or directory selection, then come back here to review progress.</string>
+    <string name="download_status_queued">Queued</string>
+    <string name="download_status_running">Downloading</string>
+    <string name="download_status_completed">Completed</string>
+    <string name="download_status_failed">Failed</string>
+    <string name="download_status_cancelled">Cancelled</string>
+    <string name="download_status_blocked">Blocked</string>
+    <string name="download_action_cancel">Cancel</string>
+    <string name="download_action_retry">Retry</string>
 
 </resources>
