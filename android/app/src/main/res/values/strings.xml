@@ -82,6 +82,8 @@
     <string name="music_lyric_no_desc">No Lyric.</string>
     <string name="music_lyric_try_add_desc">Try add one.</string>
     <string name="music_lyric_fail">Failed to load lyric.</string>
+    <string name="music_queue_sheet_title">Current Queue</string>
+    <string name="music_queue_sheet_temporary">Temporary queue</string>
     <string name="storage_edit_oauth">OAuth</string>
     <string name="storage_edit_onedrive_connect">Connect your account</string>
     <string name="storage_edit_onedrive_disconnect">Disconnect</string>
@@ -106,9 +108,6 @@
     <string name="playlist_empty_action">创建播放列表</string>
     <string name="storage_browser_error_retry">重试</string>
     <string name="storage_browser_error_request_permission">授权</string>
-    <string name="storage_browser_toggle_all_label">全选</string>
-    <string name="storage_browser_mode_select">选择</string>
-    <string name="storage_browser_mode_done">完成</string>
     <string name="import_musics_empty_storage_title">No storage available</string>
     <string name="import_musics_empty_storage_desc">Please add or reconnect a storage device before importing musics.</string>
     <string name="log_action_share">分享日志</string>
@@ -122,18 +121,11 @@
     <string name="log_preview_empty">日志为空或不存在</string>
     <string name="debug_confirm_desc">即将执行：%1$s。该操作可能导致崩溃，是否继续？</string>
 
-    <string name="storage_search_page_title">Cross-instance Search</string>
-    <string name="storage_search_page_subtitle">Official API only · grouped by instance · direct play and quick locate</string>
-    <string name="storage_search_home_title">Search everything you connected</string>
-    <string name="storage_search_home_desc_idle">%1$d searchable instance(s) are ready. Enter a keyword to start.</string>
-    <string name="storage_search_home_desc_active">Searched %1$d instance(s), %2$d total hit(s).</string>
     <string name="storage_search_placeholder_home">Search AList / OpenList</string>
     <string name="storage_search_placeholder_directory">Search inside current directory</string>
     <string name="storage_search_scope_all">All</string>
     <string name="storage_search_scope_directory">Folders</string>
     <string name="storage_search_scope_file">Files</string>
-    <string name="storage_search_total_chip">%1$d hits</string>
-    <string name="storage_search_total_chip_idle">Standby</string>
     <string name="storage_search_section_empty_title">No match in this instance</string>
     <string name="storage_search_section_empty_desc">Try another keyword or switch the scope filter.</string>
     <string name="storage_search_no_instance_title">No searchable instance</string>

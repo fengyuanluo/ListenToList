@@ -62,6 +62,7 @@ private const val STATE_SCROLL_INDEX = "storage_browser_scroll_index"
 private const val STATE_SCROLL_OFFSET = "storage_browser_scroll_offset"
 private const val STATE_SEARCH_QUERY = "storage_browser_search_query"
 private const val STATE_SEARCH_SCOPE = "storage_browser_search_scope"
+private const val STATE_SEARCH_EXPANDED = "storage_browser_search_expanded"
 private const val ARG_PATH = "path"
 
 private data class SearchTrigger(
@@ -95,6 +96,8 @@ class StorageBrowserVM @Inject constructor(
     private val restoredSearchScope = savedStateHandle.get<String>(STATE_SEARCH_SCOPE)
         ?.let { raw -> runCatching { StorageSearchScope.valueOf(raw) }.getOrNull() }
         ?: StorageSearchScope.ALL
+    private val restoredSearchExpanded = savedStateHandle.get<Boolean>(STATE_SEARCH_EXPANDED)
+        ?: restoredSearchQuery.isNotBlank()
     private val restoredSelectedPaths = (savedStateHandle.get<ArrayList<String>>(STATE_SELECTED_PATHS)
         ?: arrayListOf())
     private val _selected = MutableStateFlow(
@@ -105,6 +108,7 @@ class StorageBrowserVM @Inject constructor(
     private val _selectMode = MutableStateFlow(savedStateHandle[STATE_SELECT_MODE] ?: false)
     private val _working = MutableStateFlow(false)
     private val _exitPage = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val _searchExpanded = MutableStateFlow(restoredSearchExpanded)
     private val _searchState = MutableStateFlow(
         StorageSearchListUiState(
             query = restoredSearchQuery,
@@ -167,6 +171,7 @@ class StorageBrowserVM @Inject constructor(
     val isRefreshing = browser.isRefreshing
     val working = _working.asStateFlow()
     val storage = _storage
+    val searchExpanded = _searchExpanded.asStateFlow()
     val searchState = _searchState.asStateFlow()
     val searchSupported = _storage.map { current ->
         current?.isStorageSearchSupported() == true
@@ -229,6 +234,8 @@ class StorageBrowserVM @Inject constructor(
                 )
             }.collectLatest { trigger ->
                 if (trigger.storage == null || !trigger.storage.isStorageSearchSupported()) {
+                    _searchExpanded.value = false
+                    persistSearchExpanded()
                     resetSearchResults(parentPath = trigger.path)
                     return@collectLatest
                 }
@@ -280,6 +287,10 @@ class StorageBrowserVM @Inject constructor(
         }
         if (value.isNotBlank()) {
             exitSelectMode()
+            if (!_searchExpanded.value) {
+                _searchExpanded.value = true
+                persistSearchExpanded()
+            }
         }
         _searchState.value = _searchState.value.copy(query = value)
         savedStateHandle[STATE_SEARCH_QUERY] = value
@@ -297,10 +308,31 @@ class StorageBrowserVM @Inject constructor(
         savedStateHandle[STATE_SEARCH_SCOPE] = value.name
     }
 
+    fun expandSearch() {
+        if (_storage.value?.isStorageSearchSupported() != true || _searchExpanded.value) {
+            return
+        }
+        exitSelectMode()
+        _searchExpanded.value = true
+        persistSearchExpanded()
+    }
+
+    fun collapseSearch(clearQuery: Boolean = false) {
+        val shouldCollapse = _searchExpanded.value || (clearQuery && _searchState.value.query.isNotBlank())
+        if (!shouldCollapse) {
+            return
+        }
+        _searchExpanded.value = false
+        persistSearchExpanded()
+        if (clearQuery) {
+            clearSearch()
+        }
+    }
+
     fun clickSearchEntry(entry: StorageSearchEntry) {
         when {
             entry.isDir -> {
-                clearSearch()
+                collapseSearch(clearQuery = true)
                 navigateDir(entry.path)
             }
 
@@ -315,7 +347,7 @@ class StorageBrowserVM @Inject constructor(
     }
 
     fun locateSearchEntry(entry: StorageSearchEntry) {
-        clearSearch()
+        collapseSearch(clearQuery = true)
         if (entry.parentPath != browser.currentPathValue()) {
             navigateDir(entry.parentPath)
         } else {
@@ -549,6 +581,10 @@ class StorageBrowserVM @Inject constructor(
             loadingMore = false,
             error = null,
         )
+    }
+
+    private fun persistSearchExpanded() {
+        savedStateHandle[STATE_SEARCH_EXPANDED] = _searchExpanded.value
     }
 
     private fun applySearchResponse(

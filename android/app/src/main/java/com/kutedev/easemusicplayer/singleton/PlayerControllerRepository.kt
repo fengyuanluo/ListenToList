@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import uniffi.ease_client_backend.ArgReorderMusic
 import uniffi.ease_client_backend.ArgEnsureMusics
 import uniffi.ease_client_backend.AddedMusic
 import uniffi.ease_client_backend.Playlist
@@ -29,6 +30,7 @@ import uniffi.ease_client_backend.ctEnsureMusics
 import uniffi.ease_client_backend.ctGetMusic
 import uniffi.ease_client_backend.ctGetPlaylist
 import uniffi.ease_client_backend.ctsGetMusicAbstract
+import uniffi.ease_client_backend.ctsReorderMusicInPlaylist
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_backend.easeLog
 import uniffi.ease_client_schema.MusicId
@@ -168,6 +170,94 @@ class PlayerControllerRepository @Inject constructor(
                 direction = direction,
                 sourcePlaylist = playlist,
             )
+        }
+    }
+
+    fun playQueueEntry(queueEntryId: String) {
+        val queue = playerRepository.playbackQueueValue() ?: return
+        if (queueEntryId == (playerRepository.currentQueueEntryIdValue() ?: queue.currentQueueEntryId)) {
+            resume()
+            return
+        }
+        val targetIndex = queue.indexOf(queueEntryId)
+        if (targetIndex < 0) {
+            return
+        }
+        val currentIndex = playerRepository.currentQueueIndexValue()
+        val direction = when {
+            currentIndex < 0 -> PLAY_DIRECTION_NEXT
+            targetIndex < currentIndex -> PLAY_DIRECTION_PREVIOUS
+            else -> PLAY_DIRECTION_NEXT
+        }
+        queue.entries.getOrNull(targetIndex)?.let { entry ->
+            playQueueEntry(entry, queue, direction)
+        }
+    }
+
+    fun removeQueueEntry(queueEntryId: String) {
+        val queue = playerRepository.playbackQueueValue() ?: return
+        val currentEntryId = playerRepository.currentQueueEntryIdValue() ?: queue.currentQueueEntryId
+        if (queueEntryId == currentEntryId) {
+            removeCurrent()
+            return
+        }
+        when (queue.context.type) {
+            PlaybackContextType.USER_PLAYLIST -> removeNonCurrentPlaylistEntry(queue, queueEntryId)
+            PlaybackContextType.FOLDER -> removeNonCurrentQueueEntry(queue, queueEntryId)
+        }
+    }
+
+    fun moveQueueEntry(fromIndex: Int, toIndex: Int) {
+        val queue = playerRepository.playbackQueueValue() ?: return
+        if (
+            fromIndex == toIndex ||
+            fromIndex !in queue.entries.indices ||
+            toIndex !in queue.entries.indices
+        ) {
+            return
+        }
+        val reorderedEntries = queue.entries.toMutableList().apply {
+            val moved = removeAt(fromIndex)
+            add(toIndex, moved)
+        }
+        val currentEntryId = playerRepository.currentQueueEntryIdValue() ?: queue.currentQueueEntryId
+        val nextSnapshot = queue.copy(
+            entries = reorderedEntries,
+            currentQueueEntryId = currentEntryId,
+        )
+        when (queue.context.type) {
+            PlaybackContextType.USER_PLAYLIST -> {
+                val playlistId = queue.context.playlistId ?: return
+                val moved = reorderedEntries.getOrNull(toIndex) ?: return
+                val prev = reorderedEntries.getOrNull(toIndex - 1)
+                val next = reorderedEntries.getOrNull(toIndex + 1)
+                _scope.launch {
+                    bridge.runSync {
+                        ctsReorderMusicInPlaylist(
+                            it,
+                            ArgReorderMusic(
+                                playlistId = playlistId,
+                                id = moved.musicId,
+                                a = prev?.musicId,
+                                b = next?.musicId,
+                            )
+                        )
+                    }
+                    playlistRepository.scheduleReload()
+                }
+                applyEditedQueueSnapshot(
+                    snapshot = nextSnapshot,
+                    requestedQueueEntryId = currentEntryId,
+                    sourcePlaylist = buildUpdatedSourcePlaylist(_playlist.value, reorderedEntries),
+                )
+            }
+
+            PlaybackContextType.FOLDER -> {
+                applyEditedQueueSnapshot(
+                    snapshot = nextSnapshot,
+                    requestedQueueEntryId = currentEntryId,
+                )
+            }
         }
     }
 
@@ -399,6 +489,52 @@ class PlayerControllerRepository @Inject constructor(
         }
     }
 
+    private fun removeNonCurrentPlaylistEntry(
+        queue: PlaybackQueueSnapshot,
+        queueEntryId: String,
+    ) {
+        val playlistId = queue.context.playlistId ?: return
+        val nextEntries = queue.entries.filterNot { it.queueEntryId == queueEntryId }
+        if (nextEntries.isEmpty()) {
+            stop()
+            return
+        }
+        val target = queue.entries.firstOrNull { it.queueEntryId == queueEntryId } ?: return
+        val currentEntryId = playerRepository.currentQueueEntryIdValue() ?: queue.currentQueueEntryId
+        val nextSnapshot = queue.copy(
+            entries = nextEntries,
+            currentQueueEntryId = currentEntryId,
+        )
+        _scope.launch(Dispatchers.Main) {
+            playlistRepository.removeMusic(playlistId, target.musicId)
+        }
+        applyEditedQueueSnapshot(
+            snapshot = nextSnapshot,
+            requestedQueueEntryId = currentEntryId,
+            sourcePlaylist = buildUpdatedSourcePlaylist(_playlist.value, nextEntries),
+        )
+    }
+
+    private fun removeNonCurrentQueueEntry(
+        queue: PlaybackQueueSnapshot,
+        queueEntryId: String,
+    ) {
+        val nextEntries = queue.entries.filterNot { it.queueEntryId == queueEntryId }
+        if (nextEntries.isEmpty()) {
+            stop()
+            return
+        }
+        val currentEntryId = playerRepository.currentQueueEntryIdValue() ?: queue.currentQueueEntryId
+        val nextSnapshot = queue.copy(
+            entries = nextEntries,
+            currentQueueEntryId = currentEntryId,
+        )
+        applyEditedQueueSnapshot(
+            snapshot = nextSnapshot,
+            requestedQueueEntryId = currentEntryId,
+        )
+    }
+
     private fun removeCurrentFromPlaylist(queue: PlaybackQueueSnapshot) {
         val playlistId = queue.context.playlistId ?: return
         val currentEntry = queue.entries.firstOrNull {
@@ -543,6 +679,71 @@ class PlayerControllerRepository @Inject constructor(
                 direction = direction,
                 sourcePlaylist = if (queue.context.type == PlaybackContextType.USER_PLAYLIST) _playlist.value else null,
             )
+        }
+    }
+
+    private fun buildUpdatedSourcePlaylist(
+        sourcePlaylist: Playlist?,
+        entries: List<PlaybackQueueEntry>,
+    ): Playlist? {
+        val source = sourcePlaylist ?: return null
+        return source.copy(
+            abstr = source.abstr.copy(
+                musicCount = entries.size.toULong(),
+            ),
+            musics = entries.map { entry -> entry.musicAbstract },
+        )
+    }
+
+    private fun applyEditedQueueSnapshot(
+        snapshot: PlaybackQueueSnapshot,
+        requestedQueueEntryId: String,
+        sourcePlaylist: Playlist? = if (snapshot.context.type == PlaybackContextType.USER_PLAYLIST) _playlist.value else null,
+    ) {
+        if (snapshot.entries.isEmpty()) {
+            stop()
+            return
+        }
+        val targetEntry = snapshot.entries.firstOrNull { it.queueEntryId == requestedQueueEntryId }
+            ?: snapshot.currentEntry()
+            ?: snapshot.entries.firstOrNull()
+            ?: run {
+                stop()
+                return
+            }
+        val player = _mediaController
+        val wasPlaying = player?.playWhenReady ?: playerRepository.playing.value
+        _scope.launch(Dispatchers.Main) {
+            val currentMusic = bridge.run { ctGetMusic(it, targetEntry.musicId) } ?: run {
+                stop()
+                return@launch
+            }
+            val preservePosition = currentMusic.meta.id == playerRepository.music.value?.meta?.id
+            val startPositionMs = if (preservePosition) getCurrentPosition() else 0L
+            val finalSnapshot = snapshot.copy(currentQueueEntryId = targetEntry.queueEntryId)
+            if (player != null) {
+                playResolvedQueue(
+                    player = player,
+                    snapshot = finalSnapshot,
+                    currentMusic = currentMusic,
+                    currentQueueEntryId = targetEntry.queueEntryId,
+                    startPositionMs = startPositionMs,
+                    playWhenReady = wasPlaying,
+                    sourcePlaylist = sourcePlaylist,
+                )
+            } else {
+                playerRepository.setPlaybackSession(
+                    music = currentMusic,
+                    queueSnapshot = finalSnapshot,
+                    currentQueueEntryId = targetEntry.queueEntryId,
+                    playlist = sourcePlaylist,
+                )
+                persistCurrentSession(
+                    positionOverrideMs = startPositionMs,
+                    playWhenReadyOverride = wasPlaying,
+                    currentQueueEntryIdOverride = targetEntry.queueEntryId,
+                )
+            }
         }
     }
 

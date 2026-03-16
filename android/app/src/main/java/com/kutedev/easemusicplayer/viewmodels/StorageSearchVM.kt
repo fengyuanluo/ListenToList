@@ -30,6 +30,7 @@ import uniffi.ease_client_schema.StorageId
 private const val ARG_QUERY = "query"
 private const val STATE_QUERY = "storage_search_query"
 private const val STATE_SCOPE = "storage_search_scope"
+private const val STATE_SELECTED_STORAGE_ID = "storage_search_selected_storage_id"
 
 @HiltViewModel
 @OptIn(FlowPreview::class)
@@ -43,14 +44,18 @@ class StorageSearchVM @Inject constructor(
     private val initialScope = savedStateHandle.get<String>(STATE_SCOPE)
         ?.let { raw -> runCatching { StorageSearchScope.valueOf(raw) }.getOrNull() }
         ?: StorageSearchScope.ALL
+    private val initialSelectedStorageId = savedStateHandle.get<Long>(STATE_SELECTED_STORAGE_ID)
+        ?.let(::StorageId)
     private val _query = MutableStateFlow(initialQuery)
     private val _scope = MutableStateFlow(initialScope)
     private val _sections = MutableStateFlow<List<StorageSearchSectionUiState>>(emptyList())
+    private val _selectedStorageId = MutableStateFlow(initialSelectedStorageId)
     private var refreshSeq: Long = 0L
 
     val query = _query.asStateFlow()
     val scope = _scope.asStateFlow()
     val sections = _sections.asStateFlow()
+    val selectedStorageId = _selectedStorageId.asStateFlow()
     val searchableStorages = storageRepository.storages
         .map { storages -> storages.filter { storage -> storage.isStorageSearchSupported() } }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -61,6 +66,20 @@ class StorageSearchVM @Inject constructor(
     init {
         viewModelScope.launch {
             storageRepository.reload()
+        }
+        viewModelScope.launch {
+            searchableStorages.collectLatest { storages ->
+                val current = _selectedStorageId.value
+                val next = when {
+                    storages.isEmpty() -> null
+                    current == null || storages.none { item -> item.id == current } -> storages.first().id
+                    else -> current
+                }
+                if (next != current) {
+                    _selectedStorageId.value = next
+                    savedStateHandle[STATE_SELECTED_STORAGE_ID] = next?.value
+                }
+            }
         }
         viewModelScope.launch {
             combine(
@@ -82,6 +101,17 @@ class StorageSearchVM @Inject constructor(
                 refreshAllSections(storages = storages, query = query, scope = scope)
             }
         }
+    }
+
+    fun selectStorage(storageId: StorageId) {
+        if (_selectedStorageId.value == storageId) {
+            return
+        }
+        if (searchableStorages.value.none { item -> item.id == storageId }) {
+            return
+        }
+        _selectedStorageId.value = storageId
+        savedStateHandle[STATE_SELECTED_STORAGE_ID] = storageId.value
     }
 
     fun updateQuery(value: String) {
