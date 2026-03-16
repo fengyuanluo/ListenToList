@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
-import com.kutedev.easemusicplayer.singleton.ToastRepository
 import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.resolveTotalDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,6 +35,7 @@ class PlayerVM @Inject constructor(
     val previousMusic = playerRepository.previousMusic
     val nextMusic = playerRepository.nextMusic
     val playing = playerRepository.playing
+    val removeAction = playerRepository.removeAction
     val currentDuration = _currentDuration.asStateFlow()
     val bufferDuration = _bufferDuration.asStateFlow()
     val totalDuration = _totalDuration.asStateFlow()
@@ -87,7 +87,7 @@ class PlayerVM @Inject constructor(
     }
 
     fun remove() {
-        playerRepository.remove()
+        playerControllerRepository.removeCurrent()
     }
 
     fun seek(ms: ULong) {

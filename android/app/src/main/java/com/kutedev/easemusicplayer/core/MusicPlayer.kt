@@ -22,9 +22,15 @@ import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
 import com.kutedev.easemusicplayer.MainActivity
+import com.kutedev.easemusicplayer.singleton.PlaybackContext
+import com.kutedev.easemusicplayer.singleton.PlaybackContextType
+import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
+import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
+import com.kutedev.easemusicplayer.singleton.PlaybackSessionStore
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
 import com.kutedev.easemusicplayer.singleton.ToastRepository
+import com.kutedev.easemusicplayer.singleton.buildPlaylistQueueEntryId
 import java.io.FileNotFoundException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,8 +45,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import uniffi.ease_client_backend.MusicAbstract
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_backend.easeLog
-import uniffi.ease_client_schema.MusicId
-import uniffi.ease_client_schema.PlaylistId
 import uniffi.ease_client_schema.PlayMode
 
 
@@ -49,9 +53,8 @@ const val PLAYER_TO_NEXT_COMMAND = "PLAYER_TO_NEXT_COMMAND";
 
 private data class PlaybackRecoveryState(
     val token: Long,
-    val playlistId: PlaylistId,
     val direction: Int,
-    val attemptedIds: MutableSet<MusicId>,
+    val attemptedQueueEntryIds: MutableSet<String>,
     var skipToastShown: Boolean = false,
 )
 
@@ -61,6 +64,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var playlistRepository: PlaylistRepository
     @Inject lateinit var toastRepository: ToastRepository
     @Inject lateinit var bridge: Bridge
+    @Inject lateinit var playbackSessionStore: PlaybackSessionStore
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var _mediaSession: MediaSession? = null
     private var _prefetcher: PlaybackPrefetcher? = null
@@ -197,12 +201,14 @@ class PlaybackService : MediaSessionService() {
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playerRepository.setIsPlaying(isPlaying)
+                persistCurrentSession(player)
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
                     recoveryState = null
                     playerRepository.setIsLoading(false)
+                    persistCurrentSession(player)
                 } else if (playbackState == Player.STATE_READY) {
                     playerRepository.setIsLoading(false)
                     syncCurrentMetadata(player)
@@ -211,11 +217,13 @@ class PlaybackService : MediaSessionService() {
                         currentId = playerRepository.music.value?.meta?.id,
                         nextId = playerRepository.nextMusic.value?.meta?.id,
                     )
+                    persistCurrentSession(player)
                 } else if (playbackState == Player.STATE_BUFFERING) {
                     playerRepository.setIsLoading(true)
                 } else if (playbackState == Player.STATE_IDLE) {
                     playerRepository.setIsLoading(false)
                     _prefetcher?.cancel()
+                    persistCurrentSession(player)
                 }
             }
 
@@ -226,6 +234,7 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
                 serviceScope.launch {
                     syncRepositoryCurrentFromPlayer(player)
+                    persistCurrentSession(player)
                 }
             }
 
@@ -235,6 +244,7 @@ class PlaybackService : MediaSessionService() {
                 reason: Int
             ) {
                 playerRepository.notifyDurationChanged()
+                persistCurrentSession(player)
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -250,6 +260,7 @@ class PlaybackService : MediaSessionService() {
                     player.stop()
                     player.clearMediaItems()
                     playerRepository.resetCurrent()
+                    playbackSessionStore.clear()
                     toastRepository.emitToast("播放失败")
                 }
             }
@@ -279,6 +290,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        _mediaSession?.player?.let { persistCurrentSession(it) }
         _mediaSession?.player?.stop()
         _mediaSession?.player?.release()
         _mediaSession?.release()
@@ -299,52 +311,98 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             val targetAbstract = playlist.musics.find { it.meta.id == musicAbstract.meta.id }
             if (targetAbstract == null) {
+                player.stop()
+                player.clearMediaItems()
                 playerRepository.resetCurrent()
                 playerRepository.setIsLoading(false)
+                playbackSessionStore.clear()
                 toastRepository.emitToast("歌曲资源不可用")
                 easeError("target music abstract missing in playlist=${playlist.abstr.meta.id.value}, id=${musicAbstract.meta.id.value}")
                 return@launch
             }
             val target = bridge.run { ctGetMusic(it, targetAbstract.meta.id) }
             if (target == null) {
+                player.stop()
+                player.clearMediaItems()
                 playerRepository.resetCurrent()
                 playerRepository.setIsLoading(false)
+                playbackSessionStore.clear()
                 toastRepository.emitToast("歌曲资源不可用")
                 easeError("target music missing in playlist=${playlist.abstr.meta.id.value}, id=${musicAbstract.meta.id.value}")
                 return@launch
             }
-            playerRepository.seedPlaybackRecovery(playlist.abstr.meta.id, target.meta.id, direction)
-            playerRepository.setCurrent(target, playlist)
-            playQueueUtil(
-                playlist = playlist,
-                targetId = target.meta.id,
-                playMode = playerRepository.playMode.value,
-                player = player as ExoPlayer,
+            val queueEntryId = buildPlaylistQueueEntryId(playlist.abstr.meta.id, target.meta.id)
+            val snapshot = buildPlaylistSnapshot(playlist, queueEntryId) ?: run {
+                player.stop()
+                player.clearMediaItems()
+                playerRepository.resetCurrent()
+                playbackSessionStore.clear()
+                return@launch
+            }
+            playResolvedQueue(
+                player = player,
+                snapshot = snapshot,
+                currentMusic = target,
+                currentQueueEntryId = snapshot.currentQueueEntryId,
+                direction = direction,
+                sourcePlaylist = playlist,
             )
         }
     }
 
     private fun playNext() {
         val player = _mediaSession?.player ?: return
+        val queue = playerRepository.playbackQueueValue() ?: return
+        val currentIndex = playerRepository.currentQueueIndexValue()
+        if (currentIndex < 0 || queue.entries.isEmpty()) {
+            return
+        }
+        if (currentIndex == queue.entries.lastIndex && playerRepository.playMode.value != PlayMode.LIST_LOOP) {
+            return
+        }
         if (seekAdjacent(player, PLAY_DIRECTION_NEXT)) {
             return
         }
-        val m = playerRepository.nextMusic.value
-        val p = playerRepository.playlist.value
-        if (m != null && p != null) {
-            play(m, p, PLAY_DIRECTION_NEXT)
+        val nextIndex = (currentIndex + 1) % queue.entries.size
+        val entry = queue.entries.getOrNull(nextIndex) ?: return
+        serviceScope.launch {
+            val music = bridge.run { ctGetMusic(it, entry.musicId) } ?: return@launch
+            playResolvedQueue(
+                player = player,
+                snapshot = queue.copy(currentQueueEntryId = entry.queueEntryId),
+                currentMusic = music,
+                currentQueueEntryId = entry.queueEntryId,
+                direction = PLAY_DIRECTION_NEXT,
+                sourcePlaylist = if (queue.context.type == PlaybackContextType.USER_PLAYLIST) playerRepository.playlist.value else null,
+            )
         }
     }
 
     private fun playPrevious() {
         val player = _mediaSession?.player ?: return
+        val queue = playerRepository.playbackQueueValue() ?: return
+        val currentIndex = playerRepository.currentQueueIndexValue()
+        if (currentIndex < 0 || queue.entries.isEmpty()) {
+            return
+        }
+        if (currentIndex == 0 && playerRepository.playMode.value != PlayMode.LIST_LOOP) {
+            return
+        }
         if (seekAdjacent(player, PLAY_DIRECTION_PREVIOUS)) {
             return
         }
-        val m = playerRepository.previousMusic.value
-        val p = playerRepository.playlist.value
-        if (m != null && p != null) {
-            play(m, p, PLAY_DIRECTION_PREVIOUS)
+        val previousIndex = (currentIndex + queue.entries.size - 1) % queue.entries.size
+        val entry = queue.entries.getOrNull(previousIndex) ?: return
+        serviceScope.launch {
+            val music = bridge.run { ctGetMusic(it, entry.musicId) } ?: return@launch
+            playResolvedQueue(
+                player = player,
+                snapshot = queue.copy(currentQueueEntryId = entry.queueEntryId),
+                currentMusic = music,
+                currentQueueEntryId = entry.queueEntryId,
+                direction = PLAY_DIRECTION_PREVIOUS,
+                sourcePlaylist = if (queue.context.type == PlaybackContextType.USER_PLAYLIST) playerRepository.playlist.value else null,
+            )
         }
     }
 
@@ -366,44 +424,43 @@ class PlaybackService : MediaSessionService() {
     }
 
     private suspend fun recoverFromPlaybackError(player: ExoPlayer) {
-        val playlist = playerRepository.playlist.value
+        val snapshot = playerRepository.playbackQueueValue()
         val current = playerRepository.music.value
         val seed = playerRepository.recoverySeed.value
-        if (playlist == null || current == null || seed == null) {
+        if (snapshot == null || current == null || seed == null) {
             player.stop()
             player.clearMediaItems()
             playerRepository.resetCurrent()
+            playbackSessionStore.clear()
             toastRepository.emitToast("播放失败")
             recoveryState = null
             return
         }
 
-        val active = if (
-            recoveryState?.token != seed.token ||
-            recoveryState?.playlistId != playlist.abstr.meta.id
-        ) {
+        val active = if (recoveryState?.token != seed.token) {
             PlaybackRecoveryState(
                 token = seed.token,
-                playlistId = playlist.abstr.meta.id,
                 direction = seed.direction,
-                attemptedIds = mutableSetOf(seed.musicId, current.meta.id),
+                attemptedQueueEntryIds = mutableSetOf(seed.queueEntryId),
             ).also { recoveryState = it }
         } else {
-            recoveryState!!.also { it.attemptedIds.add(current.meta.id) }
+            recoveryState!!.also { it.attemptedQueueEntryIds.add(seed.queueEntryId) }
         }
 
-        val candidateAbstract = findRecoveryCandidate(playlist, current.meta.id, active.direction, active.attemptedIds)
-        if (candidateAbstract == null) {
+        val currentQueueEntryId = playerRepository.currentQueueEntryIdValue() ?: seed.queueEntryId
+        val candidateEntry = findRecoveryCandidate(snapshot, currentQueueEntryId, active.direction, active.attemptedQueueEntryIds)
+        if (candidateEntry == null) {
             recoveryState = null
             toastRepository.emitToast("歌曲资源不可用")
             player.stop()
             player.clearMediaItems()
             playerRepository.resetCurrent()
+            playbackSessionStore.clear()
             return
         }
-        val candidate = bridge.run { ctGetMusic(it, candidateAbstract.meta.id) }
+        val candidate = bridge.run { ctGetMusic(it, candidateEntry.musicId) }
         if (candidate == null) {
-            active.attemptedIds.add(candidateAbstract.meta.id)
+            active.attemptedQueueEntryIds.add(candidateEntry.queueEntryId)
             recoverFromPlaybackError(player)
             return
         }
@@ -412,40 +469,52 @@ class PlaybackService : MediaSessionService() {
             toastRepository.emitToast("歌曲资源不可用，已跳过")
             active.skipToastShown = true
         }
-        active.attemptedIds.add(candidate.meta.id)
-        playerRepository.setCurrent(candidate, playlist)
-        playQueueUtil(
-            playlist = playlist,
-            targetId = candidate.meta.id,
-            playMode = playerRepository.playMode.value,
+        active.attemptedQueueEntryIds.add(candidateEntry.queueEntryId)
+        playResolvedQueue(
             player = player,
+            snapshot = snapshot.copy(currentQueueEntryId = candidateEntry.queueEntryId),
+            currentMusic = candidate,
+            currentQueueEntryId = candidateEntry.queueEntryId,
+            direction = active.direction,
+            sourcePlaylist = if (snapshot.context.type == PlaybackContextType.USER_PLAYLIST) playerRepository.playlist.value else null,
         )
     }
 
     private suspend fun syncRepositoryCurrentFromPlayer(player: Player) {
-        val playlist = playerRepository.playlist.value ?: return
-        val mediaId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
-        val musicId = MusicId(mediaId)
+        val snapshot = playerRepository.playbackQueueValue() ?: return
+        val queueEntryId = player.currentMediaItem?.mediaId ?: return
+        val entry = snapshot.entries.firstOrNull { it.queueEntryId == queueEntryId } ?: return
         val direction = when {
-            playerRepository.nextMusic.value?.meta?.id == musicId -> PLAY_DIRECTION_NEXT
-            playerRepository.previousMusic.value?.meta?.id == musicId -> PLAY_DIRECTION_PREVIOUS
+            playerRepository.nextMusic.value?.meta?.id == entry.musicId -> PLAY_DIRECTION_NEXT
+            playerRepository.previousMusic.value?.meta?.id == entry.musicId -> PLAY_DIRECTION_PREVIOUS
             else -> PLAY_DIRECTION_NEXT
         }
-        playerRepository.seedPlaybackRecovery(playlist.abstr.meta.id, musicId, direction)
-        if (playerRepository.music.value?.meta?.id == musicId) {
+        playerRepository.seedPlaybackRecovery(queueEntryId, direction)
+        if (playerRepository.currentQueueEntryIdValue() == queueEntryId && playerRepository.music.value?.meta?.id == entry.musicId) {
             return
         }
-        val music = bridge.run { ctGetMusic(it, musicId) } ?: return
-        playerRepository.setCurrent(music, playlist)
+        val music = bridge.run { ctGetMusic(it, entry.musicId) } ?: return
+        playerRepository.updateCurrentQueueEntry(queueEntryId, music)
     }
 
     private fun seekAdjacent(player: Player, direction: Int): Boolean {
-        val playlist = playerRepository.playlist.value ?: return false
-        val target = if (direction >= 0) {
-            playerRepository.nextMusic.value
+        val snapshot = playerRepository.playbackQueueValue() ?: return false
+        val currentIndex = playerRepository.currentQueueIndexValue()
+        if (currentIndex < 0 || snapshot.entries.isEmpty()) {
+            return false
+        }
+        val targetIndex = if (direction >= 0) {
+            if (currentIndex == snapshot.entries.lastIndex && playerRepository.playMode.value != PlayMode.LIST_LOOP) {
+                return false
+            }
+            (currentIndex + 1) % snapshot.entries.size
         } else {
-            playerRepository.previousMusic.value
-        } ?: return false
+            if (currentIndex == 0 && playerRepository.playMode.value != PlayMode.LIST_LOOP) {
+                return false
+            }
+            (currentIndex + snapshot.entries.size - 1) % snapshot.entries.size
+        }
+        val target = snapshot.entries.getOrNull(targetIndex) ?: return false
 
         val command = if (direction >= 0) {
             COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
@@ -455,13 +524,14 @@ class PlaybackService : MediaSessionService() {
         if (!player.isCommandAvailable(command)) {
             return false
         }
-        playerRepository.seedPlaybackRecovery(playlist.abstr.meta.id, target.meta.id, direction)
+        playerRepository.seedPlaybackRecovery(target.queueEntryId, direction)
         if (direction >= 0) {
             player.seekToNextMediaItem()
         } else {
             player.seekToPreviousMediaItem()
         }
         player.play()
+        persistCurrentSession(player, currentQueueEntryIdOverride = target.queueEntryId)
         return true
     }
 
@@ -471,11 +541,11 @@ class PlaybackService : MediaSessionService() {
         preservePosition: Boolean,
     ) {
         player.repeatMode = repeatModeFor(playMode)
-        val playlist = playerRepository.playlist.value ?: return
-        val current = playerRepository.music.value ?: return
+        val snapshot = playerRepository.playbackQueueValue() ?: return
+        val currentQueueEntryId = playerRepository.currentQueueEntryIdValue() ?: return
         val plan = buildPlaybackQueuePlan(
-            playlist = playlist,
-            targetId = current.meta.id,
+            snapshot = snapshot,
+            targetQueueEntryId = currentQueueEntryId,
             playMode = playMode,
         ) ?: return
 
@@ -495,28 +565,29 @@ class PlaybackService : MediaSessionService() {
         } else {
             player.pause()
         }
+        persistCurrentSession(player)
     }
 
     private fun findRecoveryCandidate(
-        playlist: Playlist,
-        currentId: MusicId,
+        snapshot: PlaybackQueueSnapshot,
+        currentQueueEntryId: String,
         direction: Int,
-        attemptedIds: Set<MusicId>
-    ): MusicAbstract? {
-        val musics = playlist.musics
-        if (musics.isEmpty()) {
+        attemptedQueueEntryIds: Set<String>
+    ): PlaybackQueueEntry? {
+        val entries = snapshot.entries
+        if (entries.isEmpty()) {
             return null
         }
-        val startIndex = musics.indexOfFirst { it.meta.id == currentId }
+        val startIndex = entries.indexOfFirst { it.queueEntryId == currentQueueEntryId }
         if (startIndex == -1) {
             return null
         }
         val shouldWrap = playerRepository.playMode.value == PlayMode.LIST_LOOP
         var index = startIndex
         var steps = 0
-        while (steps < musics.size - 1) {
+        while (steps < entries.size - 1) {
             index = if (direction >= 0) {
-                if (index == musics.lastIndex) {
+                if (index == entries.lastIndex) {
                     if (!shouldWrap) {
                         return null
                     }
@@ -529,18 +600,91 @@ class PlaybackService : MediaSessionService() {
                     if (!shouldWrap) {
                         return null
                     }
-                    musics.lastIndex
+                    entries.lastIndex
                 } else {
                     index - 1
                 }
             }
-            val candidate = musics[index]
-            if (!attemptedIds.contains(candidate.meta.id)) {
+            val candidate = entries[index]
+            if (!attemptedQueueEntryIds.contains(candidate.queueEntryId)) {
                 return candidate
             }
             steps += 1
         }
         return null
+    }
+
+    private fun buildPlaylistSnapshot(
+        playlist: Playlist,
+        requestedQueueEntryId: String,
+    ): PlaybackQueueSnapshot? {
+        val context = PlaybackContext(
+            type = PlaybackContextType.USER_PLAYLIST,
+            playlistId = playlist.abstr.meta.id,
+        )
+        val entries = playlist.musics.map { music ->
+            PlaybackQueueEntry(
+                queueEntryId = buildPlaylistQueueEntryId(playlist.abstr.meta.id, music.meta.id),
+                musicId = music.meta.id,
+                musicAbstract = music,
+                sourceContext = context,
+            )
+        }
+        if (entries.isEmpty()) {
+            return null
+        }
+        val currentQueueEntryId = entries.firstOrNull { it.queueEntryId == requestedQueueEntryId }?.queueEntryId
+            ?: entries.first().queueEntryId
+        return PlaybackQueueSnapshot(
+            context = context,
+            entries = entries,
+            currentQueueEntryId = currentQueueEntryId,
+        )
+    }
+
+    private fun playResolvedQueue(
+        player: Player,
+        snapshot: PlaybackQueueSnapshot,
+        currentMusic: uniffi.ease_client_backend.Music,
+        currentQueueEntryId: String,
+        direction: Int = PLAY_DIRECTION_NEXT,
+        startPositionMs: Long = 0L,
+        playWhenReady: Boolean = true,
+        sourcePlaylist: Playlist? = null,
+    ) {
+        playerRepository.seedPlaybackRecovery(currentQueueEntryId, direction)
+        playerRepository.setPlaybackSession(
+            music = currentMusic,
+            queueSnapshot = snapshot,
+            currentQueueEntryId = currentQueueEntryId,
+            playlist = sourcePlaylist,
+        )
+        playQueueUtil(
+            snapshot = snapshot,
+            targetQueueEntryId = currentQueueEntryId,
+            playMode = playerRepository.playMode.value,
+            player = player,
+            startPositionMs = startPositionMs,
+            playWhenReady = playWhenReady,
+        )
+        persistCurrentSession(player)
+    }
+
+    private fun persistCurrentSession(
+        player: Player,
+        currentQueueEntryIdOverride: String? = null,
+    ) {
+        val snapshot = playerRepository.playbackQueueValue() ?: return
+        playbackSessionStore.save(
+            snapshot = snapshot.copy(
+                currentQueueEntryId = currentQueueEntryIdOverride
+                    ?: playerRepository.currentQueueEntryIdValue()
+                    ?: snapshot.currentQueueEntryId,
+            ),
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+            playWhenReady = player.playWhenReady,
+            playMode = playerRepository.playMode.value,
+        )
     }
 
     private inline fun <reified T : Throwable> Throwable.findCause(): T? {

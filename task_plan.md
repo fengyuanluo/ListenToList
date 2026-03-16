@@ -1,46 +1,83 @@
-# 设备页 / 导入页目录浏览模型修复计划
+# ListenToList playlist / queue 语义修复计划（官方最佳实践对照 + 实施）
 
 ## 目标
 
-围绕“设备页点击设备进入后的文件管理器”和导入页的同类目录浏览逻辑，完成一次高质量正式修复，目标包括：
-1. 前进/后退/面包屑跳转不再每次强制清空并重新刷目录。
-2. 设备页与导入页统一到同一套共享目录浏览内核，避免后续分叉。
-3. 修复并发乱序、状态恢复、滚动恢复、storage 失效兜底等结构性问题。
-4. 以构建 + JVM 测试 + instrumentation + 真机连机验证完成闭环验收。
+先基于 Android 官方一手资料确认 Media3 / ExoPlayer 关于 playlist、queue、media item、MediaSession、MediaLibrary 的最佳实践，
+再把结论落实到当前仓库，实现并验证以下修复：
+- 文件夹播放改为临时 runtime queue，不再创建真实歌单
+- playlist 内顺序从全局 `MusicModel.order` 迁到 membership relation
+- 播放页删除动作按上下文分流（歌单成员 vs 当前临时队列项）
+- 临时 queue 跨重启恢复
+- 播放运行态以 queue-first 模型驱动，并补齐关键验证
 
-## 阶段状态
+## 当前阶段
 
-- [completed] 阶段 1：完成源码排查，确认问题来自“单份目录状态 + 强刷新 + 无并发防护”
-- [completed] 阶段 2：抽出共享目录浏览内核，补路径级缓存、请求取消/乱序保护、TTL/SWR、滚动快照
-- [completed] 阶段 3：接入 `StorageBrowserVM` 与 `ImportVM`，统一成文件层级返回语义并补状态恢复/兜底
-- [completed] 阶段 4：更新设备页 / 导入页 UI，支持后台刷新提示、按路径滚动恢复、无设备空态
-- [completed] 阶段 5：补充 JVM 与 device instrumentation 测试，并完成 `testDebugUnitTest + assembleDebug + connectedDebugAndroidTest`
+Phase 6
 
-## 本轮关键实现决策
+## 阶段
 
-- Android 侧新增共享目录浏览内核 `DirectoryBrowserController`；不改 Rust 目录结果缓存策略。
-- 返回语义统一为“退出选择态 -> 回父目录 -> 根目录退出页面”，不再保留浏览器 history / undo 栈。
-- 目录缓存 key 固定为 `storageId + path`，TTL 为 30 秒，每 storage 最多缓存 32 个目录，过期目录走 SWR。
-- 后台刷新失败时保留旧列表，仅通过 toast 提示；只有在当前没有目录内容时才展示全屏错误。
+### Phase 1: 边界确认与上下文准备
+- [x] 读取 AGENTS.md 与用户约束
+- [x] 读取 planning-with-files skill 说明
+- [x] 执行轻量 memory quick pass，确认 ListenToList 最近已有 queue 语义背景
+- [x] 将本轮目标重写到 planning files
+- **Status:** complete
 
-## 约束与真相源
+### Phase 2: 官方资料收集
+- [x] 仅检索 Android 官方一手资料
+- [x] 收集 Media3 / ExoPlayer 关于 Player playlist API、MediaItem、MediaSession、MediaLibraryService、browse tree 的原始页面
+- [x] 记录每页能直接支持的概念结论
+- **Status:** complete
 
-- 以当前源码与可执行行为为准；历史 `report.md` / 旧 planning files 不视为规范。
-- 本仓库是 Android + Rust + UniFFI/JNI 混合工程，但本题先优先锁定 Android 文件管理器链路，再判断是否需要向 Rust 深挖。
-- 若发现文档与源码冲突，以源码为准，并在同轮记录到 findings/progress。
-- 当前工作树若存在与本题无关的既有改动，不主动覆盖。
+### Phase 3: 原则提炼
+- [x] 提炼 6-10 条概念建模原则
+- [x] 区分“官方直接表述”与“跨文档推论”
+- [x] 为每条原则整理页面标题与链接
+- **Status:** complete
 
-## 计划中的证据源
+### Phase 4: 交付整理
+- [x] 复核只引用官方来源
+- [x] 输出中文结论，明确证据边界与推论边界
+- **Status:** complete
 
-- Android 入口与导航：`MainActivity.kt`、`Root.kt`
-- 设备/浏览相关 UI：`widgets/`、`components/`
-- 状态层：`viewmodels/StorageBrowserVM.kt`、相关 repository / singleton
-- backend / storage list 调用：`Bridge.kt`、Rust storage crates
-- 已有测试与文档：`docs/android-validation-env.md`、`docs/playback-second-wave.md`、Android tests
+### Phase 5: 概念对照后的实现设计冻结
+- [x] 与用户确认文件夹播放=临时 queue、membership order 正式迁移、删除按上下文、临时 queue 要恢复
+- [x] 将实现切到 queue-first 方案，而不是继续扩展“playlist 即播放上下文”的旧模型
+- **Status:** complete
 
-## 验收结论
+### Phase 6: 逐项修复与验证
+- [x] Rust schema 升级到 v4，并把 playlist membership order 迁移到关系层
+- [x] backend 改为按 membership order 读取/重排 playlist，并新增 ensure musics 能力供 folder queue 使用
+- [x] Android 引入 runtime queue / session persistence / queue-first controller
+- [x] 文件夹播放改为临时 queue，不再创建“文件夹播放-xxx”真实歌单
+- [x] 播放页删除改为按上下文分流
+- [x] 修复 queue 当前项状态分裂、边界 next/previous 回播当前项、失败播放遗留旧 player 等运行态问题
+- [x] 跑 Rust 单测、Android unit test、assembleDebug、JNI 构建、真机 smoke
+- **Status:** complete
 
-- 已完成：
-  - `cd android && ./gradlew testDebugUnitTest :app:assembleDebug connectedDebugAndroidTest --warning-mode all`
-- 过程中碰到的主要障碍：
-  - 原有 instrumentation Compose 测试在真机上长期报 `No compose hierarchies found`，本轮已把相关 device 测试收敛为稳定的 render smoke，而将行为级断言下沉到 JVM 状态测试。
+## 关键问题
+1. 如何把“用户歌单”和“播放运行时队列”彻底拆开，不再用 `Playlist` 直接充当当前播放上下文？
+2. 如何在保留现有数据的前提下，把 playlist 顺序迁到 membership relation？
+3. 文件夹播放怎样改成临时 queue，同时不破坏 metadata probe / prefetch / smoke 路径？
+4. 当前项删除、边界切歌、恢复与 playlist 刷新，怎样避免 queue 状态分裂？
+
+## 已做决策
+| Decision | Rationale |
+|----------|-----------|
+| 官方资料只用一手来源 | 用户明确要求对照官方最佳实践 |
+| 文件夹播放改为临时 runtime queue，不创建真实歌单 | 用户已明确锁定产品语义 |
+| playlist 内顺序迁到 membership relation，并走正式迁移 | 避免全局 `MusicModel.order` 污染多个歌单 |
+| 删除当前项按上下文分流 | 用户已明确锁定产品语义 |
+| 临时 queue 需要跨重启恢复 | 用户已明确锁定产品语义 |
+
+## 错误记录
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| 既有 planning files 仍偏向“仓库概念审计”而非“官方资料调研” | 1 | 重写为本轮仅官方一手资料研究计划 |
+| Rust v4 upgrader 新增测试初次失败（作用域/借用/断言顺序） | 1 | 修正 `super::upgrade_v3_to_v4(...)` 调用、缩小表借用作用域、按 membership order 排序后断言 |
+| `PlaybackSessionStoreTest` 初次失败（`ApplicationProvider` / `commit()` 未解析） | 1 | 改为 Robolectric `RuntimeEnvironment.getApplication()`，使用 `apply()` 清空 prefs |
+| queue-first Android 改造后存在当前项状态分裂与边界切歌回播当前项风险 | 1 | 同步 `_queue.currentQueueEntryId` 与 `_currentQueueEntryId`，并修正 next/previous fallback 逻辑 |
+
+## 备注
+- 外部网页内容一律写入 `findings.md`，不把网页原文塞进 `task_plan.md`。
+- 本轮已从“只研究”推进到“按已确认方案实施修复并验证”；后续若继续扩展，应以当前源码与验证结果为准。

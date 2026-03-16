@@ -1,4 +1,4 @@
-use ease_client_schema::{upgrade_v1_to_v2, upgrade_v2_to_v3, StorageType};
+use ease_client_schema::{upgrade_v1_to_v2, upgrade_v2_to_v3, upgrade_v3_to_v4, StorageType};
 
 use crate::{ctx::BackendContext, error::BResult, objects::ArgUpsertStorage};
 
@@ -24,7 +24,7 @@ pub fn app_destroy(cx: &BackendContext) -> BResult<()> {
 }
 
 fn init_database(cx: &BackendContext, arg: &ArgInitializeApp) -> BResult<()> {
-    static SCHEMA_VERSION: u32 = 3;
+    static SCHEMA_VERSION: u32 = 4;
 
     cx.database_server().init(arg.app_document_dir.clone());
     let old_schema_version = cx.database_server().get_schema_version()?;
@@ -39,6 +39,9 @@ fn init_database(cx: &BackendContext, arg: &ArgInitializeApp) -> BResult<()> {
             }
             if old_schema_version < 3 {
                 upgrade_v2_to_v3(&cx.database_server().db())?;
+            }
+            if old_schema_version < 4 {
+                upgrade_v3_to_v4(&cx.database_server().db())?;
             }
         }
     }

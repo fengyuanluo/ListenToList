@@ -11,6 +11,8 @@ import androidx.media3.extractor.metadata.flac.PictureFrame
 import androidx.media3.extractor.metadata.id3.ApicFrame
 import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.DEFAULT_COVER_BASE64
+import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
+import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -88,7 +90,10 @@ internal fun repeatModeFor(playMode: PlayMode): Int {
     }
 }
 
-private fun buildMediaItemInternal(music: MusicOrMusicAbstract): MediaItem {
+private fun buildMediaItemInternal(
+    music: MusicOrMusicAbstract,
+    mediaIdOverride: String? = null,
+): MediaItem {
     val cover = when(music) {
         is MusicOrMusicAbstract.VMusic -> music.v1.cover
         is MusicOrMusicAbstract.VMusicAbstract -> music.v1.cover
@@ -105,7 +110,7 @@ private fun buildMediaItemInternal(music: MusicOrMusicAbstract): MediaItem {
     }
 
     return MediaItem.Builder()
-        .setMediaId(meta.id.value.toString())
+        .setMediaId(mediaIdOverride ?: meta.id.value.toString())
         .setUri(buildPlaybackMusicUri(meta.id))
         .setMediaMetadata(
             MediaMetadata.Builder()
@@ -121,6 +126,13 @@ fun buildMediaItem(cx: BuildMediaContext, music: Music): MediaItem {
 }
 fun buildMediaItem(cx: BuildMediaContext, music: MusicAbstract): MediaItem {
     return buildMediaItemInternal(MusicOrMusicAbstract.VMusicAbstract(music))
+}
+
+private fun buildQueueMediaItem(entry: PlaybackQueueEntry): MediaItem {
+    return buildMediaItemInternal(
+        MusicOrMusicAbstract.VMusicAbstract(entry.musicAbstract),
+        mediaIdOverride = entry.queueEntryId,
+    )
 }
 
 internal fun buildPlaybackQueuePlan(
@@ -150,6 +162,33 @@ internal fun buildPlaybackQueuePlan(
     )
 }
 
+internal fun buildPlaybackQueuePlan(
+    snapshot: PlaybackQueueSnapshot,
+    targetQueueEntryId: String,
+    playMode: PlayMode,
+): PlaybackQueuePlan? {
+    val targetIndex = snapshot.entries.indexOfFirst { it.queueEntryId == targetQueueEntryId }
+    if (targetIndex < 0) {
+        return null
+    }
+
+    val queueEntries = when (playMode) {
+        PlayMode.SINGLE, PlayMode.SINGLE_LOOP -> listOf(snapshot.entries[targetIndex])
+        PlayMode.LIST, PlayMode.LIST_LOOP -> snapshot.entries
+    }
+    val repeatMode = repeatModeFor(playMode)
+    val startIndex = when (playMode) {
+        PlayMode.SINGLE, PlayMode.SINGLE_LOOP -> 0
+        PlayMode.LIST, PlayMode.LIST_LOOP -> targetIndex
+    }
+
+    return PlaybackQueuePlan(
+        mediaItems = queueEntries.map(::buildQueueMediaItem),
+        startIndex = startIndex,
+        repeatMode = repeatMode,
+    )
+}
+
 fun playQueueUtil(
     playlist: Playlist,
     targetId: MusicId,
@@ -159,6 +198,27 @@ fun playQueueUtil(
     playWhenReady: Boolean = true,
 ) {
     val plan = buildPlaybackQueuePlan(playlist, targetId, playMode) ?: return
+    player.repeatMode = plan.repeatMode
+    player.stop()
+    player.clearMediaItems()
+    player.setMediaItems(plan.mediaItems, plan.startIndex, startPositionMs.coerceAtLeast(0L))
+    player.prepare()
+    if (playWhenReady) {
+        player.play()
+    } else {
+        player.pause()
+    }
+}
+
+fun playQueueUtil(
+    snapshot: PlaybackQueueSnapshot,
+    targetQueueEntryId: String,
+    playMode: PlayMode,
+    player: Player,
+    startPositionMs: Long = 0L,
+    playWhenReady: Boolean = true,
+) {
+    val plan = buildPlaybackQueuePlan(snapshot, targetQueueEntryId, playMode) ?: return
     player.repeatMode = plan.repeatMode
     player.stop()
     player.clearMediaItems()
@@ -242,12 +302,16 @@ fun syncMetadataUtil(
         return null
     }
     val mediaItem = player.currentMediaItem
-    if (mediaItem == null || !mediaItem.mediaId.isDigitsOnly()) {
+    if (mediaItem == null) {
         onFinished?.invoke()
         return null
     }
 
-    val id = MusicId(mediaItem.mediaId.toLong())
+    val id = resolveMusicIdFromMediaItem(mediaItem)
+    if (id == null) {
+        onFinished?.invoke()
+        return null
+    }
     val expectedMediaId = mediaItem.mediaId
     return scope.launch {
         try {
@@ -313,4 +377,15 @@ fun syncMetadataUtil(
             onFinished?.invoke()
         }
     }
+}
+
+fun resolveMusicIdFromMediaItem(mediaItem: MediaItem?): MusicId? {
+    if (mediaItem == null) {
+        return null
+    }
+    mediaItem.localConfiguration?.uri?.let(::parsePlaybackMusicId)?.let { return it }
+    if (mediaItem.mediaId.isDigitsOnly()) {
+        return MusicId(mediaItem.mediaId.toLong())
+    }
+    return null
 }
