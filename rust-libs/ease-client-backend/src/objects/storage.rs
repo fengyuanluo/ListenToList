@@ -109,6 +109,51 @@ impl ListStorageEntryChildrenResp {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum StorageSearchScope {
+    All,
+    Directory,
+    File,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ArgSearchStorageEntries {
+    pub storage_id: StorageId,
+    pub parent: String,
+    pub keywords: String,
+    pub scope: StorageSearchScope,
+    pub page: u32,
+    pub per_page: u32,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct StorageSearchEntry {
+    pub storage_id: StorageId,
+    pub name: String,
+    pub path: String,
+    pub parent_path: String,
+    pub size: Option<u64>,
+    pub is_dir: bool,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct StorageSearchPage {
+    pub entries: Vec<StorageSearchEntry>,
+    pub total: u64,
+    pub page: u32,
+    pub per_page: u32,
+}
+
+#[derive(Debug, Clone, uniffi::Enum)]
+pub enum SearchStorageEntriesResp {
+    Ok(StorageSearchPage),
+    AuthenticationFailed,
+    Timeout,
+    Unavailable,
+    BlockedBySite,
+    Unknown,
+}
+
 pub fn onedrive_oauth_url() -> String {
     let base_url = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
     let client_id: &str = EASEM_ONEDRIVE_ID;

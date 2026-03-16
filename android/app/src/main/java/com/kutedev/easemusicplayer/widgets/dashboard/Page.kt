@@ -25,6 +25,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -40,11 +43,17 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseSearchField
+import com.kutedev.easemusicplayer.components.EaseTextButton
+import com.kutedev.easemusicplayer.components.EaseTextButtonSize
+import com.kutedev.easemusicplayer.components.EaseTextButtonType
+import com.kutedev.easemusicplayer.components.dropShadow
 import com.kutedev.easemusicplayer.viewmodels.EditStorageVM
 import com.kutedev.easemusicplayer.viewmodels.StoragesVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
 import com.kutedev.easemusicplayer.core.RouteStorageBrowser
+import com.kutedev.easemusicplayer.core.RouteStorageSearch
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_schema.StorageType
 import java.time.LocalDate
@@ -206,6 +215,82 @@ private fun QuoteBlock() {
 }
 
 @Composable
+private fun SearchCard(
+    searchableStorageCount: Int,
+) {
+    val navController = LocalNavController.current
+    var query by rememberSaveable { mutableStateOf("") }
+    val shape = RoundedCornerShape(18.dp)
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(paddingX, 0.dp)
+            .dropShadow(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
+                offsetX = 0.dp,
+                offsetY = 10.dp,
+                blurRadius = 24.dp,
+            )
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), shape)
+            .padding(18.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = stringResource(id = R.string.storage_search_dashboard_title),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 18.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            )
+            Text(
+                text = stringResource(
+                    id = R.string.storage_search_dashboard_desc,
+                    searchableStorageCount,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+            )
+        }
+        EaseSearchField(
+            value = query,
+            onValueChange = { value -> query = value },
+            placeholder = stringResource(id = R.string.storage_search_placeholder_home),
+            onClear = { query = "" },
+            onSearch = {
+                navController.navigate(RouteStorageSearch(query))
+            },
+        )
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = if (searchableStorageCount > 0) {
+                    stringResource(id = R.string.storage_search_dashboard_ready, searchableStorageCount)
+                } else {
+                    stringResource(id = R.string.storage_search_dashboard_empty)
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+            )
+            EaseTextButton(
+                text = stringResource(id = R.string.storage_search_open_page),
+                type = EaseTextButtonType.PrimaryVariant,
+                size = EaseTextButtonSize.Medium,
+                onClick = {
+                    navController.navigate(RouteStorageSearch(query))
+                },
+                disabled = searchableStorageCount == 0,
+            )
+        }
+    }
+}
+
+@Composable
 fun DashboardSubpage(
     storageVM: StoragesVM = hiltViewModel(),
     editStoragesVM: EditStorageVM = hiltViewModel()
@@ -213,6 +298,7 @@ fun DashboardSubpage(
     val navController = LocalNavController.current
     val storages by storageVM.storages.collectAsState()
     val storageItems = storages.filter { v -> v.typ != StorageType.LOCAL }
+    val searchableStorageCount = storages.count { item -> item.typ == StorageType.OPEN_LIST }
 
     LaunchedEffect(Unit) {
         storageVM.reload()
@@ -224,6 +310,8 @@ fun DashboardSubpage(
             .verticalScroll(rememberScrollState())
     ) {
         Box(modifier = Modifier.height(24.dp))
+        SearchCard(searchableStorageCount = searchableStorageCount)
+        Box(modifier = Modifier.height(20.dp))
         QuoteBlock()
         Box(modifier = Modifier.height(32.dp))
         Row(

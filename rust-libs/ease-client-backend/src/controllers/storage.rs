@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
 use ease_client_schema::{StorageEntryLoc, StorageId};
-use ease_remote_storage::OneDriveBackend;
+use ease_remote_storage::{OneDriveBackend, SearchScope};
 
 use crate::{
     error::BResult,
-    objects::{ListStorageEntryChildrenResp, Storage, StorageConnectionTestResult, StorageEntry},
+    objects::{
+        ArgSearchStorageEntries, ListStorageEntryChildrenResp, SearchStorageEntriesResp, Storage,
+        StorageConnectionTestResult, StorageEntry, StorageSearchEntry, StorageSearchPage,
+        StorageSearchScope,
+    },
     onedrive_oauth_url,
     services::{
         build_storage_backend_by_arg, evict_storage_backend_cache, get_storage_backend,
@@ -118,6 +122,83 @@ pub async fn ct_list_storage_entry_children(
                 Ok(ListStorageEntryChildrenResp::Timeout)
             } else {
                 Ok(ListStorageEntryChildrenResp::Unknown)
+            }
+        }
+    }
+}
+
+fn map_storage_search_scope(scope: StorageSearchScope) -> SearchScope {
+    match scope {
+        StorageSearchScope::All => SearchScope::All,
+        StorageSearchScope::Directory => SearchScope::Directory,
+        StorageSearchScope::File => SearchScope::File,
+    }
+}
+
+fn parent_storage_path(path: &str) -> String {
+    if path.trim().is_empty() || path == "/" {
+        return "/".to_string();
+    }
+    let trimmed = path.trim_end_matches('/');
+    let idx = trimmed.rfind('/').unwrap_or(0);
+    if idx == 0 {
+        "/".to_string()
+    } else {
+        trimmed[..idx].to_string()
+    }
+}
+
+#[uniffi::export]
+pub async fn ct_search_storage_entries(
+    cx: Arc<Backend>,
+    arg: ArgSearchStorageEntries,
+) -> BResult<SearchStorageEntriesResp> {
+    let cx = cx.get_context();
+    let backend = get_storage_backend(cx, arg.storage_id)?;
+    let Some(backend) = backend else {
+        return Ok(SearchStorageEntriesResp::Unknown);
+    };
+
+    let result = backend
+        .search(
+            arg.parent.clone(),
+            arg.keywords.clone(),
+            map_storage_search_scope(arg.scope),
+            arg.page.max(1) as usize,
+            arg.per_page.max(1) as usize,
+        )
+        .await;
+
+    match result {
+        Ok(page) => Ok(SearchStorageEntriesResp::Ok(StorageSearchPage {
+            entries: page
+                .entries
+                .into_iter()
+                .map(|entry| StorageSearchEntry {
+                    parent_path: parent_storage_path(entry.path.as_str()),
+                    storage_id: arg.storage_id,
+                    name: entry.name,
+                    path: entry.path,
+                    size: entry.size.map(|value| value as u64),
+                    is_dir: entry.is_dir,
+                })
+                .collect(),
+            total: page.total as u64,
+            page: arg.page.max(1),
+            per_page: arg.per_page.max(1),
+        })),
+        Err(e) => {
+            tracing::warn!("ct_search_storage_entries, {e:?}");
+            if e.is_search_unavailable() {
+                Ok(SearchStorageEntriesResp::Unavailable)
+            } else if e.is_site_blocked() {
+                Ok(SearchStorageEntriesResp::BlockedBySite)
+            } else if e.is_unauthorized() {
+                Ok(SearchStorageEntriesResp::AuthenticationFailed)
+            } else if e.is_timeout() {
+                Ok(SearchStorageEntriesResp::Timeout)
+            } else {
+                Ok(SearchStorageEntriesResp::Unknown)
             }
         }
     }

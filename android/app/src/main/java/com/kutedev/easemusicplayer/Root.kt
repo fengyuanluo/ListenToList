@@ -32,6 +32,7 @@ import com.kutedev.easemusicplayer.core.RouteLog
 import com.kutedev.easemusicplayer.core.RouteMusicPlayer
 import com.kutedev.easemusicplayer.core.RoutePlaylist
 import com.kutedev.easemusicplayer.core.RouteStorageBrowser
+import com.kutedev.easemusicplayer.core.RouteStorageSearch
 import com.kutedev.easemusicplayer.core.RouteThemeSettings
 import com.kutedev.easemusicplayer.core.RoutesProvider
 import com.kutedev.easemusicplayer.components.ThemeBackgroundImage
@@ -47,6 +48,7 @@ import com.kutedev.easemusicplayer.widgets.musics.MusicPlayerPage
 import com.kutedev.easemusicplayer.widgets.playlists.CreatePlaylistsDialog
 import com.kutedev.easemusicplayer.widgets.playlists.EditPlaylistsDialog
 import com.kutedev.easemusicplayer.widgets.playlists.PlaylistPage
+import com.kutedev.easemusicplayer.widgets.search.StorageSearchPage
 import com.kutedev.easemusicplayer.widgets.settings.DebugMorePage
 import com.kutedev.easemusicplayer.widgets.settings.LogPage
 import com.kutedev.easemusicplayer.widgets.settings.ThemeSettingsPage
@@ -130,10 +132,28 @@ fun Root() {
                                     EditStoragesPage()
                                 }
                                 composable(
-                                    RouteStorageBrowser("{id}"),
-                                    arguments = listOf(navArgument("id") { type = NavType.LongType })
+                                    RouteStorageBrowser("{id}", "{path}", rawPath = true),
+                                    arguments = listOf(
+                                        navArgument("id") { type = NavType.LongType },
+                                        navArgument("path") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
+                                    )
                                 ) {
                                     StorageBrowserPage()
+                                }
+                                composable(
+                                    RouteStorageSearch("{query}", rawQuery = true),
+                                    arguments = listOf(
+                                        navArgument("query") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        }
+                                    )
+                                ) {
+                                    StorageSearchPage()
                                 }
                                 composable(
                                     RoutePlaylist("{id}"),

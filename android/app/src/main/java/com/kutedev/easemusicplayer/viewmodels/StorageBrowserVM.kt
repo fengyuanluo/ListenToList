@@ -1,5 +1,6 @@
 package com.kutedev.easemusicplayer.viewmodels
 
+import android.net.Uri
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -15,6 +16,7 @@ import com.kutedev.easemusicplayer.singleton.PermissionRepository
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.StorageRepository
+import com.kutedev.easemusicplayer.singleton.StorageSearchRepository
 import com.kutedev.easemusicplayer.singleton.ToastRepository
 import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,16 +32,21 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.FlowPreview
 import uniffi.ease_client_backend.ArgEnsureMusics
 import uniffi.ease_client_backend.CurrentStorageStateType
 import uniffi.ease_client_backend.ListStorageEntryChildrenResp
+import uniffi.ease_client_backend.SearchStorageEntriesResp
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_backend.StorageEntry
 import uniffi.ease_client_backend.StorageEntryType
+import uniffi.ease_client_backend.StorageSearchEntry
+import uniffi.ease_client_backend.StorageSearchScope
 import uniffi.ease_client_backend.ToAddMusicEntry
 import uniffi.ease_client_backend.ctEnsureMusics
 import uniffi.ease_client_backend.ctListStorageEntryChildren
@@ -53,10 +60,22 @@ private const val STATE_SELECTED_PATHS = "storage_browser_selected_paths"
 private const val STATE_SELECT_MODE = "storage_browser_select_mode"
 private const val STATE_SCROLL_INDEX = "storage_browser_scroll_index"
 private const val STATE_SCROLL_OFFSET = "storage_browser_scroll_offset"
+private const val STATE_SEARCH_QUERY = "storage_browser_search_query"
+private const val STATE_SEARCH_SCOPE = "storage_browser_search_scope"
+private const val ARG_PATH = "path"
+
+private data class SearchTrigger(
+    val storage: Storage?,
+    val path: String,
+    val query: String,
+    val scope: StorageSearchScope,
+)
 
 @HiltViewModel
+@OptIn(FlowPreview::class)
 class StorageBrowserVM @Inject constructor(
     private val storageRepository: StorageRepository,
+    private val storageSearchRepository: StorageSearchRepository,
     private val playlistRepository: PlaylistRepository,
     private val playerControllerRepository: PlayerControllerRepository,
     private val permissionRepository: PermissionRepository,
@@ -66,11 +85,16 @@ class StorageBrowserVM @Inject constructor(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val storageId: StorageId = StorageId(savedStateHandle["id"]!!)
-    private val restoredPath = savedStateHandle[STATE_CURRENT_PATH] ?: "/"
+    private val routePath = Uri.decode(savedStateHandle.get<String>(ARG_PATH) ?: "/")
+    private val restoredPath = savedStateHandle[STATE_CURRENT_PATH] ?: routePath
     private val restoredScrollSnapshot = BrowserScrollSnapshot(
         index = savedStateHandle[STATE_SCROLL_INDEX] ?: 0,
         offset = savedStateHandle[STATE_SCROLL_OFFSET] ?: 0,
     )
+    private val restoredSearchQuery = savedStateHandle[STATE_SEARCH_QUERY] ?: ""
+    private val restoredSearchScope = savedStateHandle.get<String>(STATE_SEARCH_SCOPE)
+        ?.let { raw -> runCatching { StorageSearchScope.valueOf(raw) }.getOrNull() }
+        ?: StorageSearchScope.ALL
     private val restoredSelectedPaths = (savedStateHandle.get<ArrayList<String>>(STATE_SELECTED_PATHS)
         ?: arrayListOf())
     private val _selected = MutableStateFlow(
@@ -81,9 +105,17 @@ class StorageBrowserVM @Inject constructor(
     private val _selectMode = MutableStateFlow(savedStateHandle[STATE_SELECT_MODE] ?: false)
     private val _working = MutableStateFlow(false)
     private val _exitPage = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val _searchState = MutableStateFlow(
+        StorageSearchListUiState(
+            query = restoredSearchQuery,
+            scope = restoredSearchScope,
+            parentPath = restoredPath,
+        )
+    )
     private val _storage = storageRepository.storages.map { storages ->
         storages.find { it.id == storageId }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+    private var searchRequestSeq: Long = 0L
 
     private val browser = DirectoryBrowserController(
         scope = viewModelScope,
@@ -135,6 +167,10 @@ class StorageBrowserVM @Inject constructor(
     val isRefreshing = browser.isRefreshing
     val working = _working.asStateFlow()
     val storage = _storage
+    val searchState = _searchState.asStateFlow()
+    val searchSupported = _storage.map { current ->
+        current?.isStorageSearchSupported() == true
+    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val canNavigateUp = browser.canNavigateUp
     val exitPage = _exitPage.asSharedFlow()
     val selectedCount = _selected.combine(entries) { selected, currentEntries ->
@@ -178,6 +214,56 @@ class StorageBrowserVM @Inject constructor(
                 trimSelectionToEntries(currentEntries)
             }
         }
+        viewModelScope.launch {
+            combine(
+                _storage,
+                currentPath,
+                _searchState.map { it.query }.debounce(320),
+                _searchState.map { it.scope },
+            ) { storage, path, query, scope ->
+                SearchTrigger(
+                    storage = storage,
+                    path = path,
+                    query = query.trim(),
+                    scope = scope,
+                )
+            }.collectLatest { trigger ->
+                if (trigger.storage == null || !trigger.storage.isStorageSearchSupported()) {
+                    resetSearchResults(parentPath = trigger.path)
+                    return@collectLatest
+                }
+                if (trigger.query.isBlank()) {
+                    resetSearchResults(parentPath = trigger.path)
+                    return@collectLatest
+                }
+                val token = ++searchRequestSeq
+                _searchState.value = _searchState.value.copy(
+                    loading = true,
+                    loadingMore = false,
+                    error = null,
+                    entries = emptyList(),
+                    total = 0,
+                    parentPath = trigger.path,
+                )
+                val response = storageSearchRepository.search(
+                    storageId = trigger.storage.id,
+                    parent = trigger.path,
+                    keywords = trigger.query,
+                    scope = trigger.scope,
+                    page = 1,
+                    perPage = STORAGE_BROWSER_SEARCH_PAGE_SIZE,
+                )
+                if (token != searchRequestSeq) {
+                    return@collectLatest
+                }
+                applySearchResponse(
+                    response = response,
+                    page = 1,
+                    append = false,
+                    parentPath = trigger.path,
+                )
+            }
+        }
     }
 
     fun clickEntry(entry: StorageEntry) {
@@ -185,6 +271,121 @@ class StorageBrowserVM @Inject constructor(
             entry.isDir -> navigateDir(entry.path)
             entry.entryTyp() == StorageEntryType.MUSIC -> playFromFolder(entry)
             else -> toastRepository.emitToast("该文件暂不支持播放")
+        }
+    }
+
+    fun updateSearchQuery(value: String) {
+        if (_searchState.value.query == value) {
+            return
+        }
+        if (value.isNotBlank()) {
+            exitSelectMode()
+        }
+        _searchState.value = _searchState.value.copy(query = value)
+        savedStateHandle[STATE_SEARCH_QUERY] = value
+    }
+
+    fun clearSearch() {
+        updateSearchQuery("")
+    }
+
+    fun updateSearchScope(value: StorageSearchScope) {
+        if (_searchState.value.scope == value) {
+            return
+        }
+        _searchState.value = _searchState.value.copy(scope = value)
+        savedStateHandle[STATE_SEARCH_SCOPE] = value.name
+    }
+
+    fun clickSearchEntry(entry: StorageSearchEntry) {
+        when {
+            entry.isDir -> {
+                clearSearch()
+                navigateDir(entry.path)
+            }
+
+            entry.entryTyp() == StorageEntryType.MUSIC -> {
+                viewModelScope.launch {
+                    storageSearchRepository.playSearchEntry(entry)
+                }
+            }
+
+            else -> locateSearchEntry(entry)
+        }
+    }
+
+    fun locateSearchEntry(entry: StorageSearchEntry) {
+        clearSearch()
+        if (entry.parentPath != browser.currentPathValue()) {
+            navigateDir(entry.parentPath)
+        } else {
+            toastRepository.emitToastRes(com.kutedev.easemusicplayer.R.string.storage_search_located_current_dir)
+        }
+    }
+
+    fun loadMoreSearch() {
+        val currentStorage = _storage.value ?: return
+        val state = _searchState.value
+        if (!currentStorage.isStorageSearchSupported() || !state.canLoadMore) {
+            return
+        }
+        val nextPage = state.page + 1
+        val token = searchRequestSeq
+        viewModelScope.launch {
+            _searchState.value = state.copy(loadingMore = true, error = null)
+            val response = storageSearchRepository.search(
+                storageId = currentStorage.id,
+                parent = browser.currentPathValue(),
+                keywords = state.query.trim(),
+                scope = state.scope,
+                page = nextPage,
+                perPage = STORAGE_BROWSER_SEARCH_PAGE_SIZE,
+            )
+            if (token != searchRequestSeq || state.query.trim() != _searchState.value.query.trim()) {
+                return@launch
+            }
+            applySearchResponse(
+                response = response,
+                page = nextPage,
+                append = true,
+                parentPath = browser.currentPathValue(),
+            )
+        }
+    }
+
+    fun retrySearch() {
+        val currentStorage = _storage.value ?: return
+        val state = _searchState.value
+        if (!currentStorage.isStorageSearchSupported() || state.query.isBlank()) {
+            return
+        }
+        val token = ++searchRequestSeq
+        viewModelScope.launch {
+            _searchState.value = state.copy(
+                loading = true,
+                loadingMore = false,
+                error = null,
+                entries = emptyList(),
+                total = 0,
+                page = 0,
+            )
+            val response = storageSearchRepository.search(
+                storageId = currentStorage.id,
+                parent = browser.currentPathValue(),
+                keywords = state.query.trim(),
+                scope = state.scope,
+                page = 1,
+                perPage = STORAGE_BROWSER_SEARCH_PAGE_SIZE,
+            )
+            if (token != searchRequestSeq) {
+                return@launch
+            }
+            applySearchResponse(
+                response = response,
+                page = 1,
+                append = false,
+                parentPath = browser.currentPathValue(),
+            )
         }
     }
 
@@ -336,6 +537,51 @@ class StorageBrowserVM @Inject constructor(
 
     fun reload() {
         browser.refresh(forceRemote = true)
+    }
+
+    private fun resetSearchResults(parentPath: String) {
+        _searchState.value = _searchState.value.copy(
+            parentPath = parentPath,
+            entries = emptyList(),
+            total = 0,
+            page = 0,
+            loading = false,
+            loadingMore = false,
+            error = null,
+        )
+    }
+
+    private fun applySearchResponse(
+        response: SearchStorageEntriesResp,
+        page: Int,
+        append: Boolean,
+        parentPath: String,
+    ) {
+        val resultPage = response.pageOrNull()
+        if (resultPage != null) {
+            val mergedEntries = if (append) {
+                mergeSearchPages(_searchState.value.entries, resultPage.entries)
+            } else {
+                resultPage.entries
+            }
+            _searchState.value = _searchState.value.copy(
+                parentPath = parentPath,
+                entries = mergedEntries,
+                total = resultPage.total.toInt(),
+                page = page,
+                loading = false,
+                loadingMore = false,
+                error = null,
+            )
+            return
+        }
+        _searchState.value = _searchState.value.copy(
+            parentPath = parentPath,
+            loading = false,
+            loadingMore = false,
+            error = response.errorTypeOrNull(),
+            page = if (append) _searchState.value.page else 0,
+        )
     }
 
     private suspend fun listEntries(path: String): List<StorageEntry>? {
