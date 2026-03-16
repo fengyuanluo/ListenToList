@@ -584,6 +584,7 @@ private fun MusicPlayerBody(
 
 @Composable
 private fun TransportControls(
+    modifier: Modifier = Modifier,
     playerVM: PlayerVM = hiltViewModel(),
 ) {
     val previousMusic by playerVM.previousMusic.collectAsState()
@@ -594,7 +595,7 @@ private fun TransportControls(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier
     ) {
         EaseIconButton(
             sizeType = EaseIconButtonSize.Large,
@@ -1002,12 +1003,9 @@ fun MusicPlayerPage(
                     }
                 )
                 Box(modifier = Modifier.height(22.dp))
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    TransportControls()
-                }
+                TransportControls(
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
                 Box(modifier = Modifier.height(18.dp))
                 MusicPanel(
                     hasLyric = hasLyric,
