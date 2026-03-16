@@ -234,34 +234,28 @@ private fun StorageBrowserEntry(
     } else {
         ""
     }
-    val allowSelect = entry.isDir || entryType == StorageEntryType.MUSIC
     val iconSize = 28.dp
     val titleSize = 16.sp
     val subTitleSize = 12.sp
     val checkboxSize = 20.dp
     val handleClick = {
-        if (selectMode && allowSelect) {
+        if (selectMode) {
             onToggle(entry)
         } else {
             onClickEntry(entry)
         }
     }
-
-    val rowModifier = if (allowSelect) {
-        Modifier.combinedClickable(
-            onClick = { handleClick() },
-            onLongClick = {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                if (selectMode) {
-                    onToggle(entry)
-                } else {
-                    onLongClickEntry(entry)
-                }
+    val rowModifier = Modifier.combinedClickable(
+        onClick = { handleClick() },
+        onLongClick = {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            if (selectMode) {
+                onToggle(entry)
+            } else {
+                onLongClickEntry(entry)
             }
-        )
-    } else {
-        Modifier.clickable { handleClick() }
-    }
+        }
+    )
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -298,7 +292,7 @@ private fun StorageBrowserEntry(
         }
         Box(modifier = Modifier.width(14.dp))
         Box(modifier = Modifier.size(if (selectMode) checkboxSize else 0.dp)) {
-            if (selectMode && allowSelect) {
+            if (selectMode) {
                 EaseCheckbox(
                     value = checked,
                     onChange = { onToggle(entry) },

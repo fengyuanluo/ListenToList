@@ -193,7 +193,9 @@ class StorageSearchVM @Inject constructor(
         if (entry.isDir) {
             return
         }
-        downloadRepository.enqueueEntries(listOf(entry.toStorageEntry()))
+        viewModelScope.launch {
+            downloadRepository.enqueueEntries(listOf(entry.toStorageEntry()))
+        }
     }
 
     private suspend fun refreshAllSections(

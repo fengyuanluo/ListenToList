@@ -101,4 +101,75 @@ class StorageBrowserUtilsTest {
         assertTrue(result.any { it.path == "/folder/song2.flac" })
         assertTrue(result.any { it.path == "/folder/sub/song3.ogg" })
     }
+
+    @Test
+    fun resolveSelectedDownloadEntries_shouldCollectAllNonDirectoryFiles() = runBlocking {
+        val storageId = StorageId(1)
+        val rootEntries = listOf(
+            StorageEntry(
+                storageId = storageId,
+                name = "folder",
+                path = "/folder",
+                size = null,
+                isDir = true
+            ),
+            StorageEntry(
+                storageId = storageId,
+                name = "cover.jpg",
+                path = "/cover.jpg",
+                size = 15uL,
+                isDir = false
+            ),
+        )
+        val folderEntries = listOf(
+            StorageEntry(
+                storageId = storageId,
+                name = "song.mp3",
+                path = "/folder/song.mp3",
+                size = 120uL,
+                isDir = false
+            ),
+            StorageEntry(
+                storageId = storageId,
+                name = "book.pdf",
+                path = "/folder/book.pdf",
+                size = 80uL,
+                isDir = false
+            ),
+            StorageEntry(
+                storageId = storageId,
+                name = "sub",
+                path = "/folder/sub",
+                size = null,
+                isDir = true
+            )
+        )
+        val subEntries = listOf(
+            StorageEntry(
+                storageId = storageId,
+                name = "clip.mp4",
+                path = "/folder/sub/clip.mp4",
+                size = 300uL,
+                isDir = false
+            )
+        )
+
+        val result = StorageBrowserUtils.resolveSelectedDownloadEntries(
+            selectedPaths = setOf("/folder", "/cover.jpg"),
+            currentEntries = rootEntries,
+            listChildren = { dir ->
+                when (dir) {
+                    "/folder" -> folderEntries
+                    "/folder/sub" -> subEntries
+                    else -> emptyList()
+                }
+            }
+        )
+
+        assertEquals(4, result.size)
+        assertTrue(result.any { it.path == "/cover.jpg" })
+        assertTrue(result.any { it.path == "/folder/song.mp3" })
+        assertTrue(result.any { it.path == "/folder/book.pdf" })
+        assertTrue(result.any { it.path == "/folder/sub/clip.mp4" })
+    }
 }
