@@ -570,17 +570,6 @@ fun StorageSearchPage(
                     )
                 )
             }
-            if (!sheetEntry.isDir) {
-                add(
-                    StorageSearchActionItem(
-                        label = stringResource(id = R.string.common_download),
-                        onClick = {
-                            actionEntry = null
-                            storageSearchVM.downloadEntry(sheetEntry)
-                        }
-                    )
-                )
-            }
         }
         StorageSearchActionSheet(
             title = sheetEntry.name,

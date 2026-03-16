@@ -15,10 +15,13 @@ import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -71,16 +74,14 @@ data class DownloadTaskItem(
     val errorMessage: String? = null,
 ) {
     val active: Boolean
-        get() = status == DownloadTaskStatus.QUEUED ||
-            status == DownloadTaskStatus.RUNNING ||
-            status == DownloadTaskStatus.BLOCKED
+        get() = status.active
 
     val retryable: Boolean
         get() = status == DownloadTaskStatus.FAILED || status == DownloadTaskStatus.CANCELLED
 }
 
 @Serializable
-private data class PersistedDownloadRecord(
+internal data class PersistedDownloadRecord(
     val id: String,
     val title: String,
     val sourcePath: String,
@@ -103,6 +104,7 @@ private data class BuiltDownloadRequest(
 class DownloadRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val toastRepository: ToastRepository,
+    private val scope: CoroutineScope,
 ) {
     companion object {
         private const val PREFS_NAME = "download_tasks"
@@ -116,31 +118,37 @@ class DownloadRepository @Inject constructor(
         encodeDefaults = true
     }
     private val records = MutableStateFlow(loadPersisted())
+    private val workInfoObserver = Observer<List<WorkInfo>> { infos ->
+        synchronizeWithWorkInfos(infos.orEmpty())
+    }
 
-    val tasks: Flow<List<DownloadTaskItem>> = callbackFlow {
-        val liveData = workManager.getWorkInfosByTagLiveData(DOWNLOAD_WORK_TAG)
-        val observer = Observer<List<WorkInfo>> { infos ->
-            trySend(
-                mergeWithWorkInfos(infos.orEmpty())
-                    .sortedByDescending { item -> item.createdAtMs }
-            )
+    val tasks: Flow<List<DownloadTaskItem>> = records.map { currentRecords ->
+        currentRecords.map(::toTaskItem)
+            .sortedByDescending { item -> item.createdAtMs }
+    }
+
+    init {
+        scope.launch(Dispatchers.Main.immediate) {
+            workManager.getWorkInfosByTagLiveData(DOWNLOAD_WORK_TAG)
+                .observeForever(workInfoObserver)
         }
-        liveData.observeForever(observer)
-        trySend(records.value.map(::toTaskItem).sortedByDescending { item -> item.createdAtMs })
-        awaitClose { liveData.removeObserver(observer) }
+        scope.launch {
+            reconcileWorkInfosNow()
+        }
     }
 
     fun downloadDirectory(): String {
         return ensureDownloadDir().absolutePath
     }
 
-    fun enqueueEntries(entries: List<StorageEntry>) {
+    suspend fun enqueueEntries(entries: List<StorageEntry>) {
         val files = entries.filterNot { it.isDir }
         if (files.isEmpty()) {
             toastRepository.emitToast("当前没有可下载的文件")
             return
         }
 
+        reconcileWorkInfosNow()
         val activeSources = activeSourceKeys()
         val reservedNames = activeReservedFileNames()
         var skippedDuplicates = 0
@@ -180,7 +188,8 @@ class DownloadRepository @Inject constructor(
         )
     }
 
-    fun enqueueCurrentMusic(music: Music) {
+    suspend fun enqueueCurrentMusic(music: Music) {
+        reconcileWorkInfosNow()
         if (hasActiveTask(storageId = music.loc.storageId.value, sourcePath = music.loc.path)) {
             toastRepository.emitToast("当前歌曲已在下载队列中")
             return
@@ -197,11 +206,13 @@ class DownloadRepository @Inject constructor(
         toastRepository.emitToast("已加入下载队列")
     }
 
-    fun cancel(id: UUID) {
+    suspend fun cancel(id: UUID) {
         workManager.cancelWorkById(id)
+        reconcileWorkInfosNow()
     }
 
-    fun retry(task: DownloadTaskItem) {
+    suspend fun retry(task: DownloadTaskItem) {
+        reconcileWorkInfosNow()
         if (hasActiveTask(storageId = task.storageId, sourcePath = task.sourcePath)) {
             toastRepository.emitToast("该任务已在下载队列中")
             return
@@ -360,37 +371,28 @@ class DownloadRepository @Inject constructor(
         return "$storageId::$sourcePath"
     }
 
+    private suspend fun reconcileWorkInfosNow() {
+        val infos = runCatching {
+            withContext(Dispatchers.IO) {
+                workManager.getWorkInfosByTag(DOWNLOAD_WORK_TAG).get()
+            }
+        }.getOrDefault(emptyList())
+        synchronizeWithWorkInfos(infos)
+    }
+
     private fun ensureDownloadDir(): File {
         val base = appContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
             ?: File(appContext.filesDir, "downloads")
         return File(base, "downloads").apply { mkdirs() }
     }
 
-    private fun mergeWithWorkInfos(
+    private fun synchronizeWithWorkInfos(
         infos: List<WorkInfo>,
-    ): List<DownloadTaskItem> {
-        val infoById = infos.associateBy { info -> info.id.toString() }
-        val updated = records.value.map { record ->
-            val info = infoById[record.id] ?: return@map record
-            val progress = info.progress
-            val output = info.outputData
-            record.copy(
-                status = info.state.toDownloadStatus().name,
-                bytesDownloaded = progress.longOrNull(DownloadWorkKeys.PROGRESS_BYTES)
-                    ?: output.longOrNull(DownloadWorkKeys.OUTPUT_DOWNLOADED_BYTES)
-                    ?: record.bytesDownloaded,
-                totalBytes = progress.longOrNull(DownloadWorkKeys.PROGRESS_TOTAL_BYTES)
-                    ?: record.totalBytes,
-                destinationPath = output.getString(DownloadWorkKeys.OUTPUT_DEST_PATH)
-                    ?: record.destinationPath,
-                errorMessage = output.getString(DownloadWorkKeys.OUTPUT_ERROR_MESSAGE)
-                    ?: record.errorMessage,
-            )
-        }
+    ) {
+        val updated = mergePersistedDownloadRecords(records.value, infos)
         if (updated != records.value) {
             persistRecords(updated)
         }
-        return updated.map(::toTaskItem)
     }
 
     private fun toPersistedRecord(
@@ -473,4 +475,28 @@ private fun WorkInfo.State.toDownloadStatus(): DownloadTaskStatus {
 private fun PersistedDownloadRecord.toDownloadStatus(): DownloadTaskStatus {
     return runCatching { DownloadTaskStatus.valueOf(status) }
         .getOrDefault(DownloadTaskStatus.QUEUED)
+}
+
+internal fun mergePersistedDownloadRecords(
+    currentRecords: List<PersistedDownloadRecord>,
+    infos: List<WorkInfo>,
+): List<PersistedDownloadRecord> {
+    val infoById = infos.associateBy { info -> info.id.toString() }
+    return currentRecords.map { record ->
+        val info = infoById[record.id] ?: return@map record
+        val progress = info.progress
+        val output = info.outputData
+        record.copy(
+            status = info.state.toDownloadStatus().name,
+            bytesDownloaded = progress.longOrNull(DownloadWorkKeys.PROGRESS_BYTES)
+                ?: output.longOrNull(DownloadWorkKeys.OUTPUT_DOWNLOADED_BYTES)
+                ?: record.bytesDownloaded,
+            totalBytes = progress.longOrNull(DownloadWorkKeys.PROGRESS_TOTAL_BYTES)
+                ?: record.totalBytes,
+            destinationPath = output.getString(DownloadWorkKeys.OUTPUT_DEST_PATH)
+                ?: record.destinationPath,
+            errorMessage = output.getString(DownloadWorkKeys.OUTPUT_ERROR_MESSAGE)
+                ?: record.errorMessage,
+        )
+    }
 }

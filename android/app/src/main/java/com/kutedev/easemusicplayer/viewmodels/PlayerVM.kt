@@ -126,7 +126,9 @@ class PlayerVM @Inject constructor(
 
     fun downloadCurrent() {
         val currentMusic = music.value ?: return
-        downloadRepository.enqueueCurrentMusic(currentMusic)
+        viewModelScope.launch {
+            downloadRepository.enqueueCurrentMusic(currentMusic)
+        }
     }
 
     fun syncPosition() {

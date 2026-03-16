@@ -184,7 +184,7 @@ class StorageBrowserVM @Inject constructor(
         currentEntries.count { entry -> selected.contains(entry.path) }
     }.stateIn(viewModelScope, SharingStarted.Lazily, 0)
     val disableToggleAll = entries.map { currentEntries ->
-        currentEntries.none { it.entryTyp() == StorageEntryType.MUSIC || it.isDir }
+        currentEntries.isEmpty()
     }.stateIn(viewModelScope, SharingStarted.Lazily, true)
 
     init {
@@ -443,9 +443,6 @@ class StorageBrowserVM @Inject constructor(
         if (!_selectMode.value) {
             return
         }
-        if (!(entry.isDir || entry.entryTyp() == StorageEntryType.MUSIC)) {
-            return
-        }
         val path = entry.path
         val selected = _selected.value
         val next = if (selected.contains(path)) {
@@ -458,9 +455,6 @@ class StorageBrowserVM @Inject constructor(
     }
 
     fun startSelection(entry: StorageEntry) {
-        if (!(entry.isDir || entry.entryTyp() == StorageEntryType.MUSIC)) {
-            return
-        }
         if (!_selectMode.value) {
             _selectMode.value = true
             persistSelectMode()
@@ -476,7 +470,7 @@ class StorageBrowserVM @Inject constructor(
         if (!_selectMode.value) {
             return
         }
-        val selectable = entries.value.filter { it.isDir || it.entryTyp() == StorageEntryType.MUSIC }
+        val selectable = entries.value
         val allSelected = _selected.value.size == selectable.size
         _selected.value = if (allSelected) {
             _selected.value.clear()
@@ -581,7 +575,9 @@ class StorageBrowserVM @Inject constructor(
         if (entry.isDir) {
             return
         }
-        downloadRepository.enqueueEntries(listOf(entry.toStorageEntry()))
+        viewModelScope.launch {
+            downloadRepository.enqueueEntries(listOf(entry.toStorageEntry()))
+        }
     }
 
     fun playFromFolder(entry: StorageEntry) {
@@ -728,7 +724,6 @@ class StorageBrowserVM @Inject constructor(
 
     private fun trimSelectionToEntries(currentEntries: List<StorageEntry>) {
         val selectablePaths = currentEntries
-            .filter { it.isDir || it.entryTyp() == StorageEntryType.MUSIC }
             .map { it.path }
             .toSet()
         val trimmed = retainPaths(_selected.value, selectablePaths)
