@@ -32,6 +32,10 @@ class PlayerVM @Inject constructor(
     private val _bufferDuration = MutableStateFlow(Duration.ZERO)
     private val _totalDuration = MutableStateFlow(null as Duration?)
     val music = playerRepository.music
+    val playlist = playerRepository.playlist
+    val playbackQueue = playerRepository.playbackQueue
+    val currentQueueEntryId = playerRepository.currentQueueEntryId
+    val currentQueueEntry = playerRepository.currentQueueEntry
     val previousMusic = playerRepository.previousMusic
     val nextMusic = playerRepository.nextMusic
     val playing = playerRepository.playing
@@ -96,6 +100,18 @@ class PlayerVM @Inject constructor(
 
     fun play(id: MusicId, playlistId: PlaylistId) {
         playerControllerRepository.play(id, playlistId)
+    }
+
+    fun playQueueEntry(queueEntryId: String) {
+        playerControllerRepository.playQueueEntry(queueEntryId)
+    }
+
+    fun removeQueueEntry(queueEntryId: String) {
+        playerControllerRepository.removeQueueEntry(queueEntryId)
+    }
+
+    fun moveQueueEntry(fromIndex: Int, toIndex: Int) {
+        playerControllerRepository.moveQueueEntry(fromIndex, toIndex)
     }
 
     fun changePlayModeToNext() {

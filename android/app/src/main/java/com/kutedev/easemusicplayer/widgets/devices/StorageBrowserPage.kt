@@ -288,6 +288,7 @@ private fun StorageBrowserSearchHeader(
     onQueryChange: (String) -> Unit,
     onClearQuery: () -> Unit,
     onScopeChange: (StorageSearchScope) -> Unit,
+    onCollapse: () -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -295,12 +296,25 @@ private fun StorageBrowserSearchHeader(
             .fillMaxWidth()
             .padding(horizontal = 32.dp, vertical = 4.dp)
     ) {
-        EaseSearchField(
-            value = searchState.query,
-            onValueChange = onQueryChange,
-            placeholder = stringResource(id = R.string.storage_search_placeholder_directory),
-            onClear = onClearQuery,
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            EaseSearchField(
+                value = searchState.query,
+                onValueChange = onQueryChange,
+                placeholder = stringResource(id = R.string.storage_search_placeholder_directory),
+                elevated = false,
+                onClear = onClearQuery,
+                modifier = Modifier.weight(1f),
+            )
+            EaseIconButton(
+                sizeType = EaseIconButtonSize.Medium,
+                buttonType = EaseIconButtonType.Default,
+                painter = painterResource(id = R.drawable.icon_close),
+                onClick = onCollapse,
+            )
+        }
         StorageSearchScopeSelector(
             selectedScope = searchState.scope,
             onScopeChange = onScopeChange,
@@ -536,6 +550,7 @@ fun StorageBrowserContent(
     title: String,
     loadState: CurrentStorageStateType,
     searchSupported: Boolean,
+    searchExpanded: Boolean,
     searchState: StorageSearchListUiState,
     currentPath: String,
     splitPaths: List<BrowserPathItem>,
@@ -548,8 +563,10 @@ fun StorageBrowserContent(
     scrollSnapshot: BrowserScrollSnapshot,
     onBack: () -> Unit,
     onNavigateDir: (String) -> Unit,
+    onExpandSearch: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit,
+    onCollapseSearch: () -> Unit,
     onSearchScopeChange: (StorageSearchScope) -> Unit,
     onToggleAll: () -> Unit,
     onToggleSelectMode: () -> Unit,
@@ -596,7 +613,10 @@ fun StorageBrowserContent(
                         painter = painterResource(id = R.drawable.icon_back),
                         onClick = onBack
                     )
-                    Column {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.padding(start = 4.dp)
+                    ) {
                         Text(text = title)
                         if (selectMode && selectedCount > 0) {
                             Text(
@@ -612,64 +632,52 @@ fun StorageBrowserContent(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (selectMode) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            EaseIconButton(
-                                sizeType = EaseIconButtonSize.Large,
-                                buttonType = EaseIconButtonType.Default,
-                                painter = painterResource(id = R.drawable.icon_toggle_all),
-                                disabled = disableToggleAll,
-                                onClick = onToggleAll,
-                                modifier = Modifier.testTag("storage_browser_toggle_all")
-                            )
-                            Text(
-                                text = stringResource(id = R.string.storage_browser_toggle_all_label),
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (searchSupported && !searchExpanded) {
                         EaseIconButton(
                             sizeType = EaseIconButtonSize.Large,
-                            buttonType = if (selectMode) {
-                                EaseIconButtonType.Primary
-                            } else {
-                                EaseIconButtonType.Default
-                            },
-                            painter = painterResource(
-                                id = if (selectMode) {
-                                    R.drawable.icon_ok
-                                } else {
-                                    R.drawable.icon_mode_list
-                                }
-                            ),
-                            onClick = onToggleSelectMode,
-                            modifier = Modifier.testTag("storage_browser_toggle_select_mode")
-                        )
-                        Text(
-                            text = if (selectMode) {
-                                stringResource(id = R.string.storage_browser_mode_done)
-                            } else {
-                                stringResource(id = R.string.storage_browser_mode_select)
-                            },
-                            fontSize = 10.sp,
-                            color = if (selectMode) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
+                            buttonType = EaseIconButtonType.Default,
+                            painter = painterResource(id = R.drawable.icon_search),
+                            onClick = onExpandSearch,
+                            modifier = Modifier.testTag("storage_browser_expand_search")
                         )
                     }
+                    if (selectMode) {
+                        EaseIconButton(
+                            sizeType = EaseIconButtonSize.Large,
+                            buttonType = EaseIconButtonType.Default,
+                            painter = painterResource(id = R.drawable.icon_toggle_all),
+                            disabled = disableToggleAll,
+                            onClick = onToggleAll,
+                            modifier = Modifier.testTag("storage_browser_toggle_all")
+                        )
+                    }
+                    EaseIconButton(
+                        sizeType = EaseIconButtonSize.Large,
+                        buttonType = if (selectMode) {
+                            EaseIconButtonType.Primary
+                        } else {
+                            EaseIconButtonType.Default
+                        },
+                        painter = painterResource(
+                            id = if (selectMode) {
+                                R.drawable.icon_ok
+                            } else {
+                                R.drawable.icon_mode_list
+                            }
+                        ),
+                        onClick = onToggleSelectMode,
+                        modifier = Modifier.testTag("storage_browser_toggle_select_mode")
+                    )
                 }
             }
 
-            if (searchSupported) {
+            if (searchSupported && searchExpanded) {
                 StorageBrowserSearchHeader(
                     searchState = searchState,
                     onQueryChange = onSearchQueryChange,
                     onClearQuery = onClearSearch,
                     onScopeChange = onSearchScopeChange,
+                    onCollapse = onCollapseSearch,
                 )
             }
 
@@ -740,6 +748,7 @@ fun StorageBrowserPage(
     val working by storageBrowserVM.working.collectAsState()
     val storage by storageBrowserVM.storage.collectAsState()
     val searchSupported by storageBrowserVM.searchSupported.collectAsState()
+    val searchExpanded by storageBrowserVM.searchExpanded.collectAsState()
     val searchState by storageBrowserVM.searchState.collectAsState()
     val splitPaths by storageBrowserVM.splitPaths.collectAsState()
     val entries by storageBrowserVM.entries.collectAsState()
@@ -751,8 +760,8 @@ fun StorageBrowserPage(
     fun handleBack() {
         if (selectMode) {
             storageBrowserVM.exitSelectMode()
-        } else if (searchState.active) {
-            storageBrowserVM.clearSearch()
+        } else if (searchState.active || searchExpanded) {
+            storageBrowserVM.collapseSearch(clearQuery = true)
         } else if (canNavigateUp) {
             storageBrowserVM.navigateUp()
         } else {
@@ -760,7 +769,7 @@ fun StorageBrowserPage(
         }
     }
 
-    BackHandler(enabled = selectMode || searchState.active || canNavigateUp) {
+    BackHandler(enabled = selectMode || searchState.active || searchExpanded || canNavigateUp) {
         handleBack()
     }
 
@@ -774,6 +783,7 @@ fun StorageBrowserPage(
         title = title,
         loadState = loadState,
         searchSupported = searchSupported,
+        searchExpanded = searchExpanded,
         searchState = searchState,
         currentPath = currentPath,
         splitPaths = splitPaths,
@@ -786,8 +796,10 @@ fun StorageBrowserPage(
         scrollSnapshot = currentScrollSnapshot,
         onBack = { handleBack() },
         onNavigateDir = { path -> storageBrowserVM.navigateDir(path) },
+        onExpandSearch = { storageBrowserVM.expandSearch() },
         onSearchQueryChange = { value -> storageBrowserVM.updateSearchQuery(value) },
         onClearSearch = { storageBrowserVM.clearSearch() },
+        onCollapseSearch = { storageBrowserVM.collapseSearch(clearQuery = true) },
         onSearchScopeChange = { value -> storageBrowserVM.updateSearchScope(value) },
         onToggleAll = { storageBrowserVM.toggleAll() },
         onToggleSelectMode = { storageBrowserVM.toggleSelectMode() },

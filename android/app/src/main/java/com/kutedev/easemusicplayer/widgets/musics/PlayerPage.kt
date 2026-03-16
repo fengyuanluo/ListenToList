@@ -3,6 +3,7 @@ package com.kutedev.easemusicplayer.widgets.musics
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
@@ -20,12 +21,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +52,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,6 +77,9 @@ import com.kutedev.easemusicplayer.viewmodels.PlayerVM
 import com.kutedev.easemusicplayer.viewmodels.SleepModeVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteImport
+import com.kutedev.easemusicplayer.singleton.PlaybackContextType
+import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
+import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
 import com.kutedev.easemusicplayer.singleton.RouteImportType
 import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.toMusicDurationMs
@@ -79,17 +88,19 @@ import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_backend.LyricLine
 import uniffi.ease_client_backend.LyricLoadState
 import uniffi.ease_client_backend.Lyrics
+import uniffi.ease_client_backend.Playlist
 import uniffi.ease_client_schema.PlayMode
 import java.time.Duration
 import kotlin.collections.emptyList
 import kotlin.math.absoluteValue
 import kotlin.math.sign
+import sh.calvin.reorderable.ReorderableCollectionItemScope
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
 private fun MusicPlayerHeader(
     hasLyric: Boolean,
-    showLyric: Boolean,
-    onToggleLyric: () -> Unit,
     playerVM: PlayerVM = hiltViewModel(),
 ) {
     val navController = LocalNavController.current
@@ -119,21 +130,6 @@ private fun MusicPlayerHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (hasLyric) {
-                EaseIconButton(
-                    sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
-                    painter = painterResource(id = R.drawable.icon_lyrics),
-                    overrideColors = EaseIconButtonColors(
-                        iconTint = if (showLyric) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
-                    ),
-                    onClick = onToggleLyric
-                )
-            }
             Box {
                 EaseIconButton(
                     sizeType = EaseIconButtonSize.Medium,
@@ -586,6 +582,11 @@ private fun MusicPlayerBody(
 
 @Composable
 private fun MusicPanel(
+    hasLyric: Boolean,
+    showLyric: Boolean,
+    hasQueue: Boolean,
+    onToggleLyric: () -> Unit,
+    onOpenQueue: () -> Unit,
     playerVM: PlayerVM = hiltViewModel(),
     sleepModeVM: SleepModeVM = hiltViewModel()
 ) {
@@ -627,6 +628,24 @@ private fun MusicPanel(
             onClick = {
                 sleepModeVM.openModal()
             }
+        )
+        EaseIconButton(
+            sizeType = EaseIconButtonSize.Medium,
+            buttonType = if (showLyric && hasLyric) {
+                EaseIconButtonType.Primary
+            } else {
+                EaseIconButtonType.Default
+            },
+            painter = painterResource(id = R.drawable.icon_lyrics),
+            disabled = !hasLyric,
+            overrideColors = EaseIconButtonColors(
+                iconTint = if (showLyric && hasLyric) {
+                    MaterialTheme.colorScheme.surface
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            ),
+            onClick = onToggleLyric,
         )
         EaseIconButton(
             sizeType = EaseIconButtonSize.Medium,
@@ -677,6 +696,13 @@ private fun MusicPanel(
         EaseIconButton(
             sizeType = EaseIconButtonSize.Medium,
             buttonType = EaseIconButtonType.Default,
+            painter = painterResource(id = R.drawable.icon_mode_list),
+            disabled = !hasQueue,
+            onClick = onOpenQueue,
+        )
+        EaseIconButton(
+            sizeType = EaseIconButtonSize.Medium,
+            buttonType = EaseIconButtonType.Default,
             painter = painterResource(id = modeDrawable),
             onClick = {
                 playerVM.changePlayModeToNext()
@@ -686,11 +712,184 @@ private fun MusicPanel(
 }
 
 @Composable
+private fun currentQueueSubtitle(
+    queue: PlaybackQueueSnapshot?,
+    sourcePlaylist: Playlist?,
+): String {
+    return when {
+        sourcePlaylist != null -> sourcePlaylist.abstr.meta.title
+        queue?.context?.type == PlaybackContextType.FOLDER -> queue.context.folderPath ?: ""
+        else -> stringResource(id = R.string.music_queue_sheet_temporary)
+    }
+}
+
+@Composable
+private fun ReorderableCollectionItemScope.PlaybackQueueRow(
+    entry: PlaybackQueueEntry,
+    isCurrent: Boolean,
+    isDragging: Boolean,
+    onPlay: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(
+                if (isCurrent) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDragging) 0.92f else 0.65f)
+                }
+            )
+            .clickable(onClick = onPlay)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(
+                    if (isCurrent) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surface
+                )
+        ) {
+            if (isCurrent) {
+                Icon(
+                    painter = painterResource(id = R.drawable.icon_play),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.size(12.dp)
+                )
+            } else {
+                Text(
+                    text = "·",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 20.sp,
+                )
+            }
+        }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = entry.musicAbstract.meta.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 15.sp,
+                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = entry.musicAbstract.meta.duration?.let { formatDuration(it) } ?: "",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                maxLines = 1,
+            )
+        }
+        EaseIconButton(
+            sizeType = EaseIconButtonSize.Small,
+            buttonType = EaseIconButtonType.Error,
+            painter = painterResource(id = R.drawable.icon_deleteseep),
+            onClick = onRemove,
+        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .draggableHandle()
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.icon_drag),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlaybackQueueSheet(
+    queue: PlaybackQueueSnapshot,
+    currentQueueEntryId: String?,
+    sourcePlaylist: Playlist?,
+    onDismiss: () -> Unit,
+    onPlay: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onMove: (Int, Int) -> Unit,
+) {
+    val lazyListState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(lazyListState = lazyListState) { from, to ->
+        onMove(from.index, to.index)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+        ) {
+            Text(
+                text = stringResource(id = R.string.music_queue_sheet_title),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = currentQueueSubtitle(queue = queue, sourcePlaylist = sourcePlaylist),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        LazyColumn(
+            state = lazyListState,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+        ) {
+            items(queue.entries, key = { entry -> entry.queueEntryId }) { entry ->
+                ReorderableItem(reorderState, key = entry.queueEntryId) { isDragging ->
+                    PlaybackQueueRow(
+                        entry = entry,
+                        isCurrent = entry.queueEntryId == currentQueueEntryId,
+                        isDragging = isDragging,
+                        onPlay = { onPlay(entry.queueEntryId) },
+                        onRemove = { onRemove(entry.queueEntryId) },
+                    )
+                }
+            }
+            item {
+                Box(modifier = Modifier.height(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
 fun MusicPlayerPage(
     playerVM: PlayerVM = hiltViewModel(),
 ) {
     val navController = LocalNavController.current
     val currentMusic by playerVM.music.collectAsState()
+    val sourcePlaylist by playerVM.playlist.collectAsState()
+    val playbackQueue by playerVM.playbackQueue.collectAsState()
+    val currentQueueEntryId by playerVM.currentQueueEntryId.collectAsState()
     val currentDuration by playerVM.currentDuration.collectAsState()
     val previousMusic by playerVM.previousMusic.collectAsState()
     val nextMusic by playerVM.nextMusic.collectAsState()
@@ -700,8 +899,10 @@ fun MusicPlayerPage(
     val lyricLoadedState = currentMusic?.lyric?.loadedState ?: LyricLoadState.LOADING
     val lyrics = currentMusic?.lyric?.data?.lines ?: emptyList()
     var showLyric by rememberSaveable { mutableStateOf(false) }
+    var queueSheetOpen by rememberSaveable { mutableStateOf(false) }
 
     val hasLyric = lyricLoadedState != LyricLoadState.MISSING
+    val hasQueue = playbackQueue?.entries?.isNotEmpty() == true
 
     LaunchedEffect(currentMusic?.meta?.id) {
         showLyric = false
@@ -710,6 +911,11 @@ fun MusicPlayerPage(
     LaunchedEffect(hasLyric) {
         if (!hasLyric && showLyric) {
             showLyric = false
+        }
+    }
+    LaunchedEffect(hasQueue) {
+        if (!hasQueue && queueSheetOpen) {
+            queueSheetOpen = false
         }
     }
 
@@ -722,12 +928,6 @@ fun MusicPlayerPage(
         Column {
             MusicPlayerHeader(
                 hasLyric = hasLyric,
-                showLyric = showLyric,
-                onToggleLyric = {
-                    if (hasLyric) {
-                        showLyric = !showLyric
-                    }
-                }
             )
             Column(
                 modifier = Modifier
@@ -783,8 +983,40 @@ fun MusicPlayerPage(
                     .align(Alignment.CenterHorizontally)
                     .padding(0.dp, 48.dp)
             ) {
-                MusicPanel()
+                MusicPanel(
+                    hasLyric = hasLyric,
+                    showLyric = showLyric,
+                    hasQueue = hasQueue,
+                    onToggleLyric = {
+                        if (hasLyric) {
+                            showLyric = !showLyric
+                        }
+                    },
+                    onOpenQueue = {
+                        if (hasQueue) {
+                            queueSheetOpen = true
+                        }
+                    }
+                )
             }
+        }
+        if (queueSheetOpen && playbackQueue != null) {
+            PlaybackQueueSheet(
+                queue = playbackQueue!!,
+                currentQueueEntryId = currentQueueEntryId,
+                sourcePlaylist = sourcePlaylist,
+                onDismiss = { queueSheetOpen = false },
+                onPlay = { queueEntryId ->
+                    queueSheetOpen = false
+                    playerVM.playQueueEntry(queueEntryId)
+                },
+                onRemove = { queueEntryId ->
+                    playerVM.removeQueueEntry(queueEntryId)
+                },
+                onMove = { fromIndex, toIndex ->
+                    playerVM.moveQueueEntry(fromIndex, toIndex)
+                },
+            )
         }
     }
 }
