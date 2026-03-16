@@ -1,7 +1,9 @@
 package com.kutedev.easemusicplayer.widgets.devices
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +24,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -31,12 +34,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
@@ -62,7 +69,10 @@ import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.StorageSearchListUiState
 import com.kutedev.easemusicplayer.viewmodels.StorageBrowserVM
 import com.kutedev.easemusicplayer.viewmodels.entryTyp
+import com.kutedev.easemusicplayer.viewmodels.toStorageEntry
 import com.kutedev.easemusicplayer.widgets.playlists.CreatePlaylistsDialog
+import com.kutedev.easemusicplayer.widgets.search.StorageSearchActionItem
+import com.kutedev.easemusicplayer.widgets.search.StorageSearchActionSheet
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchErrorCard
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchLoadingRow
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchResultRow
@@ -200,6 +210,7 @@ private fun StorageBrowserError(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StorageBrowserEntry(
     entry: StorageEntry,
@@ -207,9 +218,11 @@ private fun StorageBrowserEntry(
     selectMode: Boolean,
     checkboxTag: String,
     onClickEntry: (entry: StorageEntry) -> Unit,
-    onToggle: (entry: StorageEntry) -> Unit
+    onToggle: (entry: StorageEntry) -> Unit,
+    onLongClickEntry: (entry: StorageEntry) -> Unit,
 ) {
     val entryType = entry.entryTyp()
+    val hapticFeedback = LocalHapticFeedback.current
     val iconId = when (entryType) {
         StorageEntryType.FOLDER -> R.drawable.icon_folder
         StorageEntryType.IMAGE -> R.drawable.icon_image
@@ -234,11 +247,26 @@ private fun StorageBrowserEntry(
         }
     }
 
+    val rowModifier = if (allowSelect) {
+        Modifier.combinedClickable(
+            onClick = { handleClick() },
+            onLongClick = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (selectMode) {
+                    onToggle(entry)
+                } else {
+                    onLongClickEntry(entry)
+                }
+            }
+        )
+    } else {
+        Modifier.clickable { handleClick() }
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .clickable { handleClick() }
+        modifier = rowModifier
             .padding(0.dp, 10.dp)
             .fillMaxWidth()
     ) {
@@ -331,7 +359,7 @@ private fun StorageBrowserSearchHeader(
 private fun StorageBrowserSearchResults(
     searchState: StorageSearchListUiState,
     onClickEntry: (StorageSearchEntry) -> Unit,
-    onLocateEntry: (StorageSearchEntry) -> Unit,
+    onLongClickEntry: (StorageSearchEntry) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -387,7 +415,7 @@ private fun StorageBrowserSearchResults(
                         entry = entry,
                         subtitle = entry.parentPath,
                         onClick = { onClickEntry(entry) },
-                        onLocate = { onLocateEntry(entry) },
+                        onLongClick = { onLongClickEntry(entry) },
                     )
                 }
                 if (searchState.loadingMore) {
@@ -430,6 +458,7 @@ private fun StorageBrowserEntries(
     onNavigateDir: (String) -> Unit,
     onClickEntry: (StorageEntry) -> Unit,
     onToggle: (StorageEntry) -> Unit,
+    onLongClickEntry: (StorageEntry) -> Unit,
     onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
 ) {
     val listState = remember(currentPath) {
@@ -535,7 +564,8 @@ private fun StorageBrowserEntries(
                     },
                     onToggle = { entry ->
                         onToggle(entry)
-                    }
+                    },
+                    onLongClickEntry = { entry -> onLongClickEntry(entry) },
                 )
             }
             item {
@@ -569,14 +599,16 @@ fun StorageBrowserContent(
     onCollapseSearch: () -> Unit,
     onSearchScopeChange: (StorageSearchScope) -> Unit,
     onToggleAll: () -> Unit,
-    onToggleSelectMode: () -> Unit,
     onClickEntry: (StorageEntry) -> Unit,
+    onLongClickEntry: (StorageEntry) -> Unit,
     onClickSearchEntry: (StorageSearchEntry) -> Unit,
-    onLocateSearchEntry: (StorageSearchEntry) -> Unit,
+    onLongClickSearchEntry: (StorageSearchEntry) -> Unit,
     onLoadMoreSearch: () -> Unit,
     onRetrySearch: () -> Unit,
     onToggleEntry: (StorageEntry) -> Unit,
-    onImportSelected: () -> Unit,
+    onDownloadSelected: () -> Unit,
+    onAddSelectedToPlaylist: () -> Unit,
+    onAddSelectedToQueue: () -> Unit,
     onRequestPermission: () -> Unit,
     onReload: () -> Unit,
     onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
@@ -596,6 +628,7 @@ fun StorageBrowserContent(
             .background(MaterialTheme.colorScheme.surface)
             .fillMaxSize()
     ) {
+        var selectionActionsExpanded by remember(selectMode, selectedCount) { mutableStateOf(false) }
         Column {
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -610,7 +643,7 @@ fun StorageBrowserContent(
                     EaseIconButton(
                         sizeType = EaseIconButtonSize.Large,
                         buttonType = EaseIconButtonType.Default,
-                        painter = painterResource(id = R.drawable.icon_back),
+                        painter = painterResource(id = if (selectMode) R.drawable.icon_close else R.drawable.icon_back),
                         onClick = onBack
                     )
                     Column(
@@ -632,7 +665,7 @@ fun StorageBrowserContent(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (searchSupported && !searchExpanded) {
+                    if (searchSupported && !searchExpanded && !selectMode) {
                         EaseIconButton(
                             sizeType = EaseIconButtonSize.Large,
                             buttonType = EaseIconButtonType.Default,
@@ -650,24 +683,43 @@ fun StorageBrowserContent(
                             onClick = onToggleAll,
                             modifier = Modifier.testTag("storage_browser_toggle_all")
                         )
-                    }
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Large,
-                        buttonType = if (selectMode) {
-                            EaseIconButtonType.Primary
-                        } else {
-                            EaseIconButtonType.Default
-                        },
-                        painter = painterResource(
-                            id = if (selectMode) {
-                                R.drawable.icon_ok
-                            } else {
-                                R.drawable.icon_mode_list
+                        Box {
+                            EaseIconButton(
+                                sizeType = EaseIconButtonSize.Large,
+                                buttonType = EaseIconButtonType.Default,
+                                painter = painterResource(id = R.drawable.icon_vertialcal_more),
+                                disabled = selectedCount == 0,
+                                onClick = { selectionActionsExpanded = true },
+                                modifier = Modifier.testTag("storage_browser_selection_actions")
+                            )
+                            DropdownMenu(
+                                expanded = selectionActionsExpanded,
+                                onDismissRequest = { selectionActionsExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(text = stringResource(id = R.string.common_download)) },
+                                    onClick = {
+                                        selectionActionsExpanded = false
+                                        onDownloadSelected()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(text = stringResource(id = R.string.common_add_to_playlist)) },
+                                    onClick = {
+                                        selectionActionsExpanded = false
+                                        onAddSelectedToPlaylist()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(text = stringResource(id = R.string.common_add_to_queue)) },
+                                    onClick = {
+                                        selectionActionsExpanded = false
+                                        onAddSelectedToQueue()
+                                    }
+                                )
                             }
-                        ),
-                        onClick = onToggleSelectMode,
-                        modifier = Modifier.testTag("storage_browser_toggle_select_mode")
-                    )
+                        }
+                    }
                 }
             }
 
@@ -691,7 +743,7 @@ fun StorageBrowserContent(
                 searchState.active -> StorageBrowserSearchResults(
                     searchState = searchState,
                     onClickEntry = onClickSearchEntry,
-                    onLocateEntry = onLocateSearchEntry,
+                    onLongClickEntry = onLongClickSearchEntry,
                     onLoadMore = onLoadMoreSearch,
                     onRetry = onRetrySearch,
                 )
@@ -706,26 +758,8 @@ fun StorageBrowserContent(
                     onNavigateDir = onNavigateDir,
                     onClickEntry = onClickEntry,
                     onToggle = onToggleEntry,
+                    onLongClickEntry = onLongClickEntry,
                     onScrollSnapshotChange = onScrollSnapshotChange,
-                )
-            }
-        }
-
-        if (selectMode && selectedCount > 0) {
-            FloatingActionButton(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.surface,
-                onClick = onImportSelected,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .offset((-48).dp, (-48).dp)
-                    .size(64.dp)
-                    .testTag("storage_browser_fab")
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.icon_download),
-                    contentDescription = null,
-                    modifier = Modifier.size(26.dp)
                 )
             }
         }
@@ -755,6 +789,7 @@ fun StorageBrowserPage(
     val selectedPaths by storageBrowserVM.selected.collectAsState()
     val canNavigateUp by storageBrowserVM.canNavigateUp.collectAsState()
     val scope = rememberCoroutineScope()
+    var actionSearchEntry by remember { mutableStateOf<StorageSearchEntry?>(null) }
 
     val title = storage?.alias?.ifBlank { storage?.addr ?: "Storage" } ?: "Storage"
     fun handleBack() {
@@ -802,16 +837,26 @@ fun StorageBrowserPage(
         onCollapseSearch = { storageBrowserVM.collapseSearch(clearQuery = true) },
         onSearchScopeChange = { value -> storageBrowserVM.updateSearchScope(value) },
         onToggleAll = { storageBrowserVM.toggleAll() },
-        onToggleSelectMode = { storageBrowserVM.toggleSelectMode() },
         onClickEntry = { entry ->
             storageBrowserVM.clickEntry(entry)
         },
+        onLongClickEntry = { entry -> storageBrowserVM.startSelection(entry) },
         onClickSearchEntry = { entry -> storageBrowserVM.clickSearchEntry(entry) },
-        onLocateSearchEntry = { entry -> storageBrowserVM.locateSearchEntry(entry) },
+        onLongClickSearchEntry = { entry -> actionSearchEntry = entry },
         onLoadMoreSearch = { storageBrowserVM.loadMoreSearch() },
         onRetrySearch = { storageBrowserVM.retrySearch() },
         onToggleEntry = { entry -> storageBrowserVM.toggleSelect(entry) },
-        onImportSelected = {
+        onDownloadSelected = {
+            scope.launch {
+                if (working) {
+                    return@launch
+                }
+                if (storageBrowserVM.enqueueSelectedDownloads()) {
+                    storageBrowserVM.exitSelectMode()
+                }
+            }
+        },
+        onAddSelectedToPlaylist = {
             scope.launch {
                 if (working) {
                     return@launch
@@ -823,12 +868,74 @@ fun StorageBrowserPage(
                 }
             }
         },
+        onAddSelectedToQueue = {
+            scope.launch {
+                if (working) {
+                    return@launch
+                }
+                if (storageBrowserVM.addSelectedToQueue()) {
+                    storageBrowserVM.exitSelectMode()
+                }
+            }
+        },
         onRequestPermission = { storageBrowserVM.requestPermission() },
         onReload = { storageBrowserVM.reload() },
         onScrollSnapshotChange = { snapshot ->
             storageBrowserVM.updateCurrentScrollSnapshot(snapshot.index, snapshot.offset)
         }
     )
+
+    val sheetEntry = actionSearchEntry
+    if (sheetEntry != null) {
+        val actions = buildList {
+            add(
+                StorageSearchActionItem(
+                    label = stringResource(id = R.string.storage_search_action_locate),
+                    onClick = {
+                        actionSearchEntry = null
+                        storageBrowserVM.locateSearchEntry(sheetEntry)
+                    }
+                )
+            )
+            if (sheetEntry.entryTyp() == StorageEntryType.MUSIC) {
+                add(
+                    StorageSearchActionItem(
+                        label = stringResource(id = R.string.common_add_to_queue),
+                        onClick = {
+                            actionSearchEntry = null
+                            storageBrowserVM.addSearchEntryToQueue(sheetEntry)
+                        }
+                    )
+                )
+                add(
+                    StorageSearchActionItem(
+                        label = stringResource(id = R.string.common_add_to_playlist),
+                        onClick = {
+                            actionSearchEntry = null
+                            createPlaylistVM.importFromEntries(listOf(sheetEntry.toStorageEntry()))
+                        }
+                    )
+                )
+            }
+            if (!sheetEntry.isDir) {
+                add(
+                    StorageSearchActionItem(
+                        label = stringResource(id = R.string.common_download),
+                        onClick = {
+                            actionSearchEntry = null
+                            storageBrowserVM.enqueueSearchEntryDownload(sheetEntry)
+                        }
+                    )
+                )
+            }
+        }
+        StorageSearchActionSheet(
+            title = sheetEntry.name,
+            subtitle = sheetEntry.parentPath,
+            items = actions,
+            onDismiss = { actionSearchEntry = null },
+        )
+    }
 
     CreatePlaylistsDialog()
 }

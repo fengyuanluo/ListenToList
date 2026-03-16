@@ -8,6 +8,7 @@ import uniffi.ease_client_schema.StorageId
 enum class PlaybackContextType {
     USER_PLAYLIST,
     FOLDER,
+    TEMPORARY,
 }
 
 enum class PlaybackRemoveAction {
@@ -58,4 +59,14 @@ fun buildFolderQueueEntryId(
     index: Int,
 ): String {
     return "folder:${storageId.value}:$folderPath:${musicId.value}:$index"
+}
+
+fun buildTemporaryQueueEntryId(
+    storageId: StorageId,
+    path: String,
+    musicId: MusicId,
+    nonce: Long,
+    index: Int,
+): String {
+    return "temporary:${storageId.value}:$path:${musicId.value}:$nonce:$index"
 }

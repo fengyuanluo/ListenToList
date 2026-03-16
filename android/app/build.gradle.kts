@@ -135,6 +135,7 @@ dependencies {
     implementation("androidx.media3:media3-datasource:$media3_version")
     implementation("androidx.media3:media3-database:$media3_version")
     implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.reorderable)
     testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")

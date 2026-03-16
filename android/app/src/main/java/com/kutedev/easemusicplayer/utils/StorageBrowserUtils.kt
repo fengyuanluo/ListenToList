@@ -41,6 +41,33 @@ object StorageBrowserUtils {
         currentEntries: List<StorageEntry>,
         listChildren: suspend (String) -> List<StorageEntry>?
     ): List<StorageEntry> {
+        return resolveSelectedEntries(
+            selectedPaths = selectedPaths,
+            currentEntries = currentEntries,
+            listChildren = listChildren,
+            includeFile = { entry -> entry.entryTyp() == StorageEntryType.MUSIC },
+        )
+    }
+
+    suspend fun resolveSelectedDownloadEntries(
+        selectedPaths: Set<String>,
+        currentEntries: List<StorageEntry>,
+        listChildren: suspend (String) -> List<StorageEntry>?
+    ): List<StorageEntry> {
+        return resolveSelectedEntries(
+            selectedPaths = selectedPaths,
+            currentEntries = currentEntries,
+            listChildren = listChildren,
+            includeFile = { entry -> !entry.isDir },
+        )
+    }
+
+    private suspend fun resolveSelectedEntries(
+        selectedPaths: Set<String>,
+        currentEntries: List<StorageEntry>,
+        listChildren: suspend (String) -> List<StorageEntry>?,
+        includeFile: (StorageEntry) -> Boolean,
+    ): List<StorageEntry> {
         if (selectedPaths.isEmpty()) {
             return emptyList()
         }
@@ -52,7 +79,7 @@ object StorageBrowserUtils {
             val entry = entryMap[path] ?: continue
             if (entry.isDir) {
                 queue.add(entry.path)
-            } else if (entry.entryTyp() == StorageEntryType.MUSIC) {
+            } else if (includeFile(entry)) {
                 initialFiles.add(entry)
             }
         }
@@ -70,7 +97,7 @@ object StorageBrowserUtils {
             for (child in children) {
                 if (child.isDir) {
                     queue.add(child.path)
-                } else if (child.entryTyp() == StorageEntryType.MUSIC) {
+                } else if (includeFile(child)) {
                     allFiles.add(child)
                 }
             }

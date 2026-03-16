@@ -69,10 +69,13 @@ class StorageBrowserContentTest {
                         onCollapseSearch = {},
                         onSearchScopeChange = {},
                         onToggleAll = {},
-                        onToggleSelectMode = { selectMode.value = !selectMode.value },
                         onClickEntry = {},
+                        onLongClickEntry = { entry ->
+                            selectMode.value = true
+                            selectedPaths.value = selectedPaths.value + entry.path
+                        },
                         onClickSearchEntry = {},
-                        onLocateSearchEntry = {},
+                        onLongClickSearchEntry = {},
                         onLoadMoreSearch = {},
                         onRetrySearch = {},
                         onToggleEntry = { entry ->
@@ -82,7 +85,9 @@ class StorageBrowserContentTest {
                             }
                             selectedPaths.value = next
                         },
-                        onImportSelected = {},
+                        onDownloadSelected = {},
+                        onAddSelectedToPlaylist = {},
+                        onAddSelectedToQueue = {},
                         onRequestPermission = {},
                         onReload = {},
                         onScrollSnapshotChange = {}
@@ -136,14 +141,16 @@ class StorageBrowserContentTest {
                         onCollapseSearch = {},
                         onSearchScopeChange = {},
                         onToggleAll = {},
-                        onToggleSelectMode = {},
                         onClickEntry = {},
+                        onLongClickEntry = {},
                         onClickSearchEntry = {},
-                        onLocateSearchEntry = {},
+                        onLongClickSearchEntry = {},
                         onLoadMoreSearch = {},
                         onRetrySearch = {},
                         onToggleEntry = {},
-                        onImportSelected = {},
+                        onDownloadSelected = {},
+                        onAddSelectedToPlaylist = {},
+                        onAddSelectedToQueue = {},
                         onRequestPermission = {},
                         onReload = {},
                         onScrollSnapshotChange = {}

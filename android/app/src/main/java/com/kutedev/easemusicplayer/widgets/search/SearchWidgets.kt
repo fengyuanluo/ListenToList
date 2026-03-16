@@ -2,6 +2,7 @@ package com.kutedev.easemusicplayer.widgets.search
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -17,13 +18,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +46,12 @@ import com.kutedev.easemusicplayer.viewmodels.labelRes
 import uniffi.ease_client_backend.StorageSearchScope
 import uniffi.ease_client_backend.StorageEntryType
 import uniffi.ease_client_backend.StorageSearchEntry as BackendStorageSearchEntry
+import androidx.compose.foundation.ExperimentalFoundationApi
+
+data class StorageSearchActionItem(
+    val label: String,
+    val onClick: () -> Unit,
+)
 
 @Composable
 fun StorageSearchScopeSelector(
@@ -129,35 +140,22 @@ fun StorageSearchErrorCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StorageSearchResultRow(
     entry: BackendStorageSearchEntry,
     subtitle: String,
     onClick: () -> Unit,
-    onLocate: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entryType = entry.entryTyp()
+    val hapticFeedback = LocalHapticFeedback.current
     val iconId = when (entryType) {
         StorageEntryType.FOLDER -> R.drawable.icon_folder
         StorageEntryType.MUSIC -> R.drawable.icon_music_note
         StorageEntryType.IMAGE -> R.drawable.icon_image
         else -> R.drawable.icon_file
-    }
-    val badgeTextRes = when (entryType) {
-        StorageEntryType.FOLDER -> R.string.storage_search_badge_directory
-        StorageEntryType.MUSIC -> R.string.storage_search_badge_audio
-        else -> R.string.storage_search_badge_file
-    }
-    val badgeBg = when (entryType) {
-        StorageEntryType.FOLDER -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)
-        StorageEntryType.MUSIC -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
-    val badgeFg = when (entryType) {
-        StorageEntryType.FOLDER -> MaterialTheme.colorScheme.secondary
-        StorageEntryType.MUSIC -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Row(
@@ -166,7 +164,13 @@ fun StorageSearchResultRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
+            )
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
         Box(
@@ -187,33 +191,14 @@ fun StorageSearchResultRow(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.weight(1f)
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = entry.name,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(badgeBg)
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = stringResource(id = badgeTextRes),
-                        color = badgeFg,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
+            Text(
+                text = entry.name,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 text = subtitle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -222,13 +207,66 @@ fun StorageSearchResultRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        EaseTextButton(
-            text = stringResource(id = R.string.storage_search_action_locate),
-            type = EaseTextButtonType.Primary,
-            size = EaseTextButtonSize.Small,
-            onClick = onLocate,
-            modifier = Modifier.widthIn(min = 48.dp)
-        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StorageSearchActionSheet(
+    title: String,
+    subtitle: String,
+    items: List<StorageSearchActionItem>,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+        ) {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = subtitle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+        ) {
+            items.forEach { item ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { item.onClick() }
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                ) {
+                    Text(
+                        text = item.label,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+            Box(modifier = Modifier.height(8.dp))
+        }
     }
 }
 

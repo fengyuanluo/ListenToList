@@ -100,6 +100,13 @@ class PlayerRepositoryTest {
         val queueEntryId = when (context.type) {
             PlaybackContextType.USER_PLAYLIST -> buildPlaylistQueueEntryId(context.playlistId!!, musicAbstract.meta.id)
             PlaybackContextType.FOLDER -> buildFolderQueueEntryId(context.storageId!!, context.folderPath!!, musicAbstract.meta.id, order.toInt())
+            PlaybackContextType.TEMPORARY -> buildTemporaryQueueEntryId(
+                storageId = context.storageId ?: StorageId(0L),
+                path = context.folderPath ?: "/temporary",
+                musicId = musicAbstract.meta.id,
+                nonce = 1L,
+                index = order.toInt(),
+            )
         }
         return PlaybackQueueEntry(
             queueEntryId = queueEntryId,

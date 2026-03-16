@@ -1,248 +1,124 @@
 # Findings
 
-## 本轮研究范围
-
-只收集以下官方一手来源：
-- `developer.android.com`
-- `developer.android.google.cn`
-- `github.com/androidx/media`（官方仓库中的 README / docs，如确实相关）
-
-不使用：
-- 第三方博客
-- Stack Overflow
-- Reddit
-- Medium / 掘金 / CSDN 等二手总结
+## 本轮任务范围
+- 仓库：`/root/Coding/General/ListenToList`
+- 目标页面：
+  - 聚合搜索页 `widgets/search/StorageSearchPage.kt`
+  - 目录页 `widgets/devices/StorageBrowserPage.kt`
+  - 播放页 `widgets/musics/PlayerPage.kt`
+  - 设置页 `widgets/settings/Page.kt`
+- 真相源优先级遵循根级 `AGENTS.md`
 
 ## Memory quick pass
+- `MEMORY.md` 中与本轮最相关的是 ListenToList 的目录浏览共享内核、播放队列语义、以及根级 AGENTS 真相源路线。
+- 本轮 memory 只用于恢复仓库上下文，不作为产品需求或官方依据。
 
-### 命中信息
-- `MEMORY.md` 中 ListenToList 最近已有“queue-aware playback”推进记录，说明本仓库语境里 queue 不是纯 UI 概念。
-- 这些记忆仅用于帮助理解为什么本轮研究聚焦 queue / playlist 概念，不作为官方依据。
+## 官方最佳实践（仅官方来源）
 
-### 当前结论边界
-- 最终输出里的原则必须全部回到官方页面落锚。
-- memory 只做任务上下文，不作为论据来源。
+### 1) 长按与上下文操作
+- 来源：Android Developers - Tap and press
+- 链接：https://developer.android.com/develop/ui/compose/touch-input/pointer-input/tap-and-press
+- 关键点：
+  - `combinedClickable` 是 Compose 中同时承载 click / long-click 的推荐入口。
+  - 长按适合触发上下文菜单或 selection mode。
+  - 官方示例明确把长按与上下文菜单关联在列表项上。
+  - 官方示例还建议在长按触发时加入 `HapticFeedbackType.LongPress` 之类的触感反馈，帮助用户确认状态切换。
 
-## 官方资料采集（待补充）
+### 2) 选择态 dynamic top app bar
+- 来源：Android Developers - Create a dynamic top app bar on scroll
+- 链接：https://developer.android.com/develop/ui/compose/components/app-bars-dynamic
+- 关键点：
+  - 官方示例直接展示了“selectedItems + top app bar actions”的模式。
+  - 选择态下，top app bar 应切换为上下文工具栏，而不是维持普通浏览态操作。
 
-### 候选主题
-- Media3 ExoPlayer playlists
-- MediaItem / MediaMetadata / RequestMetadata
-- MediaSession / MediaController / service lifecycle
-- MediaLibraryService / browse tree / children
-- Media item identity, queue mutation, move/remove/replace semantics
+### 3) Search bar / app bar 搜索入口
+- 来源：Android Developers - Search bar
+- 链接：https://developer.android.com/develop/ui/compose/components/search-bar
+- 关键点：
+  - 搜索入口通常承载在 app bar / top app bar 行为中。
+  - 结果项示例使用 `ListItem` 的 `leadingContent` + 主/副文本组织结果，不依赖额外“类型标签”按钮。
 
-## 官方资料采集（已核实）
+### 4) Menus / bottom sheets 用于扩展动作
+- 来源：Android Developers - Bottom sheets
+- 链接：
+  - https://developer.android.com/develop/ui/compose/components/bottom-sheets
+- 关键点：
+  - 与单个内容项强相关的一组操作，适合用 modal bottom sheet 承载。
+  - 扩展动作适合收纳在 menu / overflow 中，避免列表行堆叠过多显式按钮。
 
-### 1) Playlists | Android media | Android Developers
-- 链接: https://developer.android.com/media/media3/exoplayer/playlists
-- 可直接支持的点:
-  - Playlist API 定义在 `Player` 接口上；Player 负责顺序播放多个 `MediaItem`。
-  - 支持 `add/move/remove/replace/set/clear` 等列表变更语义。
-  - 正在播放的 item 被 move/remove/replace 时，播放器有明确的不中断/自动接续语义。
-  - `MediaItem.mediaId` 用于标识 playlist item；若未显式设置，则使用 URI 字符串。
-  - 可用 custom tag 关联 app data；官方示例用于 playlist transition 时更新 UI。
-  - `onMediaItemTransition` 适合更新“当前播放项 UI”；`onTimelineChanged(...PLAYLIST_CHANGED)` 适合更新“整个队列 UI”。
-  - shuffle 打开时播放顺序可与原始索引不同；`getCurrentMediaItemIndex()` 仍指向原始未打乱顺序。
+### 5) 后台下载与进度观察
+- 来源：Android Developers - WorkManager overview；Observe intermediate worker progress
+- 链接：
+  - https://developer.android.com/topic/libraries/architecture/workmanager
+  - https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/observe
+- 关键点：
+  - 需要跨进程/跨重启持续执行的下载任务，优先放进 WorkManager 这类持久后台工作框架。
+  - UI 层不要自造“假进度”；应以 Worker 的真实状态与进度为真相源，再把元数据补齐给页面。
 
-### 2) Media items | Android media | Android Developers
-- 链接: https://developer.android.com/media/media3/exoplayer/media-items
-- 可直接支持的点:
-  - Playlist API 基于 `MediaItem`。
-  - `MediaItem.Builder` 可同时设置 `mediaId`、`tag`、`uri`。
-  - 附加 metadata/tag 的典型用途是 playlist transition 时更新 app UI。
+## 本地代码勘察结论
 
-### 3) The Player Interface | Android media | Android Developers
-- 链接: https://developer.android.com/media/media3/session/player
-- 可直接支持的点:
-  - `Player` 的职责包括 managing a playlist/queue of media items、shuffle/repeat/speed 等播放属性。
-  - `MediaController` 通过 `MediaSession` 把 playback / playlist 调用转发给 `Player`。
-  - `MediaBrowser` 在 `MediaController` 能力之上，额外与 `MediaLibrarySession` 交互以浏览内容。
+### 1) 搜索结果页现状
+- 关键文件：
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/StorageSearchPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/SearchWidgets.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/viewmodels/StorageSearchVM.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/viewmodels/StorageSearchModels.kt`
+- 现状：
+  - `StorageSearchResultRow(...)` 目前同时显示左侧图标、类型 badge、右侧“定位”按钮。
+  - 聚合搜索页与目录页内部搜索共用同一个 `StorageSearchResultRow(...)`。
+  - 聚合搜索页短按目录会打开目录；短按音乐会调用 `StorageSearchVM.playEntry(entry)` 从所在目录播放。
 
-### 4) Control and advertise playback using a MediaSession | Android media | Android Developers
-- 链接: https://developer.android.com/media/media3/session/control-playback
-- 可直接支持的点:
-  - MediaSession 的职责是把外部来源命令路由到真正播放媒体的 player。
-  - session 可直接修改其 player 的 playlist；controller 在拥有相应 command 时也可改 playlist。
-  - 若 controller 添加的 `MediaItem` 没有可直接播放的 URI，应通过 `onAddMediaItems()` 做解析。
-  - 这类“待解析请求”可由 `MediaItem.id`、`RequestMetadata.mediaUri`、`RequestMetadata.searchQuery`、`MediaMetadata` 来描述。
-  - `onSetMediaItems()` 可把“单个请求项”扩展为“整条 playlist”，并指定起播 index/position。
+### 2) 目录页现状
+- 关键文件：
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/devices/StorageBrowserPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/viewmodels/StorageBrowserVM.kt`
+- 现状：
+  - 顶栏常态右上角有搜索按钮 + 选择按钮。
+  - 选择态由 `toggleSelectMode()` 手动进入。
+  - 选择态当前唯一显式动作是右下角 `FloatingActionButton(icon_download)`，但其真实代码路径是 `CreatePlaylistVM.importFromEntries(selectedEntries)`，不是下载。
+  - `collectSelectedMusicEntries()` 已经能把“选中的目录 + 音乐文件”解析成真实音乐条目列表，可直接复用于批量加入歌单 / 加入队列 / 下载列表。
 
-### 5) Background playback with a MediaSessionService | Android media | Android Developers
-- 链接: https://developer.android.com/media/media3/session/background-playback
-- 可直接支持的点:
-  - 只要 `Player` 的 playlist 中存在 `MediaItem`，通知就会创建。
-  - 更新现有 item 的 metadata 可用 `replaceMediaItem`，且无需中断播放（与 playlists 页面相互印证）。
-  - 播放恢复由 app 自己负责存储 playlist、当前项 metadata、起播位置；也可恢复 playback speed / repeat mode / shuffle mode。
-  - 为冷启动/重启后的系统恢复，建议使用本地可用 metadata（title / artwork）。
+### 3) 播放页现状
+- 关键文件：
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/PlayerPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/viewmodels/PlayerVM.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/singleton/PlayerControllerRepository.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/singleton/PlaybackQueueModels.kt`
+- 现状：
+  - 封面/歌词区域在 `MusicPlayerBody(...)` 中整体居中。
+  - 下方 `MusicPanel(...)` 把睡眠、歌词、上一首、播放暂停、下一首、队列、播放模式全部塞在同一行。
+  - 当前 runtime queue 的上下文类型只有 `USER_PLAYLIST` 和 `FOLDER`，不适合承接“外部追加到当前播放队列”的新动作。
 
-### 6) Serve content with a MediaLibraryService | Android media | Android Developers
-- 链接: https://developer.android.com/media/media3/session/serve-content
-- 可直接支持的点:
-  - media library 是树结构：单 root + children；节点可 playable 或 browsable。
-  - `MediaLibrarySession` 扩展 `MediaSession`，增加 `onGetLibraryRoot/onGetChildren/onGetSearchResult`。
-  - media item 可声明 item-scoped command buttons，例如 “add to playlist”。
-  - `MediaMetadata.supportedCommands` 可声明某个 `MediaItem` 支持哪些 item command。
-  - item 级自定义命令通过 media item ID 进入 session callback 处理。
+### 4) 设置页现状
+- 关键文件：
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/Page.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/core/Routes.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/Root.kt`
+- 现状：
+  - 设置页已有主题、日志、更多、关于等入口。
+  - 尚无下载管理路由或页面。
 
-### 7) Create a basic media player app using Media3 ExoPlayer | Android media | Android Developers
-- 链接: https://developer.android.com/media/implement/playback-app
-- 可直接支持的点:
-  - `MediaSession` 自动与 `Player` 状态同步。
-  - Playback / playlist commands 经由 session 自动下发给 player。
-  - `MediaLibrarySession` 以树结构服务内容库，并且可按客户端请求返回不同 root / 不同 tree。
-  - 同时指出：若允许 controller 增加 media items，应实现 `onAddMediaItems()`。
+### 5) 下载基础设施真实状态（编译阶段纠偏）
+- 关键文件：
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/singleton/DownloadRepository.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/core/DownloadWorker.kt`
+  - `android/app/build.gradle.kts`
+  - `android/gradle/libs.versions.toml`
+- 结论：
+  - 仓库并非“没有下载基础设施”，而是已有 `WorkManager + DownloadWorker + DownloadRepository` 的真实雏形。
+  - 该仓库已经支持：
+    - 从 `StorageEntry` 批量入队下载；
+    - 从当前播放音乐入队下载；
+    - 通过 `WorkInfo` 追踪状态与进度；
+    - 取消/重试已存在的下载任务。
+  - 本轮需要做的不是新造下载模型，而是：
+    1. 修正下载仓库里对 `WorkInfo` 元数据读取的实现；
+    2. 把搜索/目录/播放/设置页入口接到现有下载仓库。
 
-### 8) Media apps for cars overview | Android for Cars | Android Developers
-- 链接: https://developer.android.com/training/cars/media/
-- 可直接支持的点:
-  - 浏览器看到的是 `MediaItem` 树。
-  - `FLAG_PLAYABLE` 表示叶子单条可播放内容；`FLAG_BROWSABLE` 表示有后代的内容节点。
-  - 既可 browsable 又可 playable 的 item “operates like a playlist”：既可浏览其后代，也可选择播放其全部后代。
-
-### 9) MediaItem.RequestMetadata | API reference | Android Developers
-- 链接: https://developer.android.com/reference/androidx/media3/common/MediaItem.RequestMetadata
-- 可直接支持的点（来自搜索结果摘要）:
-  - RequestMetadata 是“帮助 player 理解由 MediaItem 表示的 playback request 的元数据”。
-  - 尤其适用于请求被转发到其他 player 实例、且发起方并不知道实际播放所需 `LocalConfiguration` 的场景。
-  - 公开字段包括 `mediaUri`、`searchQuery`、`extras`。
-
-### 10) MediaSession | API reference | Android Developers
-- 链接: https://developer.android.com/reference/androidx/media3/session/MediaSession
-- 可直接支持的点（来自搜索结果摘要）:
-  - MediaSession 向其他进程/系统暴露 player 功能、playlist 信息和当前播放 item。
-  - 一般一个 app 对其全部 playback 只需要一个 session；若要更细粒度控制才需要多个 session。
-
-## 原则提炼草案
-
-### P1. user playlist 与 playback queue 应分离（多页资料推论）
-- 依据组合：`Player` 管理 runtime playlist/queue；`MediaLibrarySession` 暴露 browse tree；item 级命令可做 “add to playlist”。
-- 建模含义：用户保存的歌单应是库中的持久实体；真正送给 Player 的是一次播放会话的运行时队列。
-
-### P2. Player / MediaSession / MediaLibrarySession 三层职责不要混用（多页资料归纳）
-- Player：播放状态与 playlist/queue。
-- MediaSession：把外部控制与 player 绑定并对外暴露。
-- MediaLibrarySession：额外提供内容浏览/搜索树。
-
-### P3. “一个播放请求”可以解析成“多个队列项”（官方直接支持）
-- `onAddMediaItems()` 支持把不可直接播放的请求项解析成可播放项。
-- `onSetMediaItems()` 可把单个请求扩展成整条 playlist 并指定起播位置。
-
-### P4. 应显式设置稳定 `mediaId`，不要默认依赖 URI（多页资料推论）
-- 官方直接说明：`mediaId` 标识 item；未设置则用 URI 字符串。
-- 建模含义：音乐 App 往往需要稳定 ID 去承接 browse、命令、持久化、恢复、URI 轮换等场景。
-
-### P5. playback-facing metadata 放在 `MediaItem`，持久化/恢复状态放在 app storage（多页资料推论）
-- 官方直接说明：UI 可随 media-item transition 使用 metadata/tag；恢复需 app 自己存 playlist、当前项 metadata、position 等。
-- 建模含义：`MediaItem` 是“当前播放会话投影”，不是唯一持久真相源。
-
-### P6. browse tree 与 queue 是两套模型；browsable/playable 语义要保留（官方直接支持 + 建模推论）
-- library 是树；节点可 browsable/playable；有些容器两者皆可并表现得像 playlist。
-- 建模含义：目录、专辑、歌单、搜索结果容器不应简单扁平化成同一种 queue item。
-
-### P7. 队列变更优先用 add/replace/move/remove 语义，而不是粗暴重建（官方直接支持）
-- Playlist API 明确提供 mutation 操作。
-- 当前播放项被 move/remove/replace 时，官方定义了连续播放行为；metadata 更新也可用 `replaceMediaItem`。
-
-### P8. canonical order 与 shuffle/repeat runtime state 应分离（官方事实 + 推论）
-- shuffle 打开后实际播放顺序独立于原始索引；当前索引仍映射原始未打乱顺序。
-- 建模含义：用户歌单顺序/专辑顺序是持久顺序，shuffle 是会话层覆盖状态。
-
-### P9. “add to playlist” 这类库动作更适合 item-scoped command，而不是 transport control（多页资料推论）
-- 官方直接说明 media item command buttons / supportedCommands 可承载 item 级动作。
-- 建模含义：用户歌单编辑、收藏、加入队列等动作应区分 item 级库操作与 session/player 级播放控制。
-
-## 本地源码审计：已确认的概念层信号
-
-### 1. 当前播放上下文直接持有 `Playlist`，队列语义由 `Playlist` 派生
-- `PlayerRepository` 直接持有 `_playlist: MutableStateFlow<Playlist?>` 与 `_music`，并据此推导 `previousMusic` / `nextMusic` / `onCompleteMusic`。
-- `PlayerControllerRepository.play()` 与 `PlaybackService.play()` 都是先加载 `Playlist`，再 `playerRepository.setCurrent(target, playlist)`，最后通过 `playQueueUtil(playlist, targetId, playMode, player)` 把队列灌给 Media3。
-- 这说明当前系统没有独立的“播放队列模型”；所谓 queue 只是从 `Playlist` 现算出来的运行态投影。
-
-### 2. 文件夹播放不是临时队列，而是“创建一个真实播放列表后再播放”
-- `StorageBrowserVM.clickEntry()` 点击音乐文件时，会走 `playFromFolder()`。
-- `playFromFolder()` 会：
-  1. 读取父目录歌曲；
-  2. 生成 `playlistName = 文件夹播放 - <folder>`；
-  3. 若同名列表已存在则先删掉；
-  4. 调 `ctCreatePlaylist(...)` 创建真实 playlist；
-  5. 再用 `playerControllerRepository.play(musicId, created.id)` 播放。
-- 这意味着“浏览目录并播放一首歌”会污染用户歌单空间，而且同名碰撞时会删除原有列表。
-
-### 3. Rust 数据层把曲目顺序挂在 `MusicModel.order` 上，而不是 playlist membership 上
-- `ease-client-schema/src/v3/models/music.rs` 中 `MusicModel` 包含 `order`；`PlaylistMusicModel` 只有 `playlist_id` / `music_id`，没有 membership 级别顺序字段。
-- `DatabaseServer.load_musics_by_playlist_id()` 读取某个 playlist 的曲目后，按 `music.order` 排序。
-- `cts_reorder_music_in_playlist()` 最终调用 `set_music_order(from.meta.id, order)`，修改的也是全局 music 实体。
-- 由于 `add_music_impl()` 会按 `StorageEntryLoc` 复用已有 `MusicId`，同一首歌可被多个 playlist 共享同一个 `MusicModel`。因此一个 playlist 中调序，本质上会改这首歌的全局顺序属性，而非该 playlist 中的 membership 顺序。
-
-### 4. 当前实现没有独立的 queue item / play context 身份
-- `buildMediaItemInternal()` 直接把 `MediaItem.mediaId` 设为 `music.meta.id`。
-- `PlayerRepository` 用 `playlist.musics.indexOfFirst { id == currentId }` 反推出当前 index。
-- 这使播放层只能识别“哪首歌”，不能识别“这首歌在当前会话中的哪一个队列项 / 来自哪个上下文”。
-- 该问题在“同一首歌出现在多个来源”“未来支持重复添加同一首歌到队列”“想对当前队列项做 remove/move”时会放大。
-
-### 5. `PlaylistRepository` 承担了过多非 playlist 语义责任
-- 除了增删改查 playlist，它还负责：metadata probe / duration 回填、播放期 prime、storage 删除联动 reload、pre-remove 事件广播。
-- 这不是单纯的‘代码多’，而是表明当前“歌单仓库”同时承担了媒体元数据后台任务与播放链路协同职责，playlist 概念边界偏宽。
-
-### 6. 外部 browse tree 与 app 内 storage/browser 仍是两套世界
-- AndroidManifest 当前只声明 `androidx.media3.session.MediaSessionService`，没有 `android.media.browse.MediaBrowserService` action，也没有 `MediaLibraryService`。
-- 结合 app 内已有的 storage browser / playlist / dashboard，可见产品已经有“内容树”概念，但系统对外只暴露 playback session，不暴露 library tree。
-- 若未来目标包含 Android Auto / Assistant / 系统媒体浏览，当前概念层会出现“app 内可浏览，系统外不可浏览”的断层。
-
-## 官方对照：Android / Media3 一手资料抽出的概念边界
-
-> 检索日期：2026-03-16；来源限定为 `developer.android.com` 官方文档。
-
-### 官方直接可确认的点
-1. `Player` 负责管理 `MediaItem` playlist / queue，并提供 `add / move / remove / replace / set / clear` 等显式队列变更语义。
-2. `MediaSession.Callback.onSetMediaItems()` 可以把“一个请求项”扩展成整条 playlist，并指定起播 index / position。
-3. `MediaItem.mediaId` 是 playlist item 的标识；若不显式设置，默认取 URI。
-4. `MediaLibraryService` / `MediaLibrarySession` 暴露的是可浏览内容树（root / children / playable / browsable item），与纯 playback session 是不同能力。
-5. 官方示例明确支持 media-item 级 command button，例如 `add_to_playlist`，说明“加入歌单”更接近 library action，而非 transport control。
-6. shuffle 后的实际播放顺序可以变化，但 `getCurrentMediaItemIndex()` 仍指向原始 playlist 索引，说明 canonical order 与 runtime order 是两个层次。
-
-### 基于多页官方资料的稳妥推论
-1. user playlist（持久化歌单）与 playback queue（本次会话运行态队列）应分离建模。
-2. browse item / request item / resolved queue item 不应天然等价；目录、专辑、歌单、搜索结果都可以先是可浏览/可解析对象，再展开成真正队列。
-3. 若 App 既有内容浏览又有播放控制，Player / MediaSession / MediaLibrarySession 的职责边界最好显式保留，不要让 Repository 额外长出平行的“当前队列真相源”。
-
-## 2026-03-16 实施阶段新增发现
-
-### 1. Rust v4 schema + backend 已完成 membership order 迁移闭环
-- `ease-client-schema` 新增 `v4`，`PlaylistMusicModel` 从单纯 `music_id` 升级为 `{ music_id, order }`。
-- `upgrade_v3_to_v4(...)` 会读取 v3 `playlist_music + music.order`，按旧顺序为每个 playlist 生成新的 membership order。
-- backend `SCHEMA_VERSION` 已升到 `4`，并串起 `upgrade_v1_to_v2 / upgrade_v2_to_v3 / upgrade_v3_to_v4`。
-- `DatabaseServer.load_musics_by_playlist_id()` 现在按 relation.order 返回，并把 relation.order 覆写到返回的 `MusicModel.order`，让上层 playlist 视图拿到的是 membership order，而不是全局顺序。
-
-### 2. folder play 已改成 ensure music + runtime queue，不再创建真实 playlist
-- `StorageBrowserVM.playFromFolder()` 不再生成 “文件夹播放 - xxx” 歌单。
-- 新流程变成：
-  1. 列当前文件夹歌曲；
-  2. `ctEnsureMusics(...)` 确保这些歌曲在 DB 中有 `MusicId`；
-  3. 继续做 duration request 与 folder prefetch；
-  4. 调 `PlayerControllerRepository.playFolder(...)` 构造临时 queue 并播放。
-- 这已经与官方“browse item / request item 解析成 runtime queue”思路对齐，不再污染用户歌单空间。
-
-### 3. Android 已形成 queue-first 运行态模型
-- 新增 `PlaybackContext / PlaybackQueueEntry / PlaybackQueueSnapshot / PlaybackSessionStore`。
-- `PlayerRepository` 不再只从 `Playlist` 推导前后曲，而是直接维护 runtime queue、current queue entry 与 remove action。
-- `MusicPlayerUtil` 已支持基于 `PlaybackQueueSnapshot` 生成真正的 Media3 queue，并把 `MediaItem.mediaId` 切到 queueEntryId。
-
-### 4. 实施中暴露出的关键运行态问题与已落地修法
-- 问题 A：`_queue.currentQueueEntryId` 与 `_currentQueueEntryId` 分裂，导致删除当前项/刷新 playlist 可能命中旧项。
-  - 修法：`PlayerRepository.setPlaybackSession / updatePlaybackQueue / updateCurrentQueueEntry` 统一同步 snapshot currentQueueEntryId。
-- 问题 B：边界 next/previous fallback 会重播当前项。
-  - 修法：在 `PlayerControllerRepository` 与 `PlaybackService` 中显式对首尾边界做 no-op，只有“命令不可用但目标仍存在”时才走 fallback 重建。
-- 问题 C：新播放请求失败时会清空 repo/session，但旧 player 可能继续播放。
-  - 修法：失败分支统一 stop/clear 当前 player，再重置 repo 与 session store。
-- 问题 D：切歌后立即持久化 session 可能把“旧 queueEntryId + 新 playWhenReady/position”写回磁盘。
-  - 修法：seek 到相邻项时，persist 接口允许显式传入 target queueEntryId override。
-
-### 5. 额外实现细节
-- `PlayerControllerRepository.playFolder()` 现在按 target `musicId` 匹配临时 queue 项，而不是仅靠输入列表索引，避免 ensure/abstract 构造过程中发生过滤时误选目标。
-- `StorageBrowserVM.clickEntry()` 已去掉不再需要的 “folder playlist prefix / rootName” 参数链。
-- 原先只用于全局 `MusicModel.order` 的 backend 内部 `set_music_order(...)` 已删除，避免旧语义继续滞留。
-
-### 6. 当前仍应注意的一个边界风险
-- playlist queue 的 `queueEntryId` 目前对“同一 playlist 中的重复曲目 occurrence”仍不是独立主键；本轮修复已防住核心语义回归，但若产品未来要正式支持“同歌多次出现且按 occurrence 精确操作”，需要引入 membership-level stable identity，而不只是 `playlistId + musicId` 级别标识。
+## 方案冻结结论
+1. 搜索结果行改为“图标 + 标题 + 副标题”，去掉 badge 与定位按钮；长按后通过 bottom sheet 打开定位 / 加入播放队列 / 加入歌单等动作。
+2. 搜索结果长按除了定位 / 加队列 / 加歌单，也补上下载入口；对应 ViewModel 直接接现有下载仓库。
+3. 目录页改为长按进入多选；常态顶栏只保留搜索；选择态切换为上下文 top bar，并把下载 / 加入歌单 / 加入播放队列收纳进 overflow menu。
+4. 播放页将控制区拆成两层：主传输控制（上一首/播放暂停/下一首）与次级动作（睡眠/歌词/下载/队列/播放模式）。
+5. 下载管理页直接接入现有 `DownloadRepository + DownloadWorker`，并补齐任务元数据持久化与页面入口。
+6. 新增 `TEMPORARY` 播放上下文，用于承接“从搜索页/目录页加入到当前播放队列”的动作，避免污染用户歌单语义。

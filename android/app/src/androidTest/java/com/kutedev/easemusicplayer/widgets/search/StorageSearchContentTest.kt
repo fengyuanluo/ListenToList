@@ -61,7 +61,7 @@ class StorageSearchContentTest {
                         onClearQuery = {},
                         onSelectStorage = {},
                         onResultClick = {},
-                        onLocate = {},
+                        onResultLongClick = {},
                         onLoadMore = {},
                         onRetryStorage = {},
                     )

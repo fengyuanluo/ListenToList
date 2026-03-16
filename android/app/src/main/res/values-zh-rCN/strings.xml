@@ -117,9 +117,6 @@
     <string name="storage_search_idle_desc">在上方输入关键词，即可通过官方 API 搜索所有已连接的 AList / OpenList 实例。</string>
     <string name="storage_search_load_more">继续加载</string>
     <string name="storage_search_action_locate">定位</string>
-    <string name="storage_search_badge_directory">目录</string>
-    <string name="storage_search_badge_audio">音频</string>
-    <string name="storage_search_badge_file">文件</string>
     <string name="storage_search_retry">重试</string>
     <string name="storage_search_current_scope_hint">当前搜索范围：%1$s</string>
     <string name="storage_search_empty_title">当前目录暂无匹配结果</string>
@@ -139,5 +136,21 @@
     <string name="storage_search_play_timeout">无法打开所在目录：请求超时。</string>
     <string name="storage_search_target_missing">目标音频已经不在所在目录中。</string>
     <string name="storage_search_located_current_dir">当前已经位于该文件所在目录。</string>
+    <string name="common_add_to_queue">加入播放列表</string>
+    <string name="common_add_to_playlist">加入歌单</string>
+    <string name="common_download">下载</string>
+    <string name="setting_downloads_title">下载管理</string>
+    <string name="setting_downloads_desc">查看进行中、失败与已完成的下载任务</string>
+    <string name="setting_downloads_dir">下载文件保存目录：%1$s</string>
+    <string name="download_empty_title">还没有下载任务</string>
+    <string name="download_empty_desc">可以从播放页或目录多选中加入下载，稍后回到这里统一查看进度。</string>
+    <string name="download_status_queued">排队中</string>
+    <string name="download_status_running">下载中</string>
+    <string name="download_status_completed">已完成</string>
+    <string name="download_status_failed">失败</string>
+    <string name="download_status_cancelled">已取消</string>
+    <string name="download_status_blocked">等待中</string>
+    <string name="download_action_cancel">取消</string>
+    <string name="download_action_retry">重试</string>
 
 </resources>

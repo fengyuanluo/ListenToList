@@ -68,6 +68,10 @@ fun RouteThemeSettings(): String {
     return "Settings/Theme"
 }
 
+fun RouteDownloadManager(): String {
+    return "Settings/Downloads"
+}
+
 val LocalNavController = compositionLocalOf<NavHostController> {
     error("No LocalNavController provided")
 }

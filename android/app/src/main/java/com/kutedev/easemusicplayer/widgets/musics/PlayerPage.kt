@@ -326,6 +326,7 @@ private fun CoverImage(dataSourceKey: DataSourceKey?) {
     ) {
         MusicCover(
             modifier = Modifier
+                .offset(y = (-10).dp)
                 .dropShadow(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     offsetX = 0.dp,
@@ -516,6 +517,7 @@ private fun MusicPlayerBody(
 
     Box(
         modifier = Modifier
+            .padding(top = 4.dp, bottom = 28.dp)
             .onSizeChanged { size ->
                 if (widgetWidth != size.width) {
                     widgetWidth = size.width;
@@ -581,21 +583,80 @@ private fun MusicPlayerBody(
 }
 
 @Composable
+private fun TransportControls(
+    playerVM: PlayerVM = hiltViewModel(),
+) {
+    val previousMusic by playerVM.previousMusic.collectAsState()
+    val nextMusic by playerVM.nextMusic.collectAsState()
+    val playing by playerVM.playing.collectAsState()
+    val loading by playerVM.loading.collectAsState()
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        EaseIconButton(
+            sizeType = EaseIconButtonSize.Large,
+            buttonType = EaseIconButtonType.Default,
+            painter = painterResource(id = R.drawable.icon_play_previous),
+            disabled = previousMusic == null,
+            onClick = {
+                playerVM.playPrevious()
+            }
+        )
+        if (!playing) {
+            EaseIconButton(
+                sizeType = EaseIconButtonSize.Large,
+                buttonType = EaseIconButtonType.Primary,
+                painter = painterResource(id = R.drawable.icon_play),
+                disabled = loading,
+                overrideColors = if (loading) {
+                    EaseIconButtonColors(
+                        buttonDisabledBg = MaterialTheme.colorScheme.secondary,
+                    )
+                } else {
+                    null
+                },
+                onClick = {
+                    playerVM.resume()
+                }
+            )
+        } else {
+            EaseIconButton(
+                sizeType = EaseIconButtonSize.Large,
+                buttonType = EaseIconButtonType.Primary,
+                painter = painterResource(id = R.drawable.icon_pause),
+                onClick = {
+                    playerVM.pause()
+                }
+            )
+        }
+        EaseIconButton(
+            sizeType = EaseIconButtonSize.Large,
+            buttonType = EaseIconButtonType.Default,
+            painter = painterResource(id = R.drawable.icon_play_next),
+            disabled = nextMusic == null,
+            onClick = {
+                playerVM.playNext()
+            }
+        )
+    }
+}
+
+@Composable
 private fun MusicPanel(
     hasLyric: Boolean,
     showLyric: Boolean,
     hasQueue: Boolean,
     onToggleLyric: () -> Unit,
+    onDownload: () -> Unit,
     onOpenQueue: () -> Unit,
     playerVM: PlayerVM = hiltViewModel(),
     sleepModeVM: SleepModeVM = hiltViewModel()
 ) {
     val playMode by playerVM.playMode.collectAsState()
     val timeToPauseState by sleepModeVM.state.collectAsState()
-    val previousMusic by playerVM.previousMusic.collectAsState()
-    val nextMusic by playerVM.nextMusic.collectAsState()
-    val playing by playerVM.playing.collectAsState()
-    val loading by playerVM.loading.collectAsState()
 
     val isTimeToPauseOpen = timeToPauseState.enabled
     val modeDrawable = when (playMode) {
@@ -607,7 +668,8 @@ private fun MusicPanel(
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth()
     ) {
         EaseIconButton(
             sizeType = EaseIconButtonSize.Medium,
@@ -650,47 +712,9 @@ private fun MusicPanel(
         EaseIconButton(
             sizeType = EaseIconButtonSize.Medium,
             buttonType = EaseIconButtonType.Default,
-            painter = painterResource(id = R.drawable.icon_play_previous),
-            disabled = previousMusic == null,
+            painter = painterResource(id = R.drawable.icon_download),
             onClick = {
-                playerVM.playPrevious()
-            }
-        )
-        if (!playing) {
-            EaseIconButton(
-                sizeType = EaseIconButtonSize.Large,
-                buttonType = EaseIconButtonType.Primary,
-                painter = painterResource(id = R.drawable.icon_play),
-                disabled = loading,
-                overrideColors = if (loading) {
-                    EaseIconButtonColors(
-                        buttonDisabledBg = MaterialTheme.colorScheme.secondary,
-                    )
-                } else {
-                    null
-                },
-                onClick = {
-                    playerVM.resume()
-                }
-            )
-        }
-        if (playing) {
-            EaseIconButton(
-                sizeType = EaseIconButtonSize.Large,
-                buttonType = EaseIconButtonType.Primary,
-                painter = painterResource(id = R.drawable.icon_pause),
-                onClick = {
-                    playerVM.pause()
-                }
-            )
-        }
-        EaseIconButton(
-            sizeType = EaseIconButtonSize.Medium,
-            buttonType = EaseIconButtonType.Default,
-            painter = painterResource(id = R.drawable.icon_play_next),
-            disabled = nextMusic == null,
-            onClick = {
-                playerVM.playNext()
+                onDownload()
             }
         )
         EaseIconButton(
@@ -958,14 +982,14 @@ fun MusicPlayerPage(
                 )
             }
             Column(
-                modifier = Modifier.padding(36.dp, 10.dp)
+                modifier = Modifier.padding(start = 36.dp, end = 36.dp, top = 2.dp, bottom = 24.dp)
             ) {
                 Text(
                     text = currentMusic?.meta?.title ?: "",
-                    maxLines = 3,
+                    maxLines = 2,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 20.sp,
-                    modifier = Modifier.padding(0.dp, 10.dp)
+                    modifier = Modifier.padding(bottom = 12.dp)
                 )
                 MusicSlider(
                     currentDuration = formatDuration(currentDuration),
@@ -977,12 +1001,14 @@ fun MusicPlayerPage(
                         playerVM.seek(nextMS)
                     }
                 )
-            }
-            Row(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(0.dp, 48.dp)
-            ) {
+                Box(modifier = Modifier.height(22.dp))
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TransportControls()
+                }
+                Box(modifier = Modifier.height(18.dp))
                 MusicPanel(
                     hasLyric = hasLyric,
                     showLyric = showLyric,
@@ -991,6 +1017,9 @@ fun MusicPlayerPage(
                         if (hasLyric) {
                             showLyric = !showLyric
                         }
+                    },
+                    onDownload = {
+                        playerVM.downloadCurrent()
                     },
                     onOpenQueue = {
                         if (hasQueue) {
