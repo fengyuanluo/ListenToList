@@ -10,7 +10,7 @@
    - 协议：`POST /api/fs/search`
 
 2. **首页聚合搜索**
-   - 入口：Dashboard 顶部 `SearchCard` + 独立 `StorageSearchPage`
+   - 入口：左下角首页（播放列表页）顶部长条搜索框 + 独立 `StorageSearchPage`
    - 范围：所有已配置的 `StorageType.OPEN_LIST` 实例根目录 `/`
    - 协议：对每个实例并发调用 `POST /api/fs/search`
 
@@ -76,6 +76,8 @@ Rust 侧已将其映射到：
 ### 首页聚合搜索
 
 - 只搜索 `StorageType.OPEN_LIST` 实例
+- 首页入口为一个极简长条搜索框，不显示额外标题、说明或状态文案
+- 搜索框放在左下角首页（播放列表页）顶部，而不是中间设备页
 - 结果按实例分组
 - 每个实例单独处理：
   - 有结果正常展示

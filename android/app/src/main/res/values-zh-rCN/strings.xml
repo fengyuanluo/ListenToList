@@ -102,17 +102,12 @@
     <string name="import_musics_empty_storage_title">暂无可用设备</string>
     <string name="import_musics_empty_storage_desc">请先添加设备或重新连接现有设备，再继续导入曲目。</string>
 
-    <string name="storage_search_dashboard_title">跨实例搜索</string>
-    <string name="storage_search_dashboard_desc">基于官方 AList / OpenList 搜索 API，在 %1$d 个已连接实例间快速联搜。</string>
-    <string name="storage_search_dashboard_ready">已有 %1$d 个实例支持搜索</string>
-    <string name="storage_search_dashboard_empty">暂未发现可搜索的 AList / OpenList 实例</string>
-    <string name="storage_search_open_page">打开搜索页</string>
     <string name="storage_search_page_title">跨实例搜索</string>
     <string name="storage_search_page_subtitle">仅走官方 API · 按实例分组 · 支持直播放与快速定位</string>
     <string name="storage_search_home_title">搜索你连接的一切</string>
     <string name="storage_search_home_desc_idle">当前已有 %1$d 个可搜索实例，输入关键词即可开始。</string>
     <string name="storage_search_home_desc_active">已搜索 %1$d 个实例，累计 %2$d 条命中。</string>
-    <string name="storage_search_placeholder_home">搜索所有已连接的 AList / OpenList 实例</string>
+    <string name="storage_search_placeholder_home">搜索 AList / OpenList</string>
     <string name="storage_search_placeholder_directory">搜索当前目录</string>
     <string name="storage_search_scope_all">全部</string>
     <string name="storage_search_scope_directory">目录</string>

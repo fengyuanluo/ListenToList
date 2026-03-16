@@ -122,17 +122,12 @@
     <string name="log_preview_empty">日志为空或不存在</string>
     <string name="debug_confirm_desc">即将执行：%1$s。该操作可能导致崩溃，是否继续？</string>
 
-    <string name="storage_search_dashboard_title">Search AList / OpenList</string>
-    <string name="storage_search_dashboard_desc">Official indexed search across %1$d connected instances. Fast, clean, and ready to jump.</string>
-    <string name="storage_search_dashboard_ready">%1$d searchable instance(s) ready</string>
-    <string name="storage_search_dashboard_empty">No searchable AList / OpenList instance yet</string>
-    <string name="storage_search_open_page">Open Search</string>
     <string name="storage_search_page_title">Cross-instance Search</string>
     <string name="storage_search_page_subtitle">Official API only · grouped by instance · direct play and quick locate</string>
     <string name="storage_search_home_title">Search everything you connected</string>
     <string name="storage_search_home_desc_idle">%1$d searchable instance(s) are ready. Enter a keyword to start.</string>
     <string name="storage_search_home_desc_active">Searched %1$d instance(s), %2$d total hit(s).</string>
-    <string name="storage_search_placeholder_home">Search all connected AList / OpenList instances</string>
+    <string name="storage_search_placeholder_home">Search AList / OpenList</string>
     <string name="storage_search_placeholder_directory">Search inside current directory</string>
     <string name="storage_search_scope_all">All</string>
     <string name="storage_search_scope_directory">Folders</string>
