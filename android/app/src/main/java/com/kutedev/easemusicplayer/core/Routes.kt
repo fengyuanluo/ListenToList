@@ -1,5 +1,6 @@
 package com.kutedev.easemusicplayer.core
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
@@ -18,8 +19,25 @@ fun RouteAddDevices(id: String): String {
     return "AddDevices/${id}"
 }
 
-fun RouteStorageBrowser(id: String): String {
-    return "StorageBrowser/${id}"
+fun RouteStorageBrowser(
+    id: String,
+    path: String? = null,
+    rawPath: Boolean = false,
+): String {
+    val route = "StorageBrowser/${id}"
+    if (path == null) {
+        return route
+    }
+    val value = if (rawPath) path else Uri.encode(path)
+    return "$route?path=$value"
+}
+
+fun RouteStorageSearch(
+    query: String = "",
+    rawQuery: Boolean = false,
+): String {
+    val encoded = if (rawQuery) query else Uri.encode(query)
+    return "StorageSearch?query=$encoded"
 }
 
 fun RoutePlaylist(id: String): String {

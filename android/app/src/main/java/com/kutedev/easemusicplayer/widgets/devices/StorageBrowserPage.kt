@@ -51,6 +51,7 @@ import com.kutedev.easemusicplayer.components.EaseCheckbox
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseSearchField
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
@@ -58,15 +59,22 @@ import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
 import com.kutedev.easemusicplayer.viewmodels.BrowserScrollSnapshot
 import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
+import com.kutedev.easemusicplayer.viewmodels.StorageSearchListUiState
 import com.kutedev.easemusicplayer.viewmodels.StorageBrowserVM
 import com.kutedev.easemusicplayer.viewmodels.entryTyp
 import com.kutedev.easemusicplayer.widgets.playlists.CreatePlaylistsDialog
+import com.kutedev.easemusicplayer.widgets.search.StorageSearchErrorCard
+import com.kutedev.easemusicplayer.widgets.search.StorageSearchLoadingRow
+import com.kutedev.easemusicplayer.widgets.search.StorageSearchResultRow
+import com.kutedev.easemusicplayer.widgets.search.StorageSearchScopeSelector
 import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.CurrentStorageStateType
 import uniffi.ease_client_backend.StorageEntry
+import uniffi.ease_client_backend.StorageSearchEntry
+import uniffi.ease_client_backend.StorageSearchScope
 import uniffi.ease_client_backend.StorageEntryType
 
 @Composable
@@ -275,6 +283,128 @@ private fun StorageBrowserEntry(
 }
 
 @Composable
+private fun StorageBrowserSearchHeader(
+    searchState: StorageSearchListUiState,
+    onQueryChange: (String) -> Unit,
+    onClearQuery: () -> Unit,
+    onScopeChange: (StorageSearchScope) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 4.dp)
+    ) {
+        EaseSearchField(
+            value = searchState.query,
+            onValueChange = onQueryChange,
+            placeholder = stringResource(id = R.string.storage_search_placeholder_directory),
+            onClear = onClearQuery,
+        )
+        StorageSearchScopeSelector(
+            selectedScope = searchState.scope,
+            onScopeChange = onScopeChange,
+        )
+        Text(
+            text = stringResource(id = R.string.storage_search_current_scope_hint, searchState.parentPath),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+        )
+    }
+}
+
+@Composable
+private fun StorageBrowserSearchResults(
+    searchState: StorageSearchListUiState,
+    onClickEntry: (StorageSearchEntry) -> Unit,
+    onLocateEntry: (StorageSearchEntry) -> Unit,
+    onLoadMore: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    when {
+        searchState.loading -> {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(horizontal = 32.dp)
+            ) {
+                repeat(3) {
+                    StorageSearchLoadingRow()
+                }
+            }
+        }
+
+        searchState.error != null -> {
+            StorageSearchErrorCard(
+                errorType = searchState.error,
+                onRetry = onRetry,
+                modifier = Modifier.padding(horizontal = 32.dp),
+            )
+        }
+
+        !searchState.hasResults -> {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+                    .padding(18.dp)
+            ) {
+                Text(
+                    text = stringResource(id = R.string.storage_search_empty_title),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(id = R.string.storage_search_empty_desc),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+
+        else -> {
+            LazyColumn(
+                modifier = Modifier.padding(horizontal = 20.dp)
+            ) {
+                itemsIndexed(searchState.entries) { _, entry ->
+                    StorageSearchResultRow(
+                        entry = entry,
+                        subtitle = entry.parentPath,
+                        onClick = { onClickEntry(entry) },
+                        onLocate = { onLocateEntry(entry) },
+                    )
+                }
+                if (searchState.loadingMore) {
+                    item {
+                        StorageSearchLoadingRow(
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        )
+                    }
+                }
+                if (searchState.canLoadMore) {
+                    item {
+                        EaseTextButton(
+                            text = stringResource(id = R.string.storage_search_load_more),
+                            type = EaseTextButtonType.PrimaryVariant,
+                            size = EaseTextButtonSize.Medium,
+                            onClick = onLoadMore,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+                item {
+                    Box(modifier = Modifier.height(12.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun StorageBrowserEntries(
     currentPath: String,
     splitPaths: List<BrowserPathItem>,
@@ -405,6 +535,8 @@ private fun StorageBrowserEntries(
 fun StorageBrowserContent(
     title: String,
     loadState: CurrentStorageStateType,
+    searchSupported: Boolean,
+    searchState: StorageSearchListUiState,
     currentPath: String,
     splitPaths: List<BrowserPathItem>,
     entries: List<StorageEntry>,
@@ -416,22 +548,31 @@ fun StorageBrowserContent(
     scrollSnapshot: BrowserScrollSnapshot,
     onBack: () -> Unit,
     onNavigateDir: (String) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    onSearchScopeChange: (StorageSearchScope) -> Unit,
     onToggleAll: () -> Unit,
     onToggleSelectMode: () -> Unit,
     onClickEntry: (StorageEntry) -> Unit,
+    onClickSearchEntry: (StorageSearchEntry) -> Unit,
+    onLocateSearchEntry: (StorageSearchEntry) -> Unit,
+    onLoadMoreSearch: () -> Unit,
+    onRetrySearch: () -> Unit,
     onToggleEntry: (StorageEntry) -> Unit,
     onImportSelected: () -> Unit,
     onRequestPermission: () -> Unit,
     onReload: () -> Unit,
     onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
 ) {
-    val showBlockingLoading = loadState == CurrentStorageStateType.LOADING && entries.isEmpty()
+    val showBlockingLoading = !searchState.active &&
+        loadState == CurrentStorageStateType.LOADING &&
+        entries.isEmpty()
     val showBlockingError = (
         loadState == CurrentStorageStateType.TIMEOUT ||
             loadState == CurrentStorageStateType.AUTHENTICATION_FAILED ||
             loadState == CurrentStorageStateType.UNKNOWN_ERROR ||
             loadState == CurrentStorageStateType.NEED_PERMISSION
-        ) && entries.isEmpty()
+        ) && entries.isEmpty() && !searchState.active
 
     Box(
         modifier = Modifier
@@ -523,12 +664,28 @@ fun StorageBrowserContent(
                 }
             }
 
+            if (searchSupported) {
+                StorageBrowserSearchHeader(
+                    searchState = searchState,
+                    onQueryChange = onSearchQueryChange,
+                    onClearQuery = onClearSearch,
+                    onScopeChange = onSearchScopeChange,
+                )
+            }
+
             when {
                 showBlockingLoading -> StorageBrowserSkeleton()
                 showBlockingError -> StorageBrowserError(
                     type = loadState,
                     onReload = onReload,
                     onRequestPermission = onRequestPermission
+                )
+                searchState.active -> StorageBrowserSearchResults(
+                    searchState = searchState,
+                    onClickEntry = onClickSearchEntry,
+                    onLocateEntry = onLocateSearchEntry,
+                    onLoadMore = onLoadMoreSearch,
+                    onRetry = onRetrySearch,
                 )
                 else -> StorageBrowserEntries(
                     currentPath = currentPath,
@@ -582,6 +739,8 @@ fun StorageBrowserPage(
     val isRefreshing by storageBrowserVM.isRefreshing.collectAsState()
     val working by storageBrowserVM.working.collectAsState()
     val storage by storageBrowserVM.storage.collectAsState()
+    val searchSupported by storageBrowserVM.searchSupported.collectAsState()
+    val searchState by storageBrowserVM.searchState.collectAsState()
     val splitPaths by storageBrowserVM.splitPaths.collectAsState()
     val entries by storageBrowserVM.entries.collectAsState()
     val selectedPaths by storageBrowserVM.selected.collectAsState()
@@ -592,6 +751,8 @@ fun StorageBrowserPage(
     fun handleBack() {
         if (selectMode) {
             storageBrowserVM.exitSelectMode()
+        } else if (searchState.active) {
+            storageBrowserVM.clearSearch()
         } else if (canNavigateUp) {
             storageBrowserVM.navigateUp()
         } else {
@@ -599,7 +760,7 @@ fun StorageBrowserPage(
         }
     }
 
-    BackHandler(enabled = selectMode || canNavigateUp) {
+    BackHandler(enabled = selectMode || searchState.active || canNavigateUp) {
         handleBack()
     }
 
@@ -612,6 +773,8 @@ fun StorageBrowserPage(
     StorageBrowserContent(
         title = title,
         loadState = loadState,
+        searchSupported = searchSupported,
+        searchState = searchState,
         currentPath = currentPath,
         splitPaths = splitPaths,
         entries = entries,
@@ -623,11 +786,18 @@ fun StorageBrowserPage(
         scrollSnapshot = currentScrollSnapshot,
         onBack = { handleBack() },
         onNavigateDir = { path -> storageBrowserVM.navigateDir(path) },
+        onSearchQueryChange = { value -> storageBrowserVM.updateSearchQuery(value) },
+        onClearSearch = { storageBrowserVM.clearSearch() },
+        onSearchScopeChange = { value -> storageBrowserVM.updateSearchScope(value) },
         onToggleAll = { storageBrowserVM.toggleAll() },
         onToggleSelectMode = { storageBrowserVM.toggleSelectMode() },
         onClickEntry = { entry ->
             storageBrowserVM.clickEntry(entry)
         },
+        onClickSearchEntry = { entry -> storageBrowserVM.clickSearchEntry(entry) },
+        onLocateSearchEntry = { entry -> storageBrowserVM.locateSearchEntry(entry) },
+        onLoadMoreSearch = { storageBrowserVM.loadMoreSearch() },
+        onRetrySearch = { storageBrowserVM.retrySearch() },
         onToggleEntry = { entry -> storageBrowserVM.toggleSelect(entry) },
         onImportSelected = {
             scope.launch {

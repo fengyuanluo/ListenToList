@@ -3,8 +3,8 @@ mod env;
 mod impls;
 
 pub use backend::{
-    DirectHttpPlaybackSource, Entry, PlaybackHttpHeader, ResolvedPlaybackSource, StorageBackend,
-    StorageBackendError, StorageBackendResult, StreamFile,
+    DirectHttpPlaybackSource, Entry, PlaybackHttpHeader, ResolvedPlaybackSource, SearchResult,
+    SearchScope, StorageBackend, StorageBackendError, StorageBackendResult, StreamFile,
 };
 pub use bytes;
 pub use impls::{

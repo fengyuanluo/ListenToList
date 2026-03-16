@@ -1,11 +1,11 @@
 use crate::backend::{
-    DirectHttpPlaybackSource, Entry, PlaybackHttpHeader, ResolvedPlaybackSource, StorageBackend,
-    StorageBackendError, StorageBackendResult, StreamFile,
+    DirectHttpPlaybackSource, Entry, PlaybackHttpHeader, ResolvedPlaybackSource, SearchResult,
+    SearchScope, StorageBackend, StorageBackendError, StorageBackendResult, StreamFile,
 };
 
 use ease_client_tokio::tokio_runtime;
 use futures_util::future::BoxFuture;
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::StatusCode;
 use reqwest::Url;
 use serde::de::DeserializeOwned;
@@ -24,6 +24,14 @@ const OPENLIST_RETRY_BASE_DELAY_MS: u64 = 400;
 const OPENLIST_RETRY_MAX_DELAY_MS: u64 = 2000;
 const OPENLIST_TCP_KEEPALIVE: Duration = Duration::from_secs(60);
 const OPENLIST_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+const OPENLIST_BROWSER_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+     (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36";
+const OPENLIST_BROWSER_ACCEPT: &str = "application/json, text/plain, */*";
+const OPENLIST_BROWSER_ACCEPT_LANGUAGE: &str = "zh-CN,zh;q=0.9,en;q=0.8";
+const OPENLIST_BROWSER_SEC_CH_UA: &str =
+    "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"134\"";
+const OPENLIST_BROWSER_SEC_CH_UA_MOBILE: &str = "?0";
+const OPENLIST_BROWSER_SEC_CH_UA_PLATFORM: &str = "\"Linux\"";
 
 pub struct BuildOpenListArg {
     pub addr: String,
@@ -62,6 +70,12 @@ struct FsListData {
     total: Option<i64>,
 }
 
+#[derive(Deserialize)]
+struct FsSearchData {
+    content: Vec<FsSearchObject>,
+    total: Option<i64>,
+}
+
 #[derive(Deserialize, Clone)]
 struct FsObject {
     name: String,
@@ -73,6 +87,14 @@ struct FsObject {
     r#type: Option<i64>,
     #[serde(default)]
     raw_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct FsSearchObject {
+    parent: String,
+    name: String,
+    size: Option<u64>,
+    is_dir: bool,
 }
 
 fn normalize_path(path: &str) -> String {
@@ -147,6 +169,41 @@ async fn sleep_backoff(delay: Duration) -> StorageBackendResult<()> {
         })
         .await?;
     Ok(())
+}
+
+fn build_header_value(value: &str) -> StorageBackendResult<HeaderValue> {
+    HeaderValue::from_str(value).map_err(|e| StorageBackendError::UrlParseError(e.to_string()))
+}
+
+fn json_like(content_type: &str, text: &str) -> bool {
+    content_type.contains("application/json")
+        || text.trim_start().starts_with('{')
+        || text.trim_start().starts_with('[')
+}
+
+fn truncate_error_text(text: &str) -> String {
+    let normalized = text.replace('\n', " ").replace('\r', " ");
+    normalized.chars().take(160).collect()
+}
+
+fn detect_site_block(status: StatusCode, content_type: &str, text: &str) -> Option<String> {
+    let lower = text.to_ascii_lowercase();
+    let looks_html = content_type.contains("text/html")
+        || lower.contains("<html")
+        || lower.contains("<!doctype html");
+    if !looks_html {
+        return None;
+    }
+    if lower.contains("cloudflare") || lower.contains("just a moment") {
+        return Some("cloudflare".to_string());
+    }
+    if status == StatusCode::FORBIDDEN
+        || status == StatusCode::TOO_MANY_REQUESTS
+        || status == StatusCode::SERVICE_UNAVAILABLE
+    {
+        return Some("html-challenge".to_string());
+    }
+    None
 }
 
 impl OpenList {
@@ -238,6 +295,76 @@ impl OpenList {
             .map_err(|e| StorageBackendError::UrlParseError(e.to_string()))
     }
 
+    fn browser_origin(&self) -> Option<String> {
+        let base = Url::parse(&self.addr).ok()?;
+        let host = base.host_str()?;
+        let mut origin = format!("{}://{}", base.scheme(), host);
+        if let Some(port) = base.port() {
+            origin.push(':');
+            origin.push_str(port.to_string().as_str());
+        }
+        Some(origin)
+    }
+
+    fn browser_referer(&self) -> Option<String> {
+        let mut base = Url::parse(&self.addr).ok()?;
+        let path = base.path();
+        let referer_path = if path.is_empty() || path == "/" {
+            "/".to_string()
+        } else if path.ends_with('/') {
+            path.to_string()
+        } else {
+            format!("{path}/")
+        };
+        base.set_path(&referer_path);
+        Some(base.to_string())
+    }
+
+    fn browser_api_headers(&self) -> StorageBackendResult<HeaderMap> {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::USER_AGENT,
+            build_header_value(OPENLIST_BROWSER_UA)?,
+        );
+        headers.insert(
+            reqwest::header::ACCEPT,
+            build_header_value(OPENLIST_BROWSER_ACCEPT)?,
+        );
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            build_header_value("application/json;charset=UTF-8")?,
+        );
+        headers.insert(
+            reqwest::header::ACCEPT_LANGUAGE,
+            build_header_value(OPENLIST_BROWSER_ACCEPT_LANGUAGE)?,
+        );
+        headers.insert(
+            HeaderName::from_static("sec-ch-ua"),
+            build_header_value(OPENLIST_BROWSER_SEC_CH_UA)?,
+        );
+        headers.insert(
+            HeaderName::from_static("sec-ch-ua-mobile"),
+            build_header_value(OPENLIST_BROWSER_SEC_CH_UA_MOBILE)?,
+        );
+        headers.insert(
+            HeaderName::from_static("sec-ch-ua-platform"),
+            build_header_value(OPENLIST_BROWSER_SEC_CH_UA_PLATFORM)?,
+        );
+        if let Some(origin) = self.browser_origin() {
+            headers.insert(
+                reqwest::header::ORIGIN,
+                build_header_value(origin.as_str())?,
+            );
+        }
+        if let Some(referer) = self.browser_referer() {
+            headers.insert(
+                reqwest::header::REFERER,
+                build_header_value(referer.as_str())?,
+            );
+        }
+        Ok(headers)
+    }
+
     fn header_map_to_playback_headers(headers: &HeaderMap) -> Vec<PlaybackHttpHeader> {
         headers
             .iter()
@@ -257,6 +384,7 @@ impl OpenList {
     ) -> StorageBackendResult<T> {
         let url = self.build_api_url(api_path)?;
         let body = serde_json::to_vec(&body)?;
+        let base_headers = self.browser_api_headers()?;
         let mut attempt = 0;
 
         loop {
@@ -264,20 +392,14 @@ impl OpenList {
             let token = self.token.read().await.clone();
             let body = body.clone();
             let url = url.clone();
+            let mut headers = base_headers.clone();
+            if let Some(token) = token {
+                let mut val = HeaderValue::from_str(token.as_str()).unwrap();
+                val.set_sensitive(true);
+                headers.insert(reqwest::header::AUTHORIZATION, val);
+            }
             let resp = tokio_runtime()
-                .spawn(async move {
-                    let mut req = client
-                        .post(url)
-                        .header(reqwest::header::CONTENT_TYPE, "application/json")
-                        .header(reqwest::header::USER_AGENT, "EaseMusicPlayer/1.0")
-                        .body(body);
-                    if let Some(token) = token {
-                        let mut val = HeaderValue::from_str(token.as_str()).unwrap();
-                        val.set_sensitive(true);
-                        req = req.header(reqwest::header::AUTHORIZATION, val);
-                    }
-                    req.send().await
-                })
+                .spawn(async move { client.post(url).headers(headers).body(body).send().await })
                 .await;
 
             let resp = match resp {
@@ -296,19 +418,13 @@ impl OpenList {
                 }
             };
 
-            let resp = match resp.error_for_status() {
-                Ok(resp) => resp,
-                Err(e) => {
-                    let err: StorageBackendError = e.into();
-                    if should_retry_error(&err) && attempt < OPENLIST_MAX_RETRIES {
-                        attempt += 1;
-                        sleep_backoff(retry_delay(attempt)).await?;
-                        continue;
-                    }
-                    return Err(err);
-                }
-            };
-
+            let status = resp.status();
+            let content_type = resp
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+                .to_string();
             let text = match resp.text().await {
                 Ok(text) => text,
                 Err(e) => {
@@ -321,6 +437,40 @@ impl OpenList {
                     return Err(err);
                 }
             };
+
+            if let Some(provider) = detect_site_block(status, content_type.as_str(), text.as_str())
+            {
+                return Err(StorageBackendError::SiteBlocked {
+                    status_code: status.as_u16(),
+                    provider,
+                });
+            }
+
+            if !status.is_success() {
+                let err = if json_like(content_type.as_str(), text.as_str()) {
+                    match serde_json::from_str::<ApiResponse<serde_json::Value>>(text.as_str()) {
+                        Ok(resp) => StorageBackendError::ApiError {
+                            code: resp.code,
+                            message: resp.message,
+                        },
+                        Err(_) => StorageBackendError::ApiError {
+                            code: status.as_u16() as i64,
+                            message: truncate_error_text(text.as_str()),
+                        },
+                    }
+                } else {
+                    StorageBackendError::ApiError {
+                        code: status.as_u16() as i64,
+                        message: truncate_error_text(text.as_str()),
+                    }
+                };
+                if should_retry_error(&err) && attempt < OPENLIST_MAX_RETRIES {
+                    attempt += 1;
+                    sleep_backoff(retry_delay(attempt)).await?;
+                    continue;
+                }
+                return Err(err);
+            }
 
             let resp: ApiResponse<T> = serde_json::from_str(&text)?;
             if resp.code != 200 {
@@ -439,6 +589,55 @@ impl OpenList {
         Ok(ret)
     }
 
+    async fn search_impl(
+        &self,
+        parent: &str,
+        keywords: &str,
+        scope: SearchScope,
+        page: usize,
+        per_page: usize,
+    ) -> StorageBackendResult<SearchResult> {
+        let parent = normalize_path(parent);
+        let api_scope = match scope {
+            SearchScope::All => 0,
+            SearchScope::Directory => 1,
+            SearchScope::File => 2,
+        };
+        let data: FsSearchData = self
+            .post_api(
+                "/api/fs/search",
+                json!({
+                    "parent": parent,
+                    "keywords": keywords,
+                    "scope": api_scope,
+                    "page": page,
+                    "per_page": per_page,
+                    "password": "",
+                }),
+            )
+            .await?;
+
+        let entries = data
+            .content
+            .into_iter()
+            .map(|item| Entry {
+                name: item.name.clone(),
+                path: join_path(item.parent.as_str(), item.name.as_str()),
+                size: if item.is_dir {
+                    None
+                } else {
+                    item.size.map(|value| value as usize)
+                },
+                is_dir: item.is_dir,
+            })
+            .collect();
+
+        Ok(SearchResult {
+            entries,
+            total: data.total.unwrap_or_default().max(0) as usize,
+        })
+    }
+
     async fn resolve_direct_http_request_impl(
         &self,
         p: &str,
@@ -505,6 +704,26 @@ impl OpenList {
         }
         self.refresh_token().await?;
         self.list_impl(dir.as_str()).await
+    }
+
+    async fn search_with_retry_impl(
+        &self,
+        parent: String,
+        keywords: String,
+        scope: SearchScope,
+        page: usize,
+        per_page: usize,
+    ) -> StorageBackendResult<SearchResult> {
+        self.ensure_token().await?;
+        let r = self
+            .search_impl(parent.as_str(), keywords.as_str(), scope, page, per_page)
+            .await;
+        if !is_auth_error(&r) {
+            return r;
+        }
+        self.refresh_token().await?;
+        self.search_impl(parent.as_str(), keywords.as_str(), scope, page, per_page)
+            .await
     }
 
     async fn get_impl(&self, p: &str, byte_offset: u64) -> StorageBackendResult<StreamFile> {
@@ -624,6 +843,17 @@ impl StorageBackend for OpenList {
         Box::pin(self.list_with_retry_impl(dir))
     }
 
+    fn search(
+        &self,
+        parent: String,
+        keywords: String,
+        scope: SearchScope,
+        page: usize,
+        per_page: usize,
+    ) -> BoxFuture<'_, StorageBackendResult<SearchResult>> {
+        Box::pin(self.search_with_retry_impl(parent, keywords, scope, page, per_page))
+    }
+
     fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>> {
         Box::pin(self.get_with_retry_impl(p, byte_offset))
     }
@@ -643,7 +873,7 @@ mod test {
         net::SocketAddr,
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Arc,
+            Arc, Mutex,
         },
         time::Duration,
     };
@@ -653,25 +883,31 @@ mod test {
     use reqwest::header::HeaderValue;
     use tokio::task::JoinHandle;
 
-    use crate::{backend::StorageBackend, ResolvedPlaybackSource};
+    use crate::{backend::StorageBackend, ResolvedPlaybackSource, SearchScope};
 
-    use super::{BuildOpenListArg, OpenList};
+    use super::{BuildOpenListArg, OpenList, OPENLIST_BROWSER_ACCEPT};
 
     const TEST_TOKEN: &str = "token-123";
 
     #[derive(Clone, Copy, Default)]
     struct RetryConfig {
         list_failures: usize,
+        search_failures: usize,
         get_failures: usize,
         file_failures: usize,
         raw_url_host: Option<&'static str>,
+        search_unavailable: bool,
+        site_blocked: bool,
     }
 
     struct SetupServerRes {
         addr: String,
         handle: JoinHandle<()>,
         list_calls: Arc<AtomicUsize>,
+        search_calls: Arc<AtomicUsize>,
         file_calls: Arc<AtomicUsize>,
+        last_search_body: Arc<Mutex<Option<String>>>,
+        last_search_headers: Arc<Mutex<Vec<(String, String)>>>,
     }
     impl SetupServerRes {
         pub fn addr(&self) -> String {
@@ -682,8 +918,20 @@ mod test {
             self.list_calls.load(Ordering::SeqCst)
         }
 
+        pub fn search_calls(&self) -> usize {
+            self.search_calls.load(Ordering::SeqCst)
+        }
+
         pub fn file_calls(&self) -> usize {
             self.file_calls.load(Ordering::SeqCst)
+        }
+
+        pub fn last_search_body(&self) -> Option<String> {
+            self.last_search_body.lock().unwrap().clone()
+        }
+
+        pub fn last_search_headers(&self) -> Vec<(String, String)> {
+            self.last_search_headers.lock().unwrap().clone()
         }
     }
     impl Drop for SetupServerRes {
@@ -701,22 +949,34 @@ mod test {
         let server = hyper::Server::bind(&addr);
         let port = server.local_addr().port();
         let list_calls = Arc::new(AtomicUsize::new(0));
+        let search_calls = Arc::new(AtomicUsize::new(0));
         let get_calls = Arc::new(AtomicUsize::new(0));
         let file_calls = Arc::new(AtomicUsize::new(0));
         let list_calls_server = list_calls.clone();
+        let search_calls_server = search_calls.clone();
         let get_calls_server = get_calls.clone();
         let file_calls_server = file_calls.clone();
+        let last_search_body = Arc::new(Mutex::new(None));
+        let last_search_headers = Arc::new(Mutex::new(Vec::new()));
+        let last_search_body_server = last_search_body.clone();
+        let last_search_headers_server = last_search_headers.clone();
         let make_service = hyper::service::make_service_fn(move |_| {
             let port = port;
             let retry = retry;
             let list_calls = list_calls_server.clone();
+            let search_calls = search_calls_server.clone();
             let get_calls = get_calls_server.clone();
             let file_calls = file_calls_server.clone();
+            let last_search_body = last_search_body_server.clone();
+            let last_search_headers = last_search_headers_server.clone();
             async move {
                 let func = move |req: Request<Body>| {
                     let list_calls = list_calls.clone();
+                    let search_calls = search_calls.clone();
                     let get_calls = get_calls.clone();
                     let file_calls = file_calls.clone();
+                    let last_search_body = last_search_body.clone();
+                    let last_search_headers = last_search_headers.clone();
                     async move {
                         let path = req.uri().path().to_string();
                         match (req.method().as_str(), path.as_str()) {
@@ -740,6 +1000,63 @@ mod test {
                                     return Ok::<_, Infallible>(resp);
                                 }
                                 let body = r#"{"code":200,"message":"success","data":{"content":[{"name":"a.bin","size":5,"is_dir":false,"sign":"sign","type":4}],"total":1}}"#;
+                                Ok::<_, Infallible>(Response::new(Body::from(body)))
+                            }
+                            ("POST", "/api/fs/search") => {
+                                let headers = req
+                                    .headers()
+                                    .iter()
+                                    .map(|(name, value)| {
+                                        (
+                                            name.as_str().to_string(),
+                                            value.to_str().unwrap_or_default().to_string(),
+                                        )
+                                    })
+                                    .collect::<Vec<_>>();
+                                *last_search_headers.lock().unwrap() = headers;
+                                let body_bytes =
+                                    hyper::body::to_bytes(req.into_body()).await.unwrap();
+                                *last_search_body.lock().unwrap() =
+                                    Some(String::from_utf8_lossy(&body_bytes).to_string());
+                                let auth = reqwest::header::HeaderValue::from_static(TEST_TOKEN);
+                                let stored_headers = last_search_headers.lock().unwrap().clone();
+                                let auth_header = stored_headers
+                                    .iter()
+                                    .find(|(name, _)| {
+                                        name.eq_ignore_ascii_case(
+                                            reqwest::header::AUTHORIZATION.as_str(),
+                                        )
+                                    })
+                                    .map(|(_, value)| value.clone());
+                                if auth_header.as_deref() != Some(auth.to_str().unwrap()) {
+                                    let mut resp = Response::new(Body::from(
+                                        r#"{"code":401,"message":"unauthorized","data":null}"#,
+                                    ));
+                                    *resp.status_mut() = StatusCode::UNAUTHORIZED;
+                                    return Ok::<_, Infallible>(resp);
+                                }
+                                let attempt = search_calls.fetch_add(1, Ordering::SeqCst);
+                                if retry.site_blocked {
+                                    let mut resp = Response::new(Body::from(
+                                        "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body>Cloudflare challenge</body></html>",
+                                    ));
+                                    *resp.status_mut() = StatusCode::FORBIDDEN;
+                                    resp.headers_mut().insert(
+                                        reqwest::header::CONTENT_TYPE,
+                                        HeaderValue::from_static("text/html; charset=UTF-8"),
+                                    );
+                                    return Ok::<_, Infallible>(resp);
+                                }
+                                if attempt < retry.search_failures {
+                                    let mut resp = Response::new(Body::from("temporary failure"));
+                                    *resp.status_mut() = StatusCode::BAD_GATEWAY;
+                                    return Ok::<_, Infallible>(resp);
+                                }
+                                if retry.search_unavailable {
+                                    let body = r#"{"code":404,"message":"search not available","data":null}"#;
+                                    return Ok::<_, Infallible>(Response::new(Body::from(body)));
+                                }
+                                let body = r#"{"code":200,"message":"success","data":{"content":[{"parent":"/music","name":"target-song.mp3","is_dir":false,"size":12}],"total":1}}"#;
                                 Ok::<_, Infallible>(Response::new(Body::from(body)))
                             }
                             ("POST", "/api/fs/get") => {
@@ -825,7 +1142,10 @@ mod test {
             addr: format!("http://127.0.0.1:{port}"),
             handle,
             list_calls,
+            search_calls,
             file_calls,
+            last_search_body,
+            last_search_headers,
         }
     }
 
@@ -980,5 +1300,130 @@ mod test {
             }
             other => panic!("unexpected resolved playback source: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_search_returns_entries_and_total() {
+        let server = setup_server().await;
+
+        let backend = OpenList::new(BuildOpenListArg {
+            addr: server.addr(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            is_anonymous: false,
+            connect_timeout: Duration::from_secs(10),
+        });
+
+        let result = backend
+            .search(
+                "/music".to_string(),
+                "target".to_string(),
+                SearchScope::All,
+                1,
+                20,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].path, "/music/target-song.mp3");
+        assert_eq!(result.entries[0].name, "target-song.mp3");
+        assert_eq!(result.entries[0].size, Some(12));
+        assert!(!result.entries[0].is_dir);
+        assert_eq!(server.search_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_search_sends_browser_compatible_headers_and_official_payload() {
+        let server = setup_server().await;
+
+        let backend = OpenList::new(BuildOpenListArg {
+            addr: server.addr(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            is_anonymous: false,
+            connect_timeout: Duration::from_secs(10),
+        });
+
+        backend
+            .search(
+                "/music".to_string(),
+                "asmr".to_string(),
+                SearchScope::File,
+                2,
+                15,
+            )
+            .await
+            .unwrap();
+
+        let headers = server.last_search_headers();
+        assert!(headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case(reqwest::header::USER_AGENT.as_str())
+                && value.contains("Chrome/134")
+        }));
+        assert!(headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case(reqwest::header::ACCEPT.as_str())
+                && value == OPENLIST_BROWSER_ACCEPT
+        }));
+        assert!(headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case(reqwest::header::ORIGIN.as_str()) && value == &server.addr()
+        }));
+        assert!(headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case(reqwest::header::REFERER.as_str())
+                && value == &format!("{}/", server.addr())
+        }));
+        let body = server.last_search_body().expect("search body");
+        assert!(body.contains("\"parent\":\"/music\""));
+        assert!(body.contains("\"keywords\":\"asmr\""));
+        assert!(body.contains("\"scope\":2"));
+        assert!(body.contains("\"page\":2"));
+        assert!(body.contains("\"per_page\":15"));
+        assert!(body.contains("\"password\":\"\""));
+    }
+
+    #[tokio::test]
+    async fn test_search_maps_unavailable() {
+        let server = setup_server_with_retry(RetryConfig {
+            search_unavailable: true,
+            ..RetryConfig::default()
+        })
+        .await;
+
+        let backend = OpenList::new(BuildOpenListArg {
+            addr: server.addr(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            is_anonymous: false,
+            connect_timeout: Duration::from_secs(10),
+        });
+
+        let err = backend
+            .search("/".to_string(), "asmr".to_string(), SearchScope::All, 1, 10)
+            .await
+            .unwrap_err();
+        assert!(err.is_search_unavailable());
+    }
+
+    #[tokio::test]
+    async fn test_search_maps_html_site_block_to_site_blocked() {
+        let server = setup_server_with_retry(RetryConfig {
+            site_blocked: true,
+            ..RetryConfig::default()
+        })
+        .await;
+
+        let backend = OpenList::new(BuildOpenListArg {
+            addr: server.addr(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            is_anonymous: false,
+            connect_timeout: Duration::from_secs(10),
+        });
+
+        let err = backend
+            .search("/".to_string(), "asmr".to_string(), SearchScope::All, 1, 10)
+            .await
+            .unwrap_err();
+        assert!(err.is_site_blocked());
     }
 }

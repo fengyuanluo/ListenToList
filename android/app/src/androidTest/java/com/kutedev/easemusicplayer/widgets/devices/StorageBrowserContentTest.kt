@@ -9,6 +9,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kutedev.easemusicplayer.debug.TestComposeActivity
 import com.kutedev.easemusicplayer.viewmodels.BrowserScrollSnapshot
+import com.kutedev.easemusicplayer.viewmodels.StorageSearchListUiState
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,6 +49,8 @@ class StorageBrowserContentTest {
                     StorageBrowserContent(
                         title = "Test Storage",
                         loadState = CurrentStorageStateType.OK,
+                        searchSupported = true,
+                        searchState = StorageSearchListUiState(),
                         currentPath = "/Music",
                         splitPaths = emptyList(),
                         entries = entries,
@@ -59,9 +62,16 @@ class StorageBrowserContentTest {
                         scrollSnapshot = BrowserScrollSnapshot(),
                         onBack = {},
                         onNavigateDir = {},
+                        onSearchQueryChange = {},
+                        onClearSearch = {},
+                        onSearchScopeChange = {},
                         onToggleAll = {},
                         onToggleSelectMode = { selectMode.value = !selectMode.value },
                         onClickEntry = {},
+                        onClickSearchEntry = {},
+                        onLocateSearchEntry = {},
+                        onLoadMoreSearch = {},
+                        onRetrySearch = {},
                         onToggleEntry = { entry ->
                             val next = selectedPaths.value.toMutableSet()
                             if (!next.add(entry.path)) {
@@ -103,6 +113,8 @@ class StorageBrowserContentTest {
                     StorageBrowserContent(
                         title = "Test Storage",
                         loadState = CurrentStorageStateType.OK,
+                        searchSupported = true,
+                        searchState = StorageSearchListUiState(),
                         currentPath = "/Music",
                         splitPaths = emptyList(),
                         entries = entries,
@@ -114,9 +126,16 @@ class StorageBrowserContentTest {
                         scrollSnapshot = BrowserScrollSnapshot(),
                         onBack = {},
                         onNavigateDir = {},
+                        onSearchQueryChange = {},
+                        onClearSearch = {},
+                        onSearchScopeChange = {},
                         onToggleAll = {},
                         onToggleSelectMode = {},
                         onClickEntry = {},
+                        onClickSearchEntry = {},
+                        onLocateSearchEntry = {},
+                        onLoadMoreSearch = {},
+                        onRetrySearch = {},
                         onToggleEntry = {},
                         onImportSelected = {},
                         onRequestPermission = {},

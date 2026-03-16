@@ -6,12 +6,25 @@ use futures_util::future::BoxFuture;
 use reqwest::StatusCode;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub name: String,
     pub path: String,
     pub size: Option<usize>,
     pub is_dir: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchScope {
+    All,
+    Directory,
+    File,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchResult {
+    pub entries: Vec<Entry>,
+    pub total: usize,
 }
 
 enum StreamFileInner {
@@ -54,6 +67,10 @@ pub enum StorageBackendError {
     QuickXMLDeError(#[from] quick_xml::DeError),
     #[error("Api Error: {code} {message}")]
     ApiError { code: i64, message: String },
+    #[error("Search unavailable")]
+    SearchUnavailable,
+    #[error("Site blocked request with HTTP {status_code} ({provider})")]
+    SiteBlocked { status_code: u16, provider: String },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -113,11 +130,34 @@ impl StorageBackendError {
             _ => false,
         }
     }
+
+    pub fn is_search_unavailable(&self) -> bool {
+        matches!(self, StorageBackendError::SearchUnavailable)
+            || matches!(
+                self,
+                StorageBackendError::ApiError { code, message }
+                    if *code == 404 && message.eq_ignore_ascii_case("search not available")
+            )
+    }
+
+    pub fn is_site_blocked(&self) -> bool {
+        matches!(self, StorageBackendError::SiteBlocked { .. })
+    }
 }
 
 pub trait StorageBackend {
     fn list(&self, dir: String) -> BoxFuture<'_, StorageBackendResult<Vec<Entry>>>;
     fn get(&self, p: String, byte_offset: u64) -> BoxFuture<'_, StorageBackendResult<StreamFile>>;
+    fn search(
+        &self,
+        _parent: String,
+        _keywords: String,
+        _scope: SearchScope,
+        _page: usize,
+        _per_page: usize,
+    ) -> BoxFuture<'_, StorageBackendResult<SearchResult>> {
+        Box::pin(async { Err(StorageBackendError::SearchUnavailable) })
+    }
     fn resolve_playback_source(
         &self,
         _p: String,
