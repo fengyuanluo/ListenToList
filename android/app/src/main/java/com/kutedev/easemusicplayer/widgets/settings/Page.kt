@@ -116,7 +116,7 @@ private fun Item(
 fun SettingSubpage() {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    val gitUrl = "https://github.com/hpp2334/ease-music-player";
+    val gitUrl = "https://github.com/fengyuanluo/ListenToList"
     val navController = LocalNavController.current
 
     Column(
