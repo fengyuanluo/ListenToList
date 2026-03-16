@@ -49,7 +49,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
@@ -58,6 +57,7 @@ import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.components.EaseSearchField
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteStorageBrowser
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.StorageSearchErrorType
 import com.kutedev.easemusicplayer.viewmodels.StorageSearchSectionUiState
@@ -182,13 +182,13 @@ private fun InstanceTabs(
     ) {
         storages.forEach { storage ->
             val selected = storage.id == selectedStorageId
-            val shape = RoundedCornerShape(999.dp)
+            val shape = RoundedCornerShape(EaseTheme.radius.control)
             Box(
                 modifier = Modifier
                     .clip(shape)
                     .background(
                         if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.88f)
+                        else EaseTheme.surfaces.chip
                     )
                     .border(
                         width = 1.dp,
@@ -205,8 +205,9 @@ private fun InstanceTabs(
                 Text(
                     text = storageSearchDisplayName(storage),
                     color = if (selected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface,
-                    fontSize = 12.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    style = EaseTheme.typography.label.copy(
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    ),
                     maxLines = 1,
                 )
             }
@@ -224,20 +225,19 @@ private fun SearchPageMessage(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-            .padding(18.dp)
+            .clip(RoundedCornerShape(EaseTheme.radius.card))
+            .background(EaseTheme.surfaces.secondary)
+            .padding(EaseTheme.spacing.lg)
     ) {
         Text(
             text = title,
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
         )
         Text(
             text = desc,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
+            style = EaseTheme.typography.bodySmall,
         )
     }
 }
@@ -413,7 +413,7 @@ fun StorageSearchContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(EaseTheme.surfaces.screen)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             SearchTopBar(

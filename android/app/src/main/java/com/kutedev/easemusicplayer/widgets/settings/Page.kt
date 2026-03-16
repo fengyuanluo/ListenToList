@@ -27,13 +27,13 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteDebugMore
 import com.kutedev.easemusicplayer.core.RouteDownloadManager
 import com.kutedev.easemusicplayer.core.RouteLog
 import com.kutedev.easemusicplayer.core.RouteThemeSettings
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 
 
 private val paddingX = SettingPaddingX
@@ -57,8 +57,7 @@ private fun Title(title: String) {
     Column {
         Text(
             text = title,
-            letterSpacing = 1.sp,
-            fontSize = 14.sp,
+            style = EaseTheme.typography.body,
         )
         Box(
            modifier = Modifier
@@ -100,13 +99,13 @@ private fun Item(
         Column {
             Text(
                 text = title,
-                fontSize = 14.sp,
+                style = EaseTheme.typography.body,
             )
             if (content != null) {
                 Text(
                     text = content,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    style = EaseTheme.typography.bodySmall,
                 )
             }
         }
@@ -122,6 +121,7 @@ fun SettingSubpage() {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(EaseTheme.surfaces.screen)
             .padding(paddingX, paddingX)
             .verticalScroll(rememberScrollState())
     ) {

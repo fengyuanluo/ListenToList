@@ -25,7 +25,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseTextButton
@@ -33,6 +32,7 @@ import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.singleton.DownloadTaskItem
 import com.kutedev.easemusicplayer.singleton.DownloadTaskStatus
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
 import com.kutedev.easemusicplayer.viewmodels.DownloadManagerVM
 
@@ -45,7 +45,7 @@ private fun DownloadStatusChip(
     val (label, bg, fg) = when (task.status) {
         DownloadTaskStatus.QUEUED -> Triple(
             stringResource(id = R.string.download_status_queued),
-            MaterialTheme.colorScheme.surfaceVariant,
+            EaseTheme.surfaces.chip,
             MaterialTheme.colorScheme.onSurfaceVariant,
         )
         DownloadTaskStatus.RUNNING -> Triple(
@@ -65,25 +65,24 @@ private fun DownloadStatusChip(
         )
         DownloadTaskStatus.CANCELLED -> Triple(
             stringResource(id = R.string.download_status_cancelled),
-            MaterialTheme.colorScheme.surfaceVariant,
+            EaseTheme.surfaces.chip,
             MaterialTheme.colorScheme.onSurfaceVariant,
         )
         DownloadTaskStatus.BLOCKED -> Triple(
             stringResource(id = R.string.download_status_blocked),
-            MaterialTheme.colorScheme.surfaceVariant,
+            EaseTheme.surfaces.chip,
             MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
     Box(
         modifier = Modifier
-            .background(bg, RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .background(bg, RoundedCornerShape(EaseTheme.radius.control))
+            .padding(horizontal = EaseTheme.spacing.sm, vertical = EaseTheme.spacing.xxs + 1.dp)
     ) {
         Text(
             text = label,
             color = fg,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = EaseTheme.typography.caption.copy(fontWeight = FontWeight.SemiBold),
         )
     }
 }
@@ -112,19 +111,18 @@ private fun DownloadTaskCard(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(18.dp))
+            .background(EaseTheme.surfaces.card, RoundedCornerShape(EaseTheme.radius.card))
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(EaseTheme.radius.card),
             )
-            .padding(16.dp)
+            .padding(EaseTheme.spacing.cardPadding)
     ) {
         Text(
             text = task.title,
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -137,15 +135,15 @@ private fun DownloadTaskCard(
                 Box(
                     modifier = Modifier
                         .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-                            RoundedCornerShape(999.dp),
+                            EaseTheme.surfaces.chip,
+                            RoundedCornerShape(EaseTheme.radius.control),
                         )
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                        .padding(horizontal = EaseTheme.spacing.sm, vertical = EaseTheme.spacing.xxs + 1.dp)
                 ) {
                     Text(
                         text = progressLabel,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        style = EaseTheme.typography.caption,
                     )
                 }
             }
@@ -153,14 +151,14 @@ private fun DownloadTaskCard(
         Text(
             text = task.sourcePath,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
+            style = EaseTheme.typography.bodySmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = task.destinationPath,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
+            style = EaseTheme.typography.bodySmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -168,7 +166,7 @@ private fun DownloadTaskCard(
             Text(
                 text = error,
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 12.sp,
+                style = EaseTheme.typography.bodySmall,
             )
         }
         FlowRow(
@@ -207,7 +205,7 @@ fun DownloadManagerPage(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(EaseTheme.surfaces.screen)
     ) {
         item {
             Column(
@@ -216,17 +214,17 @@ fun DownloadManagerPage(
             ) {
                 Text(
                     text = stringResource(id = R.string.setting_downloads_title),
-                    fontSize = 32.sp,
+                    style = EaseTheme.typography.screenTitle,
                 )
                 Text(
                     text = stringResource(id = R.string.setting_downloads_desc),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 14.sp,
+                    style = EaseTheme.typography.body,
                 )
                 Text(
                     text = stringResource(id = R.string.setting_downloads_dir, downloadDirectory),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    style = EaseTheme.typography.bodySmall,
                 )
             }
         }
@@ -238,21 +236,20 @@ fun DownloadManagerPage(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                            RoundedCornerShape(18.dp),
+                            EaseTheme.surfaces.secondary,
+                            RoundedCornerShape(EaseTheme.radius.card),
                         )
-                        .padding(18.dp)
+                        .padding(EaseTheme.spacing.lg)
                 ) {
                     Text(
                         text = stringResource(id = R.string.download_empty_title),
                         color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
                     )
                     Text(
                         text = stringResource(id = R.string.download_empty_desc),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
+                        style = EaseTheme.typography.bodySmall,
                     )
                 }
             }

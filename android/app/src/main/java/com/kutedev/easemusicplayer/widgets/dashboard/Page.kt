@@ -34,7 +34,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
@@ -44,12 +43,13 @@ import com.kutedev.easemusicplayer.viewmodels.StoragesVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
 import com.kutedev.easemusicplayer.core.RouteStorageBrowser
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_schema.StorageType
 import java.time.LocalDate
 
-private val paddingX = 24.dp
-private val paddingY = 12.dp
+private val paddingX = EaseTheme.spacing.page
+private val paddingY = EaseTheme.spacing.sm
 
 private val DailyQuotes = listOf(
     "给每一段旋律一段安静的时间。",
@@ -70,7 +70,7 @@ private fun Title(title: String) {
     Text(
         text = title,
         color = MaterialTheme.colorScheme.primary,
-        fontSize = 14.sp,
+        style = EaseTheme.typography.body,
     )
 }
 
@@ -91,8 +91,8 @@ private fun ColumnScope.DevicesBlock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(72.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(RoundedCornerShape(EaseTheme.radius.card))
+                    .background(EaseTheme.surfaces.secondary)
                     .clickable {
                         navController.navigate(RouteAddDevices((-1).toString()))
                     }
@@ -148,7 +148,7 @@ private fun ColumnScope.DevicesBlock(
                     Column {
                         Text(
                             text = title,
-                            fontSize = 14.sp,
+                            style = EaseTheme.typography.body,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -156,7 +156,7 @@ private fun ColumnScope.DevicesBlock(
                             Text(
                                 text = subTitle,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
+                                style = EaseTheme.typography.bodySmall,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -180,9 +180,9 @@ private fun ColumnScope.DevicesBlock(
 @Composable
 private fun QuoteBlock() {
     val quote = remember { pickDailyQuote() }
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(EaseTheme.radius.card)
     val blockAlpha = 0.9f
-    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant
+    val backgroundColor = EaseTheme.surfaces.secondary
     val borderColor = MaterialTheme.colorScheme.outlineVariant
     val textColor = MaterialTheme.colorScheme.onSurfaceVariant
     Box(
@@ -193,12 +193,12 @@ private fun QuoteBlock() {
             .background(backgroundColor)
             .border(1.dp, borderColor, shape)
             .alpha(blockAlpha)
-            .padding(18.dp, 14.dp)
+            .padding(horizontal = EaseTheme.spacing.lg, vertical = EaseTheme.spacing.sm)
     ) {
         Text(
             text = quote,
             color = textColor,
-            fontSize = 12.sp,
+            style = EaseTheme.typography.bodySmall,
         )
     }
 }
@@ -218,6 +218,7 @@ fun DashboardSubpage(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(EaseTheme.surfaces.screen)
             .verticalScroll(rememberScrollState())
     ) {
         Box(modifier = Modifier.height(24.dp))

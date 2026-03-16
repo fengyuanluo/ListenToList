@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,8 +23,10 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.compose.ui.graphics.Color
 import com.kutedev.easemusicplayer.ui.theme.EaseMusicPlayerTheme
-import com.kutedev.easemusicplayer.core.LocalNavController
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
+    import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
 import com.kutedev.easemusicplayer.core.RouteDebugMore
 import com.kutedev.easemusicplayer.core.RouteDownloadManager
@@ -64,15 +67,29 @@ fun Root() {
         val layoutDirection = LocalLayoutDirection.current
 
         EaseMusicPlayerTheme(themeSettings = themeSettings) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                ThemeBackgroundImage(
-                    uri = themeSettings.backgroundImageUri,
-                    modifier = Modifier.fillMaxSize(),
-                    alpha = 0.18f,
-                )
+            val surfaces = EaseTheme.surfaces
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(EaseTheme.colors.surface)
+            ) {
+                if (surfaces.hasBackdrop) {
+                    ThemeBackgroundImage(
+                        uri = themeSettings.backgroundImageUri,
+                        modifier = Modifier.fillMaxSize(),
+                        alpha = surfaces.backdropImageAlpha,
+                    )
+                }
+                if (surfaces.backdropScrim.alpha > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(surfaces.backdropScrim)
+                    )
+                }
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    containerColor = Color.Transparent,
                 ) { scaffoldPadding ->
                     Column(
                         modifier = Modifier

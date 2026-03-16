@@ -72,6 +72,7 @@ import com.kutedev.easemusicplayer.components.MusicCover
 import com.kutedev.easemusicplayer.components.customAnchoredDraggable
 import com.kutedev.easemusicplayer.components.dropShadow
 import com.kutedev.easemusicplayer.components.rememberCustomAnchoredDraggableState
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.utils.nextTickOnMain
 import com.kutedev.easemusicplayer.viewmodels.PlayerVM
 import com.kutedev.easemusicplayer.viewmodels.SleepModeVM
@@ -112,12 +113,12 @@ private fun MusicPlayerHeader(
         mutableStateOf(false)
     }
 
-    Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .padding(13.dp, 13.dp)
-            .fillMaxWidth()
-    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .padding(EaseTheme.spacing.sm)
+                .fillMaxWidth()
+        ) {
         EaseIconButton(
             sizeType = EaseIconButtonSize.Medium,
             buttonType = EaseIconButtonType.Default,
@@ -272,8 +273,8 @@ internal fun MusicSlider(
                     .fillMaxWidth()
                     .height(sliderHeight)
                     .offset(0.dp, (sliderContainerHeight - sliderHeight) / 2)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(RoundedCornerShape(EaseTheme.radius.sm))
+                    .background(EaseTheme.surfaces.secondary)
             ) {
                 Box(
                     modifier = Modifier
@@ -295,7 +296,7 @@ internal fun MusicSlider(
                         (sliderContainerHeight - handleSize) / 2
                     )
                     .size(handleSize)
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(EaseTheme.radius.control))
                     .background(MaterialTheme.colorScheme.primary)
             )
         }
@@ -306,11 +307,11 @@ internal fun MusicSlider(
         ) {
             Text(
                 text = currentDuration,
-                fontSize = 10.sp
+                style = EaseTheme.typography.micro
             )
             Text(
                 text = totalDuration,
-                fontSize = 10.sp
+                style = EaseTheme.typography.micro
             )
         }
     }
@@ -328,12 +329,12 @@ private fun CoverImage(dataSourceKey: DataSourceKey?) {
             modifier = Modifier
                 .offset(y = (-10).dp)
                 .dropShadow(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = EaseTheme.surfaces.shadow,
                     offsetX = 0.dp,
                     offsetY = 0.dp,
                     blurRadius = 16.dp
                 )
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(EaseTheme.radius.hero))
                 .size(300.dp),
             coverDataSourceKey = dataSourceKey,
         )
@@ -367,7 +368,7 @@ private fun MusicLyric(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(EaseTheme.spacing.xxl),
         contentAlignment = Alignment.Center
     ) {
         if (lyricLoadedState == LyricLoadState.MISSING || lyricLoadedState == LyricLoadState.FAILED) {
@@ -387,7 +388,7 @@ private fun MusicLyric(
                     ) {
                         Text(
                             text = stringResource(R.string.music_lyric_no_desc),
-                            fontSize = 14.sp,
+                            style = EaseTheme.typography.body,
                         )
                         EaseTextButton(
                             text = stringResource(R.string.music_lyric_try_add_desc),
@@ -401,7 +402,7 @@ private fun MusicLyric(
                 } else {
                     Text(
                         text = stringResource(R.string.music_lyric_fail),
-                        fontSize = 14.sp,
+                        style = EaseTheme.typography.body,
                     )
                 }
             }
@@ -756,7 +757,7 @@ private fun ReorderableCollectionItemScope.PlaybackQueueRow(
     onPlay: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(EaseTheme.radius.card)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -767,20 +768,20 @@ private fun ReorderableCollectionItemScope.PlaybackQueueRow(
                 if (isCurrent) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                 } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDragging) 0.92f else 0.65f)
+                    EaseTheme.surfaces.secondary.copy(alpha = if (isDragging) 0.96f else EaseTheme.surfaces.secondary.alpha)
                 }
             )
             .clickable(onClick = onPlay)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = EaseTheme.spacing.sm, vertical = EaseTheme.spacing.sm)
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(28.dp)
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(EaseTheme.radius.control))
                 .background(
                     if (isCurrent) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surface
+                    else EaseTheme.surfaces.card
                 )
         ) {
             if (isCurrent) {
@@ -794,7 +795,7 @@ private fun ReorderableCollectionItemScope.PlaybackQueueRow(
                 Text(
                     text = "·",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 20.sp,
+                    style = EaseTheme.typography.sectionTitle,
                 )
             }
         }
@@ -805,15 +806,16 @@ private fun ReorderableCollectionItemScope.PlaybackQueueRow(
             Text(
                 text = entry.musicAbstract.meta.title,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 15.sp,
-                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Medium,
+                style = EaseTheme.typography.cardTitle.copy(
+                    fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Medium,
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = entry.musicAbstract.meta.duration?.let { formatDuration(it) } ?: "",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+                style = EaseTheme.typography.bodySmall,
                 maxLines = 1,
             )
         }
@@ -827,7 +829,7 @@ private fun ReorderableCollectionItemScope.PlaybackQueueRow(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(28.dp)
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(EaseTheme.radius.control))
                 .draggableHandle()
         ) {
             Icon(
@@ -858,7 +860,7 @@ private fun PlaybackQueueSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = EaseTheme.surfaces.dialog,
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -869,13 +871,12 @@ private fun PlaybackQueueSheet(
             Text(
                 text = stringResource(id = R.string.music_queue_sheet_title),
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
+                style = EaseTheme.typography.sectionTitle.copy(fontWeight = FontWeight.Bold),
             )
             Text(
                 text = currentQueueSubtitle(queue = queue, sourcePlaylist = sourcePlaylist),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+                style = EaseTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -947,7 +948,7 @@ fun MusicPlayerPage(
     Box(
         modifier = Modifier
             .clipToBounds()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(EaseTheme.surfaces.screen)
             .fillMaxSize()
     ) {
         Column {
@@ -983,13 +984,18 @@ fun MusicPlayerPage(
                 )
             }
             Column(
-                modifier = Modifier.padding(start = 36.dp, end = 36.dp, top = 2.dp, bottom = 24.dp)
+                modifier = Modifier.padding(
+                    start = EaseTheme.spacing.hero,
+                    end = EaseTheme.spacing.hero,
+                    top = EaseTheme.spacing.xxs / 2,
+                    bottom = EaseTheme.spacing.xl,
+                )
             ) {
                 Text(
                     text = currentMusic?.meta?.title ?: "",
                     maxLines = 2,
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 20.sp,
+                    style = EaseTheme.typography.sectionTitle,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 MusicSlider(

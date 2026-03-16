@@ -1,6 +1,6 @@
 package com.kutedev.easemusicplayer.widgets.settings
 
-import androidx.compose.ui.unit.dp
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 
 
-val SettingPaddingX = 24.dp
+val SettingPaddingX = EaseTheme.spacing.page

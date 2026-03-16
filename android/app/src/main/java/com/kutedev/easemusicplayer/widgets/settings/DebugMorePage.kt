@@ -1,5 +1,6 @@
 package com.kutedev.easemusicplayer.widgets.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,10 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.ConfirmDialog
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.DebugMoreVM
 
 private val paddingX = SettingPaddingX
@@ -42,7 +43,7 @@ private fun Item(
         Text(
             modifier = Modifier.padding(horizontal = paddingX),
             text = title,
-            fontSize = 14.sp,
+            style = EaseTheme.typography.body,
         )
     }
 }
@@ -65,13 +66,15 @@ fun DebugMorePage(
     val kotlinAsyncErrorTitle = stringResource(id = R.string.debug_trigger_kt_async_exception)
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(EaseTheme.surfaces.screen),
     ) {
         Column {
             Text(
                 modifier = Modifier.padding(start = paddingX, end = paddingX, top = 24.dp, bottom = 4.dp),
                 text = stringResource(id = R.string.setting_debug),
-                fontSize = 32.sp,
+                style = EaseTheme.typography.screenTitle,
             )
             Box(modifier = Modifier.height(24.dp))
             Item(
@@ -129,7 +132,7 @@ fun DebugMorePage(
     ) {
         Text(
             text = stringResource(id = R.string.debug_confirm_desc, pendingTitle),
-            fontSize = 14.sp
+            style = EaseTheme.typography.body,
         )
     }
 }

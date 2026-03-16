@@ -15,9 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.kutedev.easemusicplayer.R
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 
 @Composable
 fun ConfirmDialog(
@@ -33,15 +33,16 @@ fun ConfirmDialog(
     Dialog(onDismissRequest = onCancel) {
         Column(
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(24.dp, 24.dp),
+                .clip(RoundedCornerShape(EaseTheme.radius.card))
+                .background(EaseTheme.surfaces.dialog)
+                .padding(EaseTheme.spacing.dialogPadding),
         ) {
             Text(
                 text = stringResource(id = R.string.confirm_dialog_title),
                 color = MaterialTheme.colorScheme.error,
+                style = EaseTheme.typography.cardTitle,
             )
-            Box(modifier = Modifier.height(4.dp))
+            Box(modifier = Modifier.height(EaseTheme.spacing.xxs))
             content()
             Row(
                 horizontalArrangement = Arrangement.End,

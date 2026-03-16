@@ -51,7 +51,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseCheckbox
@@ -63,6 +62,7 @@ import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.core.LocalNavController
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
 import com.kutedev.easemusicplayer.viewmodels.BrowserScrollSnapshot
 import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
@@ -99,7 +99,7 @@ private fun StorageBrowserSkeleton() {
             modifier = Modifier
                 .width(width)
                 .height(height)
-                .background(color, RoundedCornerShape(6.dp))
+                .background(color, RoundedCornerShape(EaseTheme.radius.sm))
         )
     }
 
@@ -173,13 +173,13 @@ private fun StorageBrowserError(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .padding(10.dp)
+                .clip(RoundedCornerShape(EaseTheme.radius.xs))
+                .padding(EaseTheme.spacing.sm)
         ) {
             Box(
                 modifier = Modifier
                     .size(72.dp)
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(EaseTheme.radius.control))
                     .background(MaterialTheme.colorScheme.error)
             ) {
                 Icon(
@@ -191,13 +191,14 @@ private fun StorageBrowserError(
             }
             Text(
                 text = title,
-                fontSize = 16.sp,
                 color = MaterialTheme.colorScheme.error,
+                style = EaseTheme.typography.cardTitle,
             )
             Text(
                 text = desc,
-                fontSize = 14.sp,
                 modifier = Modifier.widthIn(0.dp, 240.dp)
+                ,
+                style = EaseTheme.typography.body,
             )
             Box(modifier = Modifier.height(12.dp))
             EaseTextButton(
@@ -235,8 +236,6 @@ private fun StorageBrowserEntry(
         ""
     }
     val iconSize = 28.dp
-    val titleSize = 16.sp
-    val subTitleSize = 12.sp
     val checkboxSize = 20.dp
     val handleClick = {
         if (selectMode) {
@@ -277,15 +276,16 @@ private fun StorageBrowserEntry(
             Column {
                 Text(
                     text = entry.name,
-                    fontSize = titleSize,
+                    style = EaseTheme.typography.cardTitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (sizeText.isNotBlank()) {
                     Text(
                         text = sizeText,
-                        fontSize = subTitleSize,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                        ,
+                        style = EaseTheme.typography.bodySmall,
                     )
                 }
             }
@@ -344,7 +344,7 @@ private fun StorageBrowserSearchHeader(
         Text(
             text = stringResource(id = R.string.storage_search_current_scope_hint, searchState.parentPath),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
+            style = EaseTheme.typography.bodySmall,
         )
     }
 }
@@ -382,20 +382,19 @@ private fun StorageBrowserSearchResults(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .padding(horizontal = 32.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-                    .padding(18.dp)
+                    .clip(RoundedCornerShape(EaseTheme.radius.card))
+                    .background(EaseTheme.surfaces.secondary)
+                    .padding(EaseTheme.spacing.lg)
             ) {
                 Text(
                     text = stringResource(id = R.string.storage_search_empty_title),
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
                 )
                 Text(
                     text = stringResource(id = R.string.storage_search_empty_desc),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    style = EaseTheme.typography.bodySmall,
                 )
             }
         }
@@ -485,13 +484,11 @@ private fun StorageBrowserEntries(
             !disabled -> MaterialTheme.colorScheme.onSurface
             else -> MaterialTheme.colorScheme.surfaceVariant
         }
-        val fontSize = if (isCurrent) 14.sp else 13.sp
         val fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
         Text(
             text = text,
             color = color,
-            fontSize = fontSize,
-            fontWeight = fontWeight,
+            style = EaseTheme.typography.bodySmall.copy(fontWeight = fontWeight),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
@@ -531,8 +528,8 @@ private fun StorageBrowserEntries(
             for ((index, v) in splitPaths.withIndex()) {
                 Text(
                     text = ">",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = EaseTheme.typography.bodySmall,
                 )
                 PathTab(
                     text = v.name,
@@ -619,7 +616,7 @@ fun StorageBrowserContent(
 
     Box(
         modifier = Modifier
-            .background(MaterialTheme.colorScheme.surface)
+            .background(EaseTheme.surfaces.screen)
             .fillMaxSize()
     ) {
         var selectionActionsExpanded by remember(selectMode, selectedCount) { mutableStateOf(false) }
@@ -651,9 +648,9 @@ fun StorageBrowserContent(
                                     id = R.string.storage_browser_selected,
                                     selectedCount
                                 ),
-                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.testTag("storage_browser_selected")
+                                modifier = Modifier.testTag("storage_browser_selected"),
+                                style = EaseTheme.typography.bodySmall,
                             )
                         }
                     }
