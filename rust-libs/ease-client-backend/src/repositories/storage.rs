@@ -108,7 +108,15 @@ impl DatabaseServer {
                 let mut iter = table_music_playlists.get(id)?;
                 for v in iter.by_ref() {
                     let playlist_id = v?.value();
-                    table_playlist_musics.remove(playlist_id, id)?;
+                    let relations: Vec<_> = table_playlist_musics
+                        .get(playlist_id)?
+                        .into_iter()
+                        .filter_map(|value| value.ok().map(|value| value.value()))
+                        .filter(|relation| relation.music_id == id)
+                        .collect();
+                    for relation in relations {
+                        table_playlist_musics.remove(playlist_id, relation)?;
+                    }
                 }
                 drop(iter);
                 table_music_playlists.remove_all(id)?;

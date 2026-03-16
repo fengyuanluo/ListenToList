@@ -589,9 +589,6 @@ fun StorageBrowserPage(
     val scope = rememberCoroutineScope()
 
     val title = storage?.alias?.ifBlank { storage?.addr ?: "Storage" } ?: "Storage"
-    val playlistPrefix = stringResource(id = R.string.storage_browser_folder_playlist_prefix)
-    val rootName = stringResource(id = R.string.import_musics_paths_root)
-
     fun handleBack() {
         if (selectMode) {
             storageBrowserVM.exitSelectMode()
@@ -629,7 +626,7 @@ fun StorageBrowserPage(
         onToggleAll = { storageBrowserVM.toggleAll() },
         onToggleSelectMode = { storageBrowserVM.toggleSelectMode() },
         onClickEntry = { entry ->
-            storageBrowserVM.clickEntry(entry, playlistPrefix, rootName)
+            storageBrowserVM.clickEntry(entry)
         },
         onToggleEntry = { entry -> storageBrowserVM.toggleSelect(entry) },
         onImportSelected = {

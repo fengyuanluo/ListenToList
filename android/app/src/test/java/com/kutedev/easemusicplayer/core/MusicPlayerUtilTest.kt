@@ -1,6 +1,11 @@
 package com.kutedev.easemusicplayer.core
 
 import androidx.media3.common.Player
+import com.kutedev.easemusicplayer.singleton.PlaybackContext
+import com.kutedev.easemusicplayer.singleton.PlaybackContextType
+import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
+import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
+import com.kutedev.easemusicplayer.singleton.buildPlaylistQueueEntryId
 import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -64,6 +69,62 @@ class MusicPlayerUtilTest {
         )
 
         assertNull(plan)
+    }
+
+    @Test
+    fun buildPlaybackQueuePlan_snapshotUsesQueueEntryIdentity() {
+        val playlistId = PlaylistId(7L)
+        val musics = listOf(41L, 42L, 43L).mapIndexed { index, id ->
+            MusicAbstract(
+                meta = MusicMeta(
+                    id = MusicId(id),
+                    title = "track-$id",
+                    duration = Duration.ofSeconds(index.toLong() + 1),
+                    order = emptyList(),
+                ),
+                cover = null,
+            )
+        }
+        val snapshot = PlaybackQueueSnapshot(
+            context = PlaybackContext(
+                type = PlaybackContextType.USER_PLAYLIST,
+                playlistId = playlistId,
+            ),
+            entries = musics.map { music ->
+                PlaybackQueueEntry(
+                    queueEntryId = buildPlaylistQueueEntryId(playlistId, music.meta.id),
+                    musicId = music.meta.id,
+                    musicAbstract = music,
+                    sourceContext = PlaybackContext(
+                        type = PlaybackContextType.USER_PLAYLIST,
+                        playlistId = playlistId,
+                    ),
+                )
+            },
+            currentQueueEntryId = buildPlaylistQueueEntryId(playlistId, MusicId(42L)),
+        )
+
+        val plan = buildPlaybackQueuePlan(
+            snapshot = snapshot,
+            targetQueueEntryId = snapshot.currentQueueEntryId,
+            playMode = PlayMode.LIST_LOOP,
+        )
+
+        assertNotNull(plan)
+        assertEquals(
+            listOf(
+                buildPlaylistQueueEntryId(playlistId, MusicId(41L)),
+                buildPlaylistQueueEntryId(playlistId, MusicId(42L)),
+                buildPlaylistQueueEntryId(playlistId, MusicId(43L)),
+            ),
+            plan!!.mediaItems.map { it.mediaId },
+        )
+        assertEquals(1, plan.startIndex)
+        assertEquals(Player.REPEAT_MODE_ALL, plan.repeatMode)
+        assertEquals(
+            MusicId(42L),
+            resolveMusicIdFromMediaItem(plan.mediaItems[1]),
+        )
     }
 
     private fun testPlaylist(ids: List<Long>): Playlist {

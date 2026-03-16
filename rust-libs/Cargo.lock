@@ -706,9 +706,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bitcode",
+ "ease-order-key",
  "postcard",
  "redb",
  "serde",
+ "tempfile",
  "thiserror 1.0.63",
  "tracing",
  "uniffi",

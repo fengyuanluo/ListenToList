@@ -1,21 +1,18 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use ease_order_key::OrderKey;
 use redb::{ReadTransaction, ReadableMultimapTable, ReadableTable, ReadableTableMetadata};
 
 use crate::error::BResult;
 
-use super::{core::DatabaseServer, music::ArgDBAddMusic};
-use ease_client_schema::{
-    BlobId, DbKeyAlloc, MusicId, PlaylistId, PlaylistModel, StorageEntryLoc, TABLE_MUSIC_PLAYLIST,
-    TABLE_PLAYLIST, TABLE_PLAYLIST_MUSIC,
+use super::{
+    core::DatabaseServer,
+    music::{AddedMusic, ArgDBAddMusic},
 };
-
-#[derive(Debug, uniffi::Record)]
-pub struct AddedMusic {
-    pub id: MusicId,
-    pub existed: bool,
-}
+use ease_client_schema::{
+    BlobId, DbKeyAlloc, MusicId, PlaylistId, PlaylistModel, PlaylistMusicModel, StorageEntryLoc,
+    TABLE_MUSIC_PLAYLIST, TABLE_PLAYLIST, TABLE_PLAYLIST_MUSIC,
+};
 
 impl DatabaseServer {
     pub fn load_playlist(self: &Arc<Self>, id: PlaylistId) -> BResult<Option<PlaylistModel>> {
@@ -93,14 +90,18 @@ impl DatabaseServer {
         let mut order = OrderKey::default();
         for m in musics {
             let (id, existed) = self.add_music_impl(&db, &rdb, m, order.clone())?;
-            order = OrderKey::greater(&order);
-
             let mut table_pm = db.open_multimap_table(TABLE_PLAYLIST_MUSIC)?;
             let mut table_mp = db.open_multimap_table(TABLE_MUSIC_PLAYLIST)?;
-            table_pm.insert(playlist_id, id)?;
+            table_pm.insert(
+                playlist_id,
+                PlaylistMusicModel {
+                    music_id: id,
+                    order: order.clone().into_raw(),
+                },
+            )?;
             table_mp.insert(id, playlist_id)?;
-
             ret.push(AddedMusic { id, existed });
+            order = OrderKey::greater(&order);
         }
 
         db.commit()?;
@@ -162,8 +163,9 @@ impl DatabaseServer {
             table_playlist.remove(playlist_id)?;
 
             let ids = table_pm.get(playlist_id)?;
-            for id in ids {
-                let id = id?.value();
+            for relation in ids {
+                let relation = relation?.value();
+                let id = relation.music_id;
                 table_mp.remove(id, playlist_id)?;
                 self.compact_music_impl(&db, &rdb, &mut table_mp, &mut to_remove_blobs, id)?;
             }
@@ -192,7 +194,15 @@ impl DatabaseServer {
         {
             let mut table_pm = db.open_multimap_table(TABLE_PLAYLIST_MUSIC)?;
             let mut table_mp = db.open_multimap_table(TABLE_MUSIC_PLAYLIST)?;
-            table_pm.remove(playlist_id, music_id)?;
+            let relations: Vec<_> = table_pm
+                .get(playlist_id)?
+                .into_iter()
+                .filter_map(|value| value.ok().map(|value| value.value()))
+                .filter(|relation| relation.music_id == music_id)
+                .collect();
+            for relation in relations {
+                table_pm.remove(playlist_id, relation)?;
+            }
             table_mp.remove(music_id, playlist_id)?;
 
             self.compact_music_impl(&db, &rdb, &mut table_mp, &mut to_remove_blobs, music_id)?;
@@ -217,20 +227,70 @@ impl DatabaseServer {
         let rdb = self.db().begin_read()?;
 
         let mut ret: Vec<AddedMusic> = Vec::with_capacity(musics.len());
+        let existing_music_ids: HashSet<_> = db
+            .open_multimap_table(TABLE_PLAYLIST_MUSIC)?
+            .get(playlist_id)?
+            .into_iter()
+            .filter_map(|value| value.ok().map(|value| value.value().music_id))
+            .collect();
+        let mut seen_music_ids = existing_music_ids;
 
         let mut order = OrderKey::greater(&last_order);
         for m in musics {
             let (id, existed) = self.add_music_impl(&db, &rdb, m, order.clone())?;
-            order = OrderKey::greater(&order);
+            if seen_music_ids.contains(&id) {
+                continue;
+            }
 
             let mut table_pm = db.open_multimap_table(TABLE_PLAYLIST_MUSIC)?;
             let mut table_mp = db.open_multimap_table(TABLE_MUSIC_PLAYLIST)?;
-            table_pm.insert(playlist_id, id)?;
+            table_pm.insert(
+                playlist_id,
+                PlaylistMusicModel {
+                    music_id: id,
+                    order: order.clone().into_raw(),
+                },
+            )?;
             table_mp.insert(id, playlist_id)?;
 
             ret.push(AddedMusic { id, existed });
+            seen_music_ids.insert(id);
+            order = OrderKey::greater(&order);
         }
         db.commit()?;
         Ok(ret)
+    }
+
+    pub fn set_playlist_music_order(
+        self: &Arc<Self>,
+        playlist_id: PlaylistId,
+        music_id: MusicId,
+        order: OrderKey,
+    ) -> BResult<()> {
+        let db = self.db().begin_write()?;
+        {
+            let mut table = db.open_multimap_table(TABLE_PLAYLIST_MUSIC)?;
+            let relations: Vec<_> = table
+                .get(playlist_id)?
+                .into_iter()
+                .filter_map(|value| value.ok().map(|value| value.value()))
+                .collect();
+            for relation in relations {
+                if relation.music_id != music_id {
+                    continue;
+                }
+                table.remove(playlist_id, relation.clone())?;
+                table.insert(
+                    playlist_id,
+                    PlaylistMusicModel {
+                        music_id,
+                        order: order.clone().into_raw(),
+                    },
+                )?;
+                break;
+            }
+        }
+        db.commit()?;
+        Ok(())
     }
 }

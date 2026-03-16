@@ -74,6 +74,7 @@ import com.kutedev.easemusicplayer.core.RouteImport
 import com.kutedev.easemusicplayer.singleton.RouteImportType
 import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.toMusicDurationMs
+import com.kutedev.easemusicplayer.singleton.PlaybackRemoveAction
 import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_backend.LyricLine
 import uniffi.ease_client_backend.LyricLoadState
@@ -93,6 +94,7 @@ private fun MusicPlayerHeader(
 ) {
     val navController = LocalNavController.current
     val currentPlaying by playerVM.music.collectAsState()
+    val removeAction by playerVM.removeAction.collectAsState()
 
 
     var moreMenuExpanded by remember {
@@ -168,7 +170,10 @@ private fun MusicPlayerHeader(
                                 )
                             },
                             EaseContextMenuItem(
-                                stringId = R.string.music_player_context_menu_remove,
+                                stringId = when (removeAction) {
+                                    PlaybackRemoveAction.REMOVE_FROM_PLAYLIST -> R.string.music_player_context_menu_remove_from_playlist
+                                    PlaybackRemoveAction.REMOVE_FROM_QUEUE -> R.string.music_player_context_menu_remove_from_queue
+                                },
                                 isError = true,
                                 onClick = {
                                     playerVM.remove()

@@ -6,7 +6,7 @@ use ease_order_key::{OrderKey, OrderKeyRef};
 use crate::{
     error::{BError, BResult},
     objects::{Playlist, PlaylistAbstract},
-    repositories::{music::ArgDBAddMusic, playlist::AddedMusic},
+    repositories::music::{AddedMusic, ArgDBAddMusic},
     services::{
         get_all_playlist_abstracts, get_playlist, ArgAddMusicsToPlaylist, ArgCreatePlaylist,
         ArgRemoveMusicFromPlaylist, ArgUpdatePlaylist,
@@ -264,6 +264,157 @@ pub fn cts_reorder_music_in_playlist(cx: Arc<Backend>, arg: ArgReorderMusic) -> 
         }
     };
 
-    cx.database_server().set_music_order(from.meta.id, order)?;
+    cx.database_server()
+        .set_playlist_music_order(arg.playlist_id, from.meta.id, order)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use ease_client_schema::StorageType;
+    use tempfile::TempDir;
+
+    use crate::{
+        controllers::storage::ct_list_storage,
+        create_backend,
+        services::{ArgCreatePlaylist, ArgInitializeApp, ToAddMusicEntry},
+        StorageEntry,
+    };
+
+    use super::{
+        ct_create_playlist, ct_get_playlist, ct_list_playlist, cts_reorder_music_in_playlist,
+        ArgReorderMusic,
+    };
+
+    fn setup_backend() -> (TempDir, Arc<crate::Backend>) {
+        let tempdir = tempfile::tempdir().expect("create tempdir");
+        let documents_dir = tempdir.path().join("documents");
+        let cache_dir = tempdir.path().join("cache");
+        std::fs::create_dir_all(&documents_dir).expect("create documents dir");
+        std::fs::create_dir_all(&cache_dir).expect("create cache dir");
+
+        let backend = create_backend(ArgInitializeApp {
+            app_document_dir: format!("{}/", documents_dir.display()),
+            app_cache_dir: format!("{}/", cache_dir.display()),
+            storage_path: "/".to_string(),
+        });
+        backend.init().expect("init backend");
+        (tempdir, backend)
+    }
+
+    #[test]
+    fn reorder_music_only_changes_membership_order_inside_target_playlist() {
+        ease_client_tokio::tokio_runtime().block_on(async {
+            let (_tempdir, backend) = setup_backend();
+            let local_storage = ct_list_storage(backend.clone())
+                .await
+                .expect("list storages")
+                .into_iter()
+                .find(|storage| storage.typ == StorageType::Local)
+                .expect("local storage");
+
+            let make_entry = |path: &str, name: &str| ToAddMusicEntry {
+                entry: StorageEntry {
+                    storage_id: local_storage.id,
+                    name: name.to_string(),
+                    path: path.to_string(),
+                    size: None,
+                    is_dir: false,
+                },
+                name: name.to_string(),
+            };
+
+            let playlist_a = ct_create_playlist(
+                backend.clone(),
+                ArgCreatePlaylist {
+                    title: "playlist-a".to_string(),
+                    cover: None,
+                    entries: vec![
+                        make_entry("/shared/a.mp3", "a"),
+                        make_entry("/shared/b.mp3", "b"),
+                    ],
+                },
+            )
+            .await
+            .expect("create playlist a")
+            .id;
+
+            let playlist_b = ct_create_playlist(
+                backend.clone(),
+                ArgCreatePlaylist {
+                    title: "playlist-b".to_string(),
+                    cover: None,
+                    entries: vec![
+                        make_entry("/shared/a.mp3", "a"),
+                        make_entry("/shared/b.mp3", "b"),
+                    ],
+                },
+            )
+            .await
+            .expect("create playlist b")
+            .id;
+
+            let before_a = ct_get_playlist(backend.clone(), playlist_a)
+                .await
+                .expect("load playlist a")
+                .expect("playlist a exists");
+            let before_b = ct_get_playlist(backend.clone(), playlist_b)
+                .await
+                .expect("load playlist b")
+                .expect("playlist b exists");
+
+            let shared_a_id = before_a.musics[0].meta.id;
+            let shared_b_id = before_a.musics[1].meta.id;
+            assert_eq!(shared_a_id, before_b.musics[0].meta.id);
+            assert_eq!(shared_b_id, before_b.musics[1].meta.id);
+
+            cts_reorder_music_in_playlist(
+                backend.clone(),
+                ArgReorderMusic {
+                    playlist_id: playlist_a,
+                    id: shared_b_id,
+                    a: None,
+                    b: Some(shared_a_id),
+                },
+            )
+            .expect("reorder playlist a membership");
+
+            let after_a = ct_get_playlist(backend.clone(), playlist_a)
+                .await
+                .expect("reload playlist a")
+                .expect("playlist a exists after reorder");
+            let after_b = ct_get_playlist(backend.clone(), playlist_b)
+                .await
+                .expect("reload playlist b")
+                .expect("playlist b exists after reorder");
+
+            assert_eq!(
+                vec![shared_b_id, shared_a_id],
+                after_a
+                    .musics
+                    .iter()
+                    .map(|music| music.meta.id)
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(
+                vec![shared_a_id, shared_b_id],
+                after_b
+                    .musics
+                    .iter()
+                    .map(|music| music.meta.id)
+                    .collect::<Vec<_>>()
+            );
+
+            let playlist_titles = ct_list_playlist(backend)
+                .await
+                .expect("list playlists after reorder")
+                .into_iter()
+                .map(|playlist| playlist.meta.title)
+                .collect::<Vec<_>>();
+            assert!(playlist_titles.iter().any(|title| title == "playlist-a"));
+            assert!(playlist_titles.iter().any(|title| title == "playlist-b"));
+        })
+    }
 }

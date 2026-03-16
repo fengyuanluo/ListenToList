@@ -38,6 +38,11 @@ pub struct ArgAddMusicsToPlaylist {
 }
 
 #[derive(Debug, uniffi::Record)]
+pub struct ArgEnsureMusics {
+    pub entries: Vec<ToAddMusicEntry>,
+}
+
+#[derive(Debug, uniffi::Record)]
 pub struct ArgRemoveMusicFromPlaylist {
     pub playlist_id: PlaylistId,
     pub music_id: MusicId,

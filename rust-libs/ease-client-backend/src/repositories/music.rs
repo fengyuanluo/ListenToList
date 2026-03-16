@@ -11,6 +11,12 @@ use ease_client_schema::{
     TABLE_MUSIC_BY_LOC, TABLE_PLAYLIST_MUSIC, TABLE_STORAGE_MUSIC,
 };
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct AddedMusic {
+    pub id: MusicId,
+    pub existed: bool,
+}
+
 #[derive(Debug)]
 pub struct ArgDBAddMusic {
     pub loc: StorageEntryLoc,
@@ -29,9 +35,10 @@ impl DatabaseServer {
         let mut ret: Vec<MusicModel> = Vec::with_capacity(iter.len() as usize);
 
         for item in iter {
-            let id = item?.value();
-
-            let music = table_music.get(id)?.unwrap().value();
+            let relation = item?.value();
+            let music = table_music.get(relation.music_id)?.unwrap().value();
+            let mut music = music;
+            music.order = relation.order;
             ret.push(music);
         }
 
@@ -129,6 +136,22 @@ impl DatabaseServer {
         Ok(())
     }
 
+    pub fn upsert_musics(self: &Arc<Self>, musics: Vec<ArgDBAddMusic>) -> BResult<Vec<AddedMusic>> {
+        let db = self.db().begin_write()?;
+        let rdb = self.db().begin_read()?;
+        let mut ret: Vec<AddedMusic> = Vec::with_capacity(musics.len());
+
+        let mut order = OrderKey::default();
+        for music in musics {
+            let (id, existed) = self.add_music_impl(&db, &rdb, music, order.clone())?;
+            order = OrderKey::greater(&order);
+            ret.push(AddedMusic { id, existed });
+        }
+
+        db.commit()?;
+        Ok(ret)
+    }
+
     pub fn update_music_cover(self: &Arc<Self>, id: MusicId, cover: Vec<u8>) -> BResult<()> {
         let db = self.db().begin_write()?;
         {
@@ -169,22 +192,6 @@ impl DatabaseServer {
         }
         db.commit()?;
 
-        Ok(())
-    }
-
-    pub fn set_music_order(self: &Arc<Self>, id: MusicId, order: OrderKey) -> BResult<()> {
-        let db = self.db().begin_write()?;
-
-        {
-            let mut table_music = db.open_table(TABLE_MUSIC)?;
-            let m = table_music.get(id)?.map(|v| v.value());
-
-            if let Some(mut m) = m {
-                m.order = order.into_raw();
-                table_music.insert(id, m)?;
-            }
-        };
-        db.commit()?;
         Ok(())
     }
 

@@ -34,16 +34,15 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import uniffi.ease_client_backend.ArgCreatePlaylist
+import uniffi.ease_client_backend.ArgEnsureMusics
 import uniffi.ease_client_backend.CurrentStorageStateType
 import uniffi.ease_client_backend.ListStorageEntryChildrenResp
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_backend.StorageEntry
 import uniffi.ease_client_backend.StorageEntryType
 import uniffi.ease_client_backend.ToAddMusicEntry
-import uniffi.ease_client_backend.ctCreatePlaylist
+import uniffi.ease_client_backend.ctEnsureMusics
 import uniffi.ease_client_backend.ctListStorageEntryChildren
-import uniffi.ease_client_backend.ctRemovePlaylist
 import uniffi.ease_client_schema.StorageEntryLoc
 import uniffi.ease_client_schema.StorageId
 import uniffi.ease_client_schema.StorageType
@@ -181,10 +180,10 @@ class StorageBrowserVM @Inject constructor(
         }
     }
 
-    fun clickEntry(entry: StorageEntry, playlistPrefix: String, rootName: String) {
+    fun clickEntry(entry: StorageEntry) {
         when {
             entry.isDir -> navigateDir(entry.path)
-            entry.entryTyp() == StorageEntryType.MUSIC -> playFromFolder(entry, playlistPrefix, rootName)
+            entry.entryTyp() == StorageEntryType.MUSIC -> playFromFolder(entry)
             else -> toastRepository.emitToast("该文件暂不支持播放")
         }
     }
@@ -286,7 +285,7 @@ class StorageBrowserVM @Inject constructor(
         }
     }
 
-    fun playFromFolder(entry: StorageEntry, playlistPrefix: String, rootName: String) {
+    fun playFromFolder(entry: StorageEntry) {
         viewModelScope.launch {
             _working.value = true
             try {
@@ -302,46 +301,33 @@ class StorageBrowserVM @Inject constructor(
                     return@launch
                 }
 
-                val playlistName = StorageBrowserUtils.buildFolderPlaylistName(
-                    folderPath,
-                    playlistPrefix,
-                    rootName
-                )
-                val existing = playlistRepository.playlists.value.find { it.meta.title == playlistName }
-                if (existing != null) {
-                    bridge.run { backend -> ctRemovePlaylist(backend, existing.meta.id) }
-                }
-
-                val entries = songs.map { song -> ToAddMusicEntry(song, song.name) }
-                val created = bridge.run { backend ->
-                    ctCreatePlaylist(
-                        backend,
-                        ArgCreatePlaylist(
-                            title = playlistName,
-                            cover = null,
-                            entries = entries
+                val index = songs.indexOfFirst { it.path == entry.path }.coerceAtLeast(0)
+                val ensured = bridge.run {
+                    ctEnsureMusics(
+                        it,
+                        ArgEnsureMusics(
+                            entries = songs.map { song -> ToAddMusicEntry(song, song.name) }
                         )
                     )
-                }
-                if (created == null) {
-                    toastRepository.emitToast("创建播放列表失败")
+                } ?: emptyList()
+                if (ensured.isEmpty()) {
+                    toastRepository.emitToast("当前文件夹暂无可播放的音乐")
                     return@launch
                 }
-                val index = songs.indexOfFirst { it.path == entry.path }.coerceAtLeast(0)
-                val musicId = created.musicIds.getOrNull(index)?.id
-                    ?: created.musicIds.firstOrNull()?.id
-                if (musicId == null) {
-                    toastRepository.emitToast("播放列表为空")
-                    return@launch
-                }
+                playlistRepository.requestTotalDuration(ensured)
                 folderPrefetcher.cancel()
                 prefetchFolderSongs(
                     songs = songs,
-                    musicIds = created.musicIds,
+                    musicIds = ensured,
                     startIndex = index,
                 )
-                playlistRepository.reload()
-                playerControllerRepository.play(musicId, created.id)
+                playerControllerRepository.playFolder(
+                    storageId = storageId,
+                    folderPath = folderPath,
+                    songs = songs,
+                    targetEntryPath = entry.path,
+                    ensuredMusics = ensured,
+                )
             } finally {
                 _working.value = false
             }
