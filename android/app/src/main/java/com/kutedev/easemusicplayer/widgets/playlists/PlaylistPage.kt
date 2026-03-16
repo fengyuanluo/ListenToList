@@ -70,6 +70,7 @@ import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteImport
 import com.kutedev.easemusicplayer.core.RouteMusicPlayer
 import com.kutedev.easemusicplayer.singleton.RouteImportType
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.EditPlaylistVM
 import com.kutedev.easemusicplayer.widgets.appbar.BottomBar
 import com.kutedev.easemusicplayer.widgets.appbar.BottomBarSpacer
@@ -150,7 +151,7 @@ private fun PlaylistHeader(
                 )
                 Box(
                     modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.6f))
+                        .background(EaseTheme.surfaces.coverScrim)
                         .fillMaxSize()
                 )
             }
@@ -221,15 +222,14 @@ private fun PlaylistHeader(
                 text = title,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
-                fontSize = 24.sp,
-                lineHeight = 26.sp,
+                style = EaseTheme.typography.heroTitle,
                 overflow = TextOverflow.Ellipsis,
                 maxLines = 2
             )
             Text(
                 text = "${musics.size} ${stringResource(id = countSuffixStringId)} · ${duration}",
                 color = Color.White,
-                fontSize = 14.sp,
+                style = EaseTheme.typography.body,
             )
         }
     }
@@ -247,8 +247,9 @@ private fun EmptyPlaylist(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .padding(24.dp, 24.dp),
+                .clip(RoundedCornerShape(EaseTheme.radius.card))
+                .background(EaseTheme.surfaces.secondary)
+                .padding(EaseTheme.spacing.dialogPadding),
         ) {
             Image(
                 painter = painterResource(id = R.drawable.empty_playlist),
@@ -342,7 +343,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .offset(x = with(density) { anchoredDraggableState.value.toDp() })
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(EaseTheme.radius.compact))
                 .customAnchoredDraggable(
                     state = anchoredDraggableState,
                     orientation = Orientation.Horizontal,
@@ -351,9 +352,9 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                     }
                 )
                 .background(bgColor)
-                .padding(8.dp, 16.dp)
+                .padding(EaseTheme.spacing.xs, EaseTheme.spacing.md)
                 .fillMaxWidth()
-                .padding(6.dp, 0.dp)
+                .padding(EaseTheme.spacing.sm, 0.dp)
         ){
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -371,14 +372,14 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                     text = (index + 1).toString(),
                     color = dragHandleColor,
                     maxLines = 1,
-                    fontSize = 14.sp,
+                    style = EaseTheme.typography.body,
                 )
                 Text(
                     text = title,
                     color = color,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 14.sp,
+                    style = EaseTheme.typography.body,
                 )
             }
             Box(modifier = Modifier.width(16.dp))
@@ -387,8 +388,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                 color = durationColor,
                 maxLines = 1,
                 modifier = Modifier.wrapContentWidth(),
-                fontSize = 14.sp,
-                fontFamily = FontFamily(Font(R.font.noto_sans)),
+                style = EaseTheme.typography.body.copy(fontFamily = FontFamily(Font(R.font.noto_sans))),
             )
         }
         Box(
@@ -487,7 +487,7 @@ fun PlaylistPage(
 
     Box(
         modifier = Modifier
-            .background(MaterialTheme.colorScheme.surface)
+            .background(EaseTheme.surfaces.screen)
             .fillMaxSize()
     ) {
         Column {

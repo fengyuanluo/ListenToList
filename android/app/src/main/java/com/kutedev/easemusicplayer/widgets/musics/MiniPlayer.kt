@@ -27,7 +27,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
@@ -37,6 +36,7 @@ import com.kutedev.easemusicplayer.components.MusicCover
 import com.kutedev.easemusicplayer.viewmodels.PlayerVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteMusicPlayer
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.toMusicDurationMs
 import uniffi.ease_client_schema.DataSourceKey
@@ -60,9 +60,9 @@ private fun MiniPlayerCore(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(30.dp)
+            .padding(horizontal = EaseTheme.spacing.hero, vertical = EaseTheme.spacing.lg)
             .height(64.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
@@ -74,24 +74,24 @@ private fun MiniPlayerCore(
         ) {
             MusicCover(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(EaseTheme.radius.sm))
                     .size(60.dp),
                 coverDataSourceKey = cover,
             )
-            Box(modifier = Modifier.width(16.dp))
+            Box(modifier = Modifier.width(EaseTheme.spacing.md))
             Column(
                 modifier = Modifier.fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = title,
-                    style = TextStyle(fontSize = 16.sp),
+                    style = EaseTheme.typography.cardTitle,
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1
                 )
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
+                        .clip(RoundedCornerShape(EaseTheme.radius.control))
                         .fillMaxWidth()
                 ) {
                     LinearProgressIndicator(
@@ -104,12 +104,12 @@ private fun MiniPlayerCore(
                             }
                         },
                         color = MaterialTheme.colorScheme.onSurface,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        trackColor = EaseTheme.surfaces.secondary,
                     )
                 }
                 Text(
                     text = totalDuration,
-                    fontSize = 9.sp,
+                    style = EaseTheme.typography.micro,
                 )
             }
         }

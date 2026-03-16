@@ -37,7 +37,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,6 +44,7 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.LogVM
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -134,19 +134,21 @@ fun LogPage(
     }
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(EaseTheme.surfaces.screen),
     ) {
         Column {
             Text(
                 modifier = Modifier.padding(start = paddingX, end = paddingX, top = 24.dp, bottom = 4.dp),
                 text = stringResource(id = R.string.log_title),
-                fontSize = 32.sp,
+                style = EaseTheme.typography.screenTitle,
             )
             Text(
                 modifier = Modifier.padding(horizontal = paddingX),
                 text = pluralStringResource(id = R.plurals.log_desc, count = logs.size, logs.size),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 14.sp,
+                style = EaseTheme.typography.body,
             )
             Box(modifier = Modifier.height(24.dp))
             LazyColumn(
@@ -171,9 +173,9 @@ fun LogPage(
                             )
                             Text(
                                 text = log.path,
-                                fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
+                                style = EaseTheme.typography.caption,
                             )
                         }
                     }
@@ -187,46 +189,45 @@ fun LogPage(
         Dialog(onDismissRequest = { previewLog = null }) {
             Column(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surface)
+                    .clip(RoundedCornerShape(EaseTheme.radius.card))
+                    .background(EaseTheme.surfaces.dialog)
                     .heightIn(max = 520.dp)
                     .verticalScroll(rememberScrollState())
-                    .padding(20.dp, 20.dp),
+                    .padding(EaseTheme.spacing.lg),
             ) {
                 Text(
                     text = stringResource(id = R.string.log_preview_title),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
+                    style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
                 )
                 Text(
                     text = previewLog?.name.orEmpty(),
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
+                    style = EaseTheme.typography.bodySmall,
                 )
                 Text(
                     text = previewLog?.path.orEmpty(),
-                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = EaseTheme.typography.caption,
                 )
                 Box(modifier = Modifier.height(12.dp))
                 if (previewError != null) {
                     Text(
                         text = previewError ?: "",
                         color = MaterialTheme.colorScheme.error,
-                        fontSize = 12.sp,
+                        style = EaseTheme.typography.bodySmall,
                     )
                 } else {
                     Text(
                         text = previewContent,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
+                        style = EaseTheme.typography.caption,
                     )
                     if (previewTruncated) {
                         Box(modifier = Modifier.height(8.dp))
                         Text(
                             text = stringResource(id = R.string.log_preview_truncated),
-                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = EaseTheme.typography.caption,
                         )
                     }
                 }

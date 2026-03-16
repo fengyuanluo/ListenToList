@@ -39,6 +39,7 @@ import com.kutedev.easemusicplayer.core.RouteHome
 import com.kutedev.easemusicplayer.core.RoutePlaylist
 import com.kutedev.easemusicplayer.core.isRouteHome
 import com.kutedev.easemusicplayer.core.isRoutePlaylist
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.widgets.musics.MiniPlayer
 import kotlinx.coroutines.launch
 
@@ -132,13 +133,13 @@ fun BoxScope.BottomBar(
         modifier = Modifier
             .align(Alignment.BottomStart)
             .dropShadow(
-                MaterialTheme.colorScheme.surfaceVariant,
+                EaseTheme.surfaces.shadow,
                 0.dp,
                 (-4).dp,
                 8.dp,
             )
-            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 0.dp, bottomEnd = 0.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .clip(RoundedCornerShape(topStart = EaseTheme.radius.compact, topEnd = EaseTheme.radius.compact))
+            .background(EaseTheme.surfaces.card)
             .fillMaxWidth()
     ) {
         if (showMiniPlayer) {

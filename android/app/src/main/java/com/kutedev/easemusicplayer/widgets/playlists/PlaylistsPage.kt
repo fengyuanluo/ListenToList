@@ -62,13 +62,14 @@ import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.PlaylistsMode
 import com.kutedev.easemusicplayer.viewmodels.PlaylistsVM
 import com.kutedev.easemusicplayer.viewmodels.durationStr
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ScrollMoveMode
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import uniffi.ease_client_backend.PlaylistAbstract
 
-private val playlistsPaddingX = 24.dp
+private val playlistsPaddingX = EaseTheme.spacing.page
 
 @Composable
 internal fun PlaylistHomeSearchEntry(
@@ -103,7 +104,9 @@ fun PlaylistsSubpage(
 
     if (playlists.isEmpty()) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .background(EaseTheme.surfaces.screen)
         ) {
             Spacer(modifier = Modifier.height(20.dp))
             PlaylistHomeSearchEntry(
@@ -122,8 +125,9 @@ fun PlaylistsSubpage(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .padding(24.dp, 24.dp),
+                        .clip(RoundedCornerShape(EaseTheme.radius.card))
+                        .background(EaseTheme.surfaces.secondary)
+                        .padding(EaseTheme.spacing.dialogPadding),
                 ) {
                     Image(painter = painterResource(id = R.drawable.empty_playlists), contentDescription = null)
                     Box(modifier = Modifier.height(20.dp))
@@ -147,6 +151,7 @@ fun PlaylistsSubpage(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(EaseTheme.surfaces.screen)
             ) {
                 Spacer(modifier = Modifier.height(20.dp))
                 PlaylistHomeSearchEntry(
@@ -243,7 +248,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
 ) {
     val mode by playlistsVM.mode.collectAsState()
     val navController = LocalNavController.current
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(EaseTheme.radius.hero)
     val dragModifier = if (isDragging) {
         Modifier
             .shadow(8.dp, shape)
@@ -273,7 +278,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
         ) {
             Box(
                 modifier = Modifier.clip(shape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant).size(136.dp)
+                    .background(EaseTheme.surfaces.secondary).size(136.dp)
             ) {
                 val cover = playlist.meta.showCover
                 if (cover == null) {
@@ -296,7 +301,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
             ) {
                 Text(
                     text = playlist.meta.title,
-                    fontSize = 14.sp,
+                    style = EaseTheme.typography.body,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -307,8 +312,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                     append("  ·  ")
                     append(playlist.durationStr())
                 },
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Light,
+                style = EaseTheme.typography.bodySmall.copy(fontWeight = FontWeight.Light),
                 maxLines = 1,
             )
         }
@@ -317,7 +321,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .size(24.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(EaseTheme.radius.xs))
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {

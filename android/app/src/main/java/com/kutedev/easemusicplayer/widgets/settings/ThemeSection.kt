@@ -41,13 +41,13 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.components.ThemeBackgroundImage
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.ui.theme.ThemePresets
 import com.kutedev.easemusicplayer.viewmodels.ThemeVM
 import kotlin.math.roundToInt
@@ -57,8 +57,7 @@ private fun SectionTitle(title: String) {
     Column {
         Text(
             text = title,
-            letterSpacing = 1.sp,
-            fontSize = 14.sp,
+            style = EaseTheme.typography.body,
         )
         Box(
             modifier = Modifier
@@ -176,8 +175,8 @@ fun ThemeSection(
         }
         Text(
             text = stringResource(id = R.string.setting_theme_preset),
-            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.bodySmall,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -196,8 +195,8 @@ fun ThemeSection(
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = stringResource(id = R.string.setting_theme_palette),
-            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.bodySmall,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -207,24 +206,24 @@ fun ThemeSection(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(EaseTheme.radius.sm))
                     .background(previewColor)
-                    .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(10.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(EaseTheme.radius.sm))
             )
             val hex = remember(previewColor) {
                 String.format("#%06X", 0xFFFFFF and previewColor.toArgb())
             }
             Text(
                 text = "${stringResource(id = R.string.setting_theme_preview)} $hex",
-                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = EaseTheme.typography.bodySmall,
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "${stringResource(id = R.string.setting_theme_hue)} ${hue.roundToInt()} deg",
-            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.bodySmall,
         )
         GradientSlider(
             value = hue,
@@ -238,8 +237,8 @@ fun ThemeSection(
         )
         Text(
             text = "${stringResource(id = R.string.setting_theme_saturation)} ${(saturation * 100).roundToInt()}%",
-            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.bodySmall,
         )
         GradientSlider(
             value = saturation,
@@ -257,8 +256,8 @@ fun ThemeSection(
         )
         Text(
             text = "${stringResource(id = R.string.setting_theme_brightness)} ${(value * 100).roundToInt()}%",
-            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.bodySmall,
         )
         GradientSlider(
             value = value,
@@ -277,16 +276,16 @@ fun ThemeSection(
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = stringResource(id = R.string.setting_theme_background),
-            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.bodySmall,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(120.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clip(RoundedCornerShape(EaseTheme.radius.compact))
+                .background(EaseTheme.surfaces.secondary)
         ) {
             ThemeBackgroundImage(
                 uri = settings.backgroundImageUri,
@@ -298,7 +297,7 @@ fun ThemeSection(
                     modifier = Modifier.align(Alignment.Center),
                     text = stringResource(id = R.string.setting_theme_background_empty),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    style = EaseTheme.typography.bodySmall,
                 )
             }
         }

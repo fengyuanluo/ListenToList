@@ -32,7 +32,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
@@ -45,6 +44,7 @@ import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteImport
 import com.kutedev.easemusicplayer.singleton.RouteImportType
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.EditPlaylistVM
 import uniffi.ease_client_backend.CreatePlaylistMode
 import uniffi.ease_client_schema.DataSourceKey
@@ -66,7 +66,7 @@ private fun Tab(
             modifier = Modifier
                 .padding(8.dp, 0.dp),
             text = stringResource(id = stringId),
-            fontSize = 11.sp,
+            style = EaseTheme.typography.caption,
             color = if (!isActive) {
                 MaterialTheme.colorScheme.onSurfaceVariant
             } else {
@@ -91,7 +91,7 @@ private fun FullImportHeader(
 ) {
     Text(
         text = text,
-        fontSize = 10.sp,
+        style = EaseTheme.typography.micro,
     )
 }
 
@@ -112,12 +112,12 @@ private fun FullImportBlock(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(EaseTheme.radius.sm))
                 .clickable {
                     createPlaylistVM.prepareImportCreate()
                     navController.navigate(RouteImport(RouteImportType.EditPlaylist))
                 }
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(EaseTheme.surfaces.secondary)
                 .padding(0.dp, 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -130,7 +130,7 @@ private fun FullImportBlock(
             )
             Text(
                 text = stringResource(R.string.playlists_dialog_playlist_full_import_desc),
-                fontSize = 12.sp,
+                style = EaseTheme.typography.bodySmall,
                 textAlign = TextAlign.Center
             )
         }
@@ -215,11 +215,11 @@ fun CreatePlaylistsDialog(
     ) {
         Column(
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface)
+                .clip(RoundedCornerShape(EaseTheme.radius.card))
+                .background(EaseTheme.surfaces.dialog)
                 .heightIn(max = 520.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp, 24.dp),
+                .padding(EaseTheme.spacing.dialogPadding),
         ) {
             Row {
                 Tab(
@@ -313,11 +313,11 @@ fun EditPlaylistsDialog(
     ) {
         Column(
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface)
+                .clip(RoundedCornerShape(EaseTheme.radius.card))
+                .background(EaseTheme.surfaces.dialog)
                 .heightIn(max = 520.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp, 24.dp),
+                .padding(EaseTheme.spacing.dialogPadding),
         ) {
 
             FullImportHeader(

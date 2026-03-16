@@ -34,12 +34,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.components.dropShadow
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.StorageSearchErrorType
 import com.kutedev.easemusicplayer.viewmodels.entryTyp
 import com.kutedev.easemusicplayer.viewmodels.labelRes
@@ -65,13 +65,13 @@ fun StorageSearchScopeSelector(
     ) {
         StorageSearchScope.values().forEach { scope ->
             val selected = scope == selectedScope
-            val shape = RoundedCornerShape(999.dp)
+            val shape = RoundedCornerShape(EaseTheme.radius.control)
             Box(
                 modifier = Modifier
                     .clip(shape)
                     .background(
                         if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
+                        else EaseTheme.surfaces.chip
                     )
                     .border(
                         width = 1.dp,
@@ -88,8 +88,9 @@ fun StorageSearchScopeSelector(
                 Text(
                     text = stringResource(id = scope.labelRes()),
                     color = if (selected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface,
-                    fontSize = 12.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    style = EaseTheme.typography.label.copy(
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    ),
                 )
             }
         }
@@ -102,32 +103,31 @@ fun StorageSearchErrorCard(
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(EaseTheme.radius.card)
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
             .fillMaxWidth()
             .dropShadow(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                color = EaseTheme.surfaces.shadow,
                 offsetX = 0.dp,
                 offsetY = 4.dp,
                 blurRadius = 14.dp,
             )
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(EaseTheme.surfaces.card)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), shape)
-            .padding(16.dp)
+            .padding(EaseTheme.spacing.cardPadding)
     ) {
         Text(
             text = stringResource(id = errorType.titleRes),
             color = MaterialTheme.colorScheme.error,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = EaseTheme.typography.body.copy(fontWeight = FontWeight.SemiBold),
         )
         Text(
             text = stringResource(id = errorType.bodyRes),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
+            style = EaseTheme.typography.bodySmall,
         )
         if (onRetry != null) {
             EaseTextButton(
@@ -163,7 +163,7 @@ fun StorageSearchResultRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(EaseTheme.radius.card))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = {
@@ -177,8 +177,8 @@ fun StorageSearchResultRow(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(42.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
+                .clip(RoundedCornerShape(EaseTheme.radius.compact))
+                .background(EaseTheme.surfaces.secondary)
         ) {
             Icon(
                 painter = painterResource(id = iconId),
@@ -194,15 +194,14 @@ fun StorageSearchResultRow(
             Text(
                 text = entry.name,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = subtitle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+                style = EaseTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -220,7 +219,7 @@ fun StorageSearchActionSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = EaseTheme.surfaces.dialog,
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -231,15 +230,14 @@ fun StorageSearchActionSheet(
             Text(
                 text = title,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
+                style = EaseTheme.typography.sectionTitle.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = subtitle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+                style = EaseTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -253,15 +251,14 @@ fun StorageSearchActionSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(EaseTheme.radius.card))
                         .clickable { item.onClick() }
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                        .padding(horizontal = EaseTheme.spacing.md, vertical = EaseTheme.spacing.sm)
                 ) {
                     Text(
                         text = item.label,
                         color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
+                        style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.Medium),
                     )
                 }
             }
@@ -274,14 +271,14 @@ fun StorageSearchActionSheet(
 fun StorageSearchLoadingRow(
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(EaseTheme.radius.card)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            .background(EaseTheme.surfaces.secondary)
             .padding(horizontal = 14.dp, vertical = 14.dp)
     ) {
         CircularProgressIndicator(
@@ -296,15 +293,15 @@ fun StorageSearchLoadingRow(
                 modifier = Modifier
                     .width(140.dp)
                     .height(10.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(MaterialTheme.colorScheme.surface)
+                    .clip(RoundedCornerShape(EaseTheme.radius.control))
+                    .background(EaseTheme.surfaces.card)
             )
             Box(
                 modifier = Modifier
                     .width(190.dp)
                     .height(8.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(MaterialTheme.colorScheme.surface)
+                    .clip(RoundedCornerShape(EaseTheme.radius.control))
+                    .background(EaseTheme.surfaces.card)
             )
         }
     }

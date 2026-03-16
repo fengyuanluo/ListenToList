@@ -43,7 +43,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.ConfirmDialog
@@ -59,6 +58,7 @@ import com.kutedev.easemusicplayer.components.FormText
 import com.kutedev.easemusicplayer.components.FormWidget
 import com.kutedev.easemusicplayer.viewmodels.EditStorageVM
 import com.kutedev.easemusicplayer.core.LocalNavController
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import kotlinx.coroutines.flow.update
 import uniffi.ease_client_backend.StorageConnectionTestResult
 import uniffi.ease_client_backend.ctOnedriveOauthUrl
@@ -120,11 +120,11 @@ private fun RemoveDialog(
     ) {
         Text(
             text = mainDesc,
-            fontSize = 14.sp
+            style = EaseTheme.typography.body,
         )
         Text(
             text = countDesc,
-            fontSize = 14.sp
+            style = EaseTheme.typography.body,
         )
     }
 }
@@ -136,9 +136,9 @@ private fun StorageBlock(
     onSelect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isActive) { MaterialTheme.colorScheme.primary } else { MaterialTheme.colorScheme.surfaceVariant }
+    val bgColor = if (isActive) { MaterialTheme.colorScheme.primary } else { EaseTheme.surfaces.secondary }
     val tint = if (isActive) { MaterialTheme.colorScheme.surface } else { MaterialTheme.colorScheme.onSurface }
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(EaseTheme.radius.hero)
     val borderModifier = if (isActive) {
         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
     } else {
@@ -363,7 +363,7 @@ private fun OneDriveConfig(
                     ),
                     text = stringResource(R.string.storage_edit_onedrive_should_auth),
                     color = MaterialTheme.colorScheme.error,
-                    fontSize = 11.sp,
+                    style = EaseTheme.typography.caption,
                 )
             }
         }
@@ -413,7 +413,7 @@ fun EditStoragesPage(
 
     Column(
         modifier = Modifier
-            .background(MaterialTheme.colorScheme.surface)
+            .background(EaseTheme.surfaces.screen)
             .fillMaxSize()
     ) {
         Row(

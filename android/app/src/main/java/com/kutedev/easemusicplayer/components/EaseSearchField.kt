@@ -28,8 +28,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.kutedev.easemusicplayer.R
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 
 @Composable
 fun EaseSearchField(
@@ -42,13 +42,14 @@ fun EaseSearchField(
     onSearch: () -> Unit = {},
     onClear: () -> Unit = {},
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val surfaces = EaseTheme.surfaces
+    val shape = RoundedCornerShape(EaseTheme.radius.control)
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val backgroundColor = if (focused) {
-        MaterialTheme.colorScheme.surface
+        surfaces.card
     } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (elevated) 0.94f else 0.88f)
+        surfaces.secondary
     }
     val borderColor = if (focused) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.36f)
@@ -57,20 +58,19 @@ fun EaseSearchField(
     }
     val textStyle = TextStyle(
         color = MaterialTheme.colorScheme.onSurface,
-        fontSize = 15.sp,
-    )
+    ).merge(EaseTheme.typography.cardTitle)
     val containerModifier = if (elevated) {
         Modifier.dropShadow(
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            color = surfaces.shadow,
             offsetX = 0.dp,
-            offsetY = 6.dp,
-            blurRadius = 18.dp,
+            offsetY = EaseTheme.spacing.xs,
+            blurRadius = EaseTheme.spacing.sectionGap,
         )
     } else {
         Modifier
     }
-    val horizontalPadding = if (elevated) 18.dp else 16.dp
-    val verticalPadding = if (elevated) 14.dp else 12.dp
+    val horizontalPadding = if (elevated) EaseTheme.spacing.lg else EaseTheme.spacing.md
+    val verticalPadding = if (elevated) EaseTheme.spacing.md else EaseTheme.spacing.sm
 
     BasicTextField(
         value = value,
@@ -115,7 +115,7 @@ fun EaseSearchField(
                         Text(
                             text = placeholder,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 15.sp,
+                            style = EaseTheme.typography.cardTitle,
                         )
                     }
                     innerTextField()

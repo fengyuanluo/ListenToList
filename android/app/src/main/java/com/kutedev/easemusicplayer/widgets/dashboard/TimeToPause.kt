@@ -44,6 +44,7 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.SleepModeVM
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -130,7 +131,7 @@ private fun Block(
     ) {
         Text(
             text = stringResource(stringId),
-            fontSize = 9.sp,
+            style = EaseTheme.typography.micro,
         )
         Box(
             modifier = Modifier
@@ -161,7 +162,7 @@ private fun Block(
                     modifier = Modifier
                         .padding(vertical = 16.dp)
                         .offset(0.dp, offsetY),
-                    fontSize = fontSizeValue.sp,
+                    style = EaseTheme.typography.heroTitle.copy(fontSize = fontSizeValue.sp),
                     color = color,
                     text = next(i).toString().padStart(2, '0'),
                 )
@@ -220,9 +221,9 @@ private fun TimeToPauseModalCore(
     ) {
         Column(
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(24.dp, 24.dp),
+                .clip(RoundedCornerShape(EaseTheme.radius.card))
+                .background(EaseTheme.surfaces.dialog)
+                .padding(EaseTheme.spacing.dialogPadding),
         ) {
             Row(
                 modifier = Modifier

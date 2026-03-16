@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 
 enum class EaseTextButtonType {
     Primary,
@@ -35,9 +35,9 @@ fun EaseTextButton(
     disabled: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val fontSize = when (size) {
-        EaseTextButtonSize.Small -> 10.sp
-        EaseTextButtonSize.Medium -> 14.sp
+    val textStyle = when (size) {
+        EaseTextButtonSize.Small -> EaseTheme.typography.micro
+        EaseTextButtonSize.Medium -> EaseTheme.typography.body
     }
     val buttonColors = when(type) {
         EaseTextButtonType.Default -> ButtonDefaults.textButtonColors().copy(
@@ -69,7 +69,7 @@ fun EaseTextButton(
     ) {
         Text(
             text = text,
-            fontSize = fontSize,
+            style = textStyle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

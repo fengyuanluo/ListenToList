@@ -54,6 +54,7 @@ import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.core.LocalNavController
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
 import com.kutedev.easemusicplayer.viewmodels.BrowserScrollSnapshot
 import com.kutedev.easemusicplayer.viewmodels.ImportVM
@@ -77,7 +78,7 @@ private fun ImportEntriesSkeleton() {
         Box(modifier = Modifier
             .width(width)
             .height(height)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(EaseTheme.radius.sm))
             .background(color)
         )
     }
@@ -172,12 +173,12 @@ private fun ImportEntry(
                 modifier = Modifier
                     .size(24.dp)
             )
-            Text(
-                text = entry.name,
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        Text(
+            text = entry.name,
+            style = EaseTheme.typography.body,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         }
         Box(modifier = Modifier.width(12.dp))
         Box(
@@ -242,13 +243,15 @@ private fun ImportEntries(
             !disabled -> MaterialTheme.colorScheme.onSurface
             else -> MaterialTheme.colorScheme.surfaceVariant
         }
-        val fontSize = if (isCurrent) 13.sp else 12.sp
         val fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
         Text(
             text = text,
             color = color,
-            fontSize = fontSize,
-            fontWeight = fontWeight,
+            style = if (isCurrent) {
+                EaseTheme.typography.bodySmall.copy(fontWeight = fontWeight)
+            } else {
+                EaseTheme.typography.bodySmall.copy(fontWeight = fontWeight)
+            },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
@@ -258,7 +261,7 @@ private fun ImportEntries(
                         onNavigateDir(path)
                     }
                 )
-                .clip(RoundedCornerShape(2.dp))
+                .clip(RoundedCornerShape(EaseTheme.radius.xs))
                 .widthIn(10.dp, 100.dp)
                 .padding(4.dp, 2.dp)
         )
@@ -290,8 +293,9 @@ private fun ImportEntries(
             for ((index, v) in splitPaths.withIndex()) {
                 Text(
                     text = ">",
-                    fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ,
+                    style = EaseTheme.typography.bodySmall,
                 )
                 PathTab(
                     text = v.name,
@@ -359,11 +363,6 @@ private fun ImportStorages(
 
             val selected = selectedStorageId == item.id
 
-            val bgColor = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            }
             val textColor = if (selected) {
                 Color.White
             } else {
@@ -372,11 +371,11 @@ private fun ImportStorages(
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(EaseTheme.radius.sm))
                     .clickable {
                         importVM.selectStorage(item.id)
                     }
-                    .background(bgColor)
+                    .background(if (selected) MaterialTheme.colorScheme.primary else EaseTheme.surfaces.secondary)
                     .width(142.dp)
                     .height(65.dp)
             ) {
@@ -387,16 +386,14 @@ private fun ImportStorages(
                     Text(
                         text = item.name,
                         color = textColor,
-                        fontSize = 14.sp,
-                        lineHeight = 14.sp,
+                        style = EaseTheme.typography.body,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = item.subtitle,
                         color = textColor,
-                        fontSize = 10.sp,
-                        lineHeight = 10.sp,
+                        style = EaseTheme.typography.micro,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -432,15 +429,15 @@ private fun ImportMusicsWarningImpl(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
+                .clip(RoundedCornerShape(EaseTheme.radius.xs))
                 .clickable {
                     onClick()
                 }
-                .padding(10.dp)
+                .padding(EaseTheme.spacing.sm)
         ) {
             Box(modifier = Modifier
                 .size(60.dp)
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(EaseTheme.radius.control))
                 .background(color)
             ) {
                 Icon(
@@ -453,14 +450,15 @@ private fun ImportMusicsWarningImpl(
             }
             Text(
                 text = title,
-                fontSize = 14.sp,
                 color = color,
+                style = EaseTheme.typography.body,
             )
             Text(
                 text = subTitle,
-                fontSize = 12.sp,
                 modifier = Modifier
                     .widthIn(0.dp, 220.dp)
+                ,
+                style = EaseTheme.typography.bodySmall,
             )
         }
     }
@@ -475,14 +473,14 @@ private fun ImportNoStorageState() {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .padding(10.dp)
+                .clip(RoundedCornerShape(EaseTheme.radius.xs))
+                .padding(EaseTheme.spacing.sm)
         ) {
             Box(
                 modifier = Modifier
                     .size(60.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(RoundedCornerShape(EaseTheme.radius.control))
+                    .background(EaseTheme.surfaces.secondary)
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.icon_info),
@@ -493,14 +491,14 @@ private fun ImportNoStorageState() {
             }
             Text(
                 text = stringResource(id = R.string.import_musics_empty_storage_title),
-                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurface,
+                style = EaseTheme.typography.body,
             )
             Text(
                 text = stringResource(id = R.string.import_musics_empty_storage_desc),
-                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.widthIn(0.dp, 220.dp)
+                modifier = Modifier.widthIn(0.dp, 220.dp),
+                style = EaseTheme.typography.bodySmall,
             )
         }
     }
@@ -590,7 +588,7 @@ fun ImportMusicsPage(
     }
     Column(
         modifier = Modifier
-            .background(MaterialTheme.colorScheme.surface)
+            .background(EaseTheme.surfaces.screen)
             .fillMaxSize()
     ) {
         Row(
@@ -612,7 +610,8 @@ fun ImportMusicsPage(
                     }
                 )
                 Text(
-                    text = titleText
+                    text = titleText,
+                    style = EaseTheme.typography.cardTitle,
                 )
             }
             Row {

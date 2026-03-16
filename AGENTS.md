@@ -66,6 +66,56 @@
 - `core/MusicPlayer.kt`：定义 `PlaybackService : MediaSessionService`，承接真正的播放服务。
 - `singleton/Bridge.kt`：Android ↔ Rust backend 的关键边界。
 
+### Compose 主题 / Token 契约
+- 当前主题系统的真相源是：
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/ui/theme/ThemeSettings.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/ui/theme/Theme.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/ui/theme/Type.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/ui/theme/Tokens.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/Root.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/ThemeSection.kt`
+- 当前持久化主题模型刻意保持极简：`ThemeSettings` 只保留 `primaryColor` 与 `backgroundImageUri`。
+  - 当前产品方向是“**单主色派生 + 全局背景图沉浸**”
+  - **不要轻易扩成** 多色板、逐 surface 独立配色、背景图取色、动态取色系统；若真要扩模型，先确认这不是局部视觉需求伪装成全局主题需求
+- 正式 Compose UI 优先消费统一 token，而不是继续散落写值：
+  - 字号与文字层级：优先用 `EaseTheme.typography`；`Type.kt` 是字号与行高真相源
+  - 间距：优先用 `EaseTheme.spacing`；`Tokens.kt` 是间距真相源
+  - 圆角：优先用 `EaseTheme.radius`；`Tokens.kt` 是圆角真相源
+  - 容器表面与遮罩：优先用 `EaseTheme.surfaces`；`Theme.kt` 是 surface/backdrop 语义真相源
+- 在正式页面与共享组件中，默认不要继续新增：
+  - 裸 `fontSize = xx.sp`
+  - 裸 `RoundedCornerShape(...)`
+  - 大面积直接写 `MaterialTheme.colorScheme.surface` / `surfaceVariant` 充当页面或卡片层级
+  - 如果确实需要一次性局部值，应确认它不属于可复用 token，再把理由留在局部实现里
+- 背景图规则已经收口到全局层：
+  - **全屏背景图宿主只能是 `Root.kt`**
+  - 当前统一层级是：base surface → `ThemeBackgroundImage` → backdrop scrim → 页面内容
+  - 页面与组件应通过 `EaseTheme.surfaces.screen / secondary / card / dialog` 透出背景，而不是各页自己挂整屏背景图
+  - 需要封面遮罩、沉浸蒙层时，优先复用 `EaseTheme.surfaces.coverScrim` 或统一 surface/scrim 语义，不要随手写死大块黑色遮罩
+- 关于“剩下的尺寸还有没有必要继续抽 token”，默认采用 stop rule：
+  - 只有当某个尺寸在 **3 个以上正式页面** 重复出现
+  - 且它属于 **chrome / layout 壳层规则**，不是内容几何
+  - 且改动它会明显影响全局一致性
+  - 且抽象后的命名能让后来者一眼看懂
+  - **才值得** 提升为新的全局 token
+- 当前仍值得继续抽的，只应是少量高复用壳层尺寸，例如：
+  - 页面标题区上下节奏
+  - 标准列表行高
+  - 标准图标槽位
+  - dialog / bottom sheet 常见 padding
+  - bottom bar / mini player 这类壳层高度
+- 当前**不建议**继续塞进全局 theme token 的尺寸包括：
+  - 封面大小
+  - 某个页面特有的 `offset(...)`
+  - slider 几何参数
+  - 自定义滚轮控件尺寸
+  - skeleton block 宽高
+  - 单个组件内部构图尺寸
+- 改主题系统、背景图层级、字号/间距/圆角 token 后，最小验证命令是：
+  - `cd android && ./gradlew :app:compileDebugKotlin --warning-mode all`
+  - `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`
+  - 若改动影响真实视觉层级或沉浸背景效果，最好再补截图或真机目检；仅编译通过不等于视觉一致性正确
+
 ### FFI / JNI 契约
 - Rust backend 改动如果影响导出函数、对象、类型、错误、播放描述符、ABI 输出，必须同步运行：
   - `bun run build:jni`

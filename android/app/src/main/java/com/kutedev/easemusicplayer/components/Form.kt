@@ -18,8 +18,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.sp
 import com.kutedev.easemusicplayer.R
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 
 @Composable
 fun SimpleFormText(
@@ -34,8 +34,7 @@ fun SimpleFormText(
         if (label != null) {
             Text(
                 text = label,
-                fontSize = 10.sp,
-                letterSpacing = 1.sp,
+                style = EaseTheme.typography.label,
             )
         }
         TextField(
@@ -58,8 +57,7 @@ fun FormWidget(
     ) {
         Text(
             text = label,
-            fontSize = 10.sp,
-            letterSpacing = 1.sp,
+            style = EaseTheme.typography.label,
         )
         block()
     }
@@ -115,7 +113,7 @@ fun FormText(
             Text(
                 text = stringResource(id = error),
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 10.sp,
+                style = EaseTheme.typography.micro,
             )
         }
     }
