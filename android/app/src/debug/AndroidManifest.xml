@@ -4,12 +4,23 @@
         <activity
             android:name=".debug.TestComposeActivity"
             android:exported="false" />
+        <activity
+            android:name=".debug.GrantDownloadDirectoryActivity"
+            android:exported="true" />
         <receiver
             android:name=".debug.DebugSmokeReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.kutedev.easemusicplayer.debug.SMOKE" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".debug.DebugDownloadProbeReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.kutedev.easemusicplayer.debug.DOWNLOAD_PROBE" />
             </intent-filter>
         </receiver>
     </application>
