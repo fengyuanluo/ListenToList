@@ -3,11 +3,15 @@ package com.kutedev.easemusicplayer.debug
 import android.content.Context
 import android.util.Log
 import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_DIRECT_HTTP
+import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_DOWNLOADED_CONTENT
+import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_DOWNLOADED_FILE
 import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_LOCAL_FILE
 import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_STREAM_FALLBACK
 import com.kutedev.easemusicplayer.core.PLAYBACK_SOURCE_TAG_PLAYBACK
 import com.kutedev.easemusicplayer.core.PlaybackDiagnostics
 import com.kutedev.easemusicplayer.singleton.Bridge
+import com.kutedev.easemusicplayer.singleton.DownloadRepository
+import com.kutedev.easemusicplayer.singleton.DownloadTaskStatus
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
@@ -19,6 +23,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import uniffi.ease_client_backend.RetCreatePlaylist
@@ -45,33 +50,35 @@ class DebugSmokeExecutor @Inject constructor(
     private val bridge: Bridge,
     private val storageRepository: StorageRepository,
     private val playlistRepository: PlaylistRepository,
+    private val downloadRepository: DownloadRepository,
     private val playerControllerRepository: PlayerControllerRepository,
     private val playerRepository: PlayerRepository,
 ) {
     suspend fun execute(request: DebugSmokeRequest): DebugSmokeResult {
         return runCatching {
             ensureReady()
-            val storage = upsertStorage(request)
-            val songs = listFolderSongs(storage, request.playlist.folderPath)
-            val targetIndex = songs.indexOfFirst { it.path == request.playlist.targetEntryPath }
-            require(targetIndex >= 0) {
-                "目标歌曲不存在于目录中: ${request.playlist.targetEntryPath}"
+            if (!request.play.auto) {
+                PlaybackDiagnostics.reset()
             }
-            val created = createFolderPlaylist(request, songs)
-            val playlistId = created.id.value
-            val musicId = created.musicIds.getOrNull(targetIndex)?.id?.value
-                ?: error("未能定位创建后的曲目索引: $targetIndex")
+            val prepared = preparePlayback(request)
+            request.download?.let { download ->
+                ensureDownloaded(
+                    targetEntry = prepared.targetEntry
+                        ?: error("existingPlayback 模式下不支持下载准备步骤"),
+                    timeoutMs = download.waitTimeoutMs,
+                )
+            }
 
             if (request.play.auto) {
                 withContext(Dispatchers.Main.immediate) {
                     PlaybackDiagnostics.reset()
                     playerControllerRepository.play(
-                        id = uniffi.ease_client_schema.MusicId(musicId),
-                        playlistId = uniffi.ease_client_schema.PlaylistId(playlistId),
+                        id = uniffi.ease_client_schema.MusicId(prepared.musicId),
+                        playlistId = uniffi.ease_client_schema.PlaylistId(prepared.playlistId),
                     )
                 }
                 val ready = awaitPlaybackReady(
-                    targetMusicId = musicId,
+                    targetMusicId = prepared.musicId,
                     timeoutMs = request.play.awaitReadyTimeoutMs,
                 )
                 if (ready) {
@@ -89,10 +96,10 @@ class DebugSmokeExecutor @Inject constructor(
                 val fallbackSnapshot = PlaybackDiagnostics.currentSnapshot()
                 val actualResolverMode = playbackRoute?.resolverMode ?: fallbackSnapshot.route.toResolverMode()
                 val resolvedUri = playbackRoute?.resolvedUri ?: fallbackSnapshot.resolvedUri
-                val nextMusicId = created.musicIds.getOrNull(targetIndex + 1)?.id?.value
+                val nextMusicId = prepared.nextMusicId
                 val currentDurationSynced = if (request.assertions.requireCurrentMetadataDuration) {
                     awaitMetadataDuration(
-                        musicId = musicId,
+                        musicId = prepared.musicId,
                         timeoutMs = request.assertions.metadataWaitTimeoutMs,
                     )
                 } else {
@@ -112,10 +119,10 @@ class DebugSmokeExecutor @Inject constructor(
                         status = "error",
                         stage = "play",
                         message = "等待播放就绪超时",
-                        storageId = storage.id.value,
-                        playlistId = playlistId,
-                        musicId = musicId,
-                        targetEntryPath = request.playlist.targetEntryPath,
+                        storageId = prepared.storageId,
+                        playlistId = prepared.playlistId,
+                        musicId = prepared.musicId,
+                        targetEntryPath = prepared.targetEntryPath,
                         expectedResolverMode = request.assertions.expectedResolverMode,
                         actualResolverMode = actualResolverMode,
                         resolvedUri = resolvedUri,
@@ -131,10 +138,10 @@ class DebugSmokeExecutor @Inject constructor(
                             status = "error",
                             stage = "assert",
                             message = "resolver 路由不符合预期: expected=$expectedResolverMode actual=$actualResolverMode",
-                            storageId = storage.id.value,
-                            playlistId = playlistId,
-                            musicId = musicId,
-                            targetEntryPath = request.playlist.targetEntryPath,
+                            storageId = prepared.storageId,
+                            playlistId = prepared.playlistId,
+                            musicId = prepared.musicId,
+                            targetEntryPath = prepared.targetEntryPath,
                             durationMs = readDurationOnMain(),
                             expectedResolverMode = expectedResolverMode,
                             actualResolverMode = actualResolverMode,
@@ -150,10 +157,10 @@ class DebugSmokeExecutor @Inject constructor(
                             status = "error",
                             stage = "assert",
                             message = "当前曲目 metadata duration 未在超时内回填",
-                            storageId = storage.id.value,
-                            playlistId = playlistId,
-                            musicId = musicId,
-                            targetEntryPath = request.playlist.targetEntryPath,
+                            storageId = prepared.storageId,
+                            playlistId = prepared.playlistId,
+                            musicId = prepared.musicId,
+                            targetEntryPath = prepared.targetEntryPath,
                             durationMs = readDurationOnMain(),
                             expectedResolverMode = expectedResolverMode,
                             actualResolverMode = actualResolverMode,
@@ -169,10 +176,10 @@ class DebugSmokeExecutor @Inject constructor(
                             status = "error",
                             stage = "assert",
                             message = "下一首曲目 metadata duration 未在超时内回填",
-                            storageId = storage.id.value,
-                            playlistId = playlistId,
-                            musicId = musicId,
-                            targetEntryPath = request.playlist.targetEntryPath,
+                            storageId = prepared.storageId,
+                            playlistId = prepared.playlistId,
+                            musicId = prepared.musicId,
+                            targetEntryPath = prepared.targetEntryPath,
                             durationMs = readDurationOnMain(),
                             expectedResolverMode = expectedResolverMode,
                             actualResolverMode = actualResolverMode,
@@ -192,10 +199,10 @@ class DebugSmokeExecutor @Inject constructor(
                         status = "ok",
                         stage = "play",
                         message = "debug smoke 执行成功",
-                        storageId = storage.id.value,
-                        playlistId = playlistId,
-                        musicId = musicId,
-                        targetEntryPath = request.playlist.targetEntryPath,
+                        storageId = prepared.storageId,
+                        playlistId = prepared.playlistId,
+                        musicId = prepared.musicId,
+                        targetEntryPath = prepared.targetEntryPath,
                         durationMs = readDurationOnMain(),
                         expectedResolverMode = request.assertions.expectedResolverMode,
                         actualResolverMode = actualResolverMode,
@@ -211,12 +218,12 @@ class DebugSmokeExecutor @Inject constructor(
                 DebugSmokeResult(
                     requestId = request.requestId,
                     status = "ok",
-                    stage = "playlist",
-                    message = "debug smoke 执行成功",
-                    storageId = storage.id.value,
-                    playlistId = playlistId,
-                    musicId = musicId,
-                    targetEntryPath = request.playlist.targetEntryPath,
+                    stage = if (request.download != null) "download" else "playlist",
+                    message = if (request.download != null) "下载准备完成" else "debug smoke 执行成功",
+                    storageId = prepared.storageId,
+                    playlistId = prepared.playlistId,
+                    musicId = prepared.musicId,
+                    targetEntryPath = prepared.targetEntryPath,
                     durationMs = readDurationOnMain(),
                     expectedResolverMode = request.assertions.expectedResolverMode,
                     actualResolverMode = playbackRoute?.resolverMode
@@ -246,6 +253,40 @@ class DebugSmokeExecutor @Inject constructor(
         }.also { result ->
             writeImmediateResult(result)
         }
+    }
+
+    private suspend fun preparePlayback(request: DebugSmokeRequest): PreparedPlaybackContext {
+        request.existingPlayback?.let { existing ->
+            return PreparedPlaybackContext(
+                storageId = null,
+                playlistId = existing.playlistId,
+                musicId = existing.musicId,
+                nextMusicId = null,
+                targetEntryPath = request.playlist.targetEntryPath,
+                targetEntry = null,
+            )
+        }
+
+        val storage = upsertStorage(request)
+        val songs = listFolderSongs(storage, request.playlist.folderPath)
+        val targetEntryPath = request.download?.targetEntryPath ?: request.playlist.targetEntryPath
+        val targetIndex = songs.indexOfFirst { it.path == targetEntryPath }
+        require(targetIndex >= 0) {
+            "目标歌曲不存在于目录中: $targetEntryPath"
+        }
+        val created = createFolderPlaylist(request, songs)
+        val playlistId = created.id.value
+        val musicId = created.musicIds.getOrNull(targetIndex)?.id?.value
+            ?: error("未能定位创建后的曲目索引: $targetIndex")
+        val nextMusicId = created.musicIds.getOrNull(targetIndex + 1)?.id?.value
+        return PreparedPlaybackContext(
+            storageId = storage.id.value,
+            playlistId = playlistId,
+            musicId = musicId,
+            nextMusicId = nextMusicId,
+            targetEntryPath = targetEntryPath,
+            targetEntry = songs[targetIndex],
+        )
     }
 
     fun writeImmediateResult(result: DebugSmokeResult) {
@@ -395,10 +436,42 @@ class DebugSmokeExecutor @Inject constructor(
         return synced == true
     }
 
+    private suspend fun ensureDownloaded(
+        targetEntry: StorageEntry,
+        timeoutMs: Long,
+    ) {
+        downloadRepository.enqueueEntries(listOf(targetEntry))
+        val completed = withTimeoutOrNull(timeoutMs) {
+            while (true) {
+                val resolved = downloadRepository.resolveCompletedPlaybackSource(
+                    storageId = targetEntry.storageId.value,
+                    sourcePath = targetEntry.path,
+                )
+                if (resolved != null) {
+                    return@withTimeoutOrNull true
+                }
+                val task = downloadRepository.tasks.first()
+                    .firstOrNull { item ->
+                        item.storageId == targetEntry.storageId.value &&
+                            item.sourcePath == targetEntry.path
+                    }
+                if (task != null && task.status in setOf(DownloadTaskStatus.FAILED, DownloadTaskStatus.CANCELLED)) {
+                    error("下载任务失败: ${task.errorMessage ?: targetEntry.path}")
+                }
+                delay(250)
+            }
+        }
+        check(completed == true) {
+            "等待下载完成超时: ${targetEntry.path}"
+        }
+    }
+
     private fun String?.toResolverMode(): DebugSmokeResolverMode? {
         return when (this) {
             PLAYBACK_ROUTE_DIRECT_HTTP -> DebugSmokeResolverMode.DIRECT_HTTP
             PLAYBACK_ROUTE_LOCAL_FILE -> DebugSmokeResolverMode.LOCAL_FILE
+            PLAYBACK_ROUTE_DOWNLOADED_FILE -> DebugSmokeResolverMode.DOWNLOADED_FILE
+            PLAYBACK_ROUTE_DOWNLOADED_CONTENT -> DebugSmokeResolverMode.DOWNLOADED_CONTENT
             PLAYBACK_ROUTE_STREAM_FALLBACK -> DebugSmokeResolverMode.STREAM_FALLBACK
             else -> null
         }
@@ -434,3 +507,12 @@ class DebugSmokeExecutor @Inject constructor(
         return satisfied == true
     }
 }
+
+private data class PreparedPlaybackContext(
+    val storageId: Long?,
+    val playlistId: Long,
+    val musicId: Long,
+    val nextMusicId: Long?,
+    val targetEntryPath: String,
+    val targetEntry: StorageEntry?,
+)

@@ -2,6 +2,8 @@ package com.kutedev.easemusicplayer.debug
 
 import android.util.Base64
 import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_DIRECT_HTTP
+import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_DOWNLOADED_CONTENT
+import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_DOWNLOADED_FILE
 import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_LOCAL_FILE
 import com.kutedev.easemusicplayer.core.PLAYBACK_ROUTE_STREAM_FALLBACK
 import java.io.File
@@ -27,6 +29,8 @@ val debugSmokeJson = Json {
 enum class DebugSmokeResolverMode {
     DIRECT_HTTP,
     LOCAL_FILE,
+    DOWNLOADED_FILE,
+    DOWNLOADED_CONTENT,
     STREAM_FALLBACK,
 }
 
@@ -74,6 +78,18 @@ data class DebugSmokePlayPayload(
 )
 
 @Serializable
+data class DebugSmokeDownloadPayload(
+    val targetEntryPath: String? = null,
+    val waitTimeoutMs: Long = 20_000,
+)
+
+@Serializable
+data class DebugSmokeExistingPlaybackPayload(
+    val playlistId: Long,
+    val musicId: Long,
+)
+
+@Serializable
 data class DebugSmokeAssertions(
     val expectedResolverMode: DebugSmokeResolverMode? = null,
     val requiredSourceTags: List<String> = emptyList(),
@@ -88,6 +104,8 @@ data class DebugSmokeRequest(
     val resetBefore: Boolean = true,
     val storage: DebugSmokeStoragePayload,
     val playlist: DebugSmokePlaylistPayload,
+    val existingPlayback: DebugSmokeExistingPlaybackPayload? = null,
+    val download: DebugSmokeDownloadPayload? = null,
     val play: DebugSmokePlayPayload = DebugSmokePlayPayload(),
     val assertions: DebugSmokeAssertions = DebugSmokeAssertions(),
 )
@@ -138,6 +156,8 @@ fun debugSmokeResolverModeFromRoute(route: String?): DebugSmokeResolverMode? {
     return when (route) {
         PLAYBACK_ROUTE_DIRECT_HTTP -> DebugSmokeResolverMode.DIRECT_HTTP
         PLAYBACK_ROUTE_LOCAL_FILE -> DebugSmokeResolverMode.LOCAL_FILE
+        PLAYBACK_ROUTE_DOWNLOADED_FILE -> DebugSmokeResolverMode.DOWNLOADED_FILE
+        PLAYBACK_ROUTE_DOWNLOADED_CONTENT -> DebugSmokeResolverMode.DOWNLOADED_CONTENT
         PLAYBACK_ROUTE_STREAM_FALLBACK -> DebugSmokeResolverMode.STREAM_FALLBACK
         else -> null
     }

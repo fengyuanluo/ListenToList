@@ -12,7 +12,7 @@ const DEFAULT_PORT = 18080;
 
 type Scenario = {
   name: string;
-  expectedRoute: "LOCAL_FILE" | "DIRECT_HTTP" | "STREAM_FALLBACK";
+  expectedRoute?: "LOCAL_FILE" | "DIRECT_HTTP" | "STREAM_FALLBACK" | "DOWNLOADED_FILE" | "DOWNLOADED_CONTENT";
   payload: Record<string, unknown>;
 };
 
@@ -163,18 +163,18 @@ function assertScenarioResult(result: DebugSmokeResult, scenario: Scenario, logc
   if (result.status !== "ok") {
     throw new Error(`${scenario.name} 失败: ${result.message}`);
   }
-  if (result.actualResolverMode !== scenario.expectedRoute) {
+  if (scenario.expectedRoute && result.actualResolverMode !== scenario.expectedRoute) {
     throw new Error(
       `${scenario.name} resolver 结果不符合预期: expected=${scenario.expectedRoute} actual=${result.actualResolverMode}`,
     );
   }
-  if (!result.resolvedUri) {
+  if (scenario.expectedRoute && !result.resolvedUri) {
     throw new Error(
       `${scenario.name} 缺少 resolvedUri。\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
     );
   }
   const playbackRoute = result.routeHistory?.find((entry) => entry.sourceTag === "playback");
-  if (playbackRoute && playbackRoute.resolverMode !== scenario.expectedRoute) {
+  if (scenario.expectedRoute && playbackRoute && playbackRoute.resolverMode !== scenario.expectedRoute) {
     throw new Error(
       `${scenario.name} playback routeHistory 不符合预期: expected=${scenario.expectedRoute} actual=${playbackRoute.resolverMode}` +
         `\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
@@ -225,7 +225,7 @@ function assertScenarioResult(result: DebugSmokeResult, scenario: Scenario, logc
   }
 }
 
-async function runScenario(device: string, scenario: Scenario, artifactsDir: string): Promise<void> {
+async function runScenario(device: string, scenario: Scenario, artifactsDir: string): Promise<DebugSmokeResult> {
   runOrThrow(["adb", "-s", device, "logcat", "-c"]);
   const payloadB64 = Buffer.from(JSON.stringify(scenario.payload), "utf8").toString("base64");
   const broadcastOutput = runOrThrow([
@@ -262,6 +262,7 @@ async function runScenario(device: string, scenario: Scenario, artifactsDir: str
   writeFileSync(logcatPath, logcat);
 
   assertScenarioResult(result, scenario, logcatPath);
+  return result;
 }
 
 async function main(): Promise<void> {
@@ -400,18 +401,102 @@ async function main(): Promise<void> {
       },
     ];
 
+    const smokeSummaryScenarios = [...scenarios];
     for (const scenario of scenarios) {
       console.log(`运行 scenario: ${scenario.name}`);
       await runScenario(device, scenario, artifactsDir);
     }
 
+    const downloadPrepareScenario: Scenario = {
+      name: "download-offline-prepare",
+      payload: {
+        requestId: "smoke-download-prepare-001",
+        resetBefore: true,
+        storage: {
+          type: "OPEN_LIST",
+          alias: "Smoke Offline OpenList",
+          addr: `${server.baseUrl}/openlist`,
+          username: "user",
+          password: "pass",
+          isAnonymous: false,
+          replaceExistingAlias: true,
+        },
+        playlist: {
+          folderPath: "/music",
+          targetEntryPath: "/music/test-openlist-next.wav",
+          playlistName: "Smoke offline openlist",
+        },
+        download: {
+          waitTimeoutMs: 15_000,
+        },
+        play: {
+          auto: false,
+          seekToMs: 0,
+          awaitReadyTimeoutMs: 15_000,
+        },
+        assertions: {},
+      },
+    };
+    smokeSummaryScenarios.push(downloadPrepareScenario);
+    console.log(`运行 scenario: ${downloadPrepareScenario.name}`);
+    const downloadPrepareResult = await runScenario(device, downloadPrepareScenario, artifactsDir);
+    if (!downloadPrepareResult.playlistId || !downloadPrepareResult.musicId) {
+      throw new Error(
+        `download-offline-prepare 未返回 playlistId/musicId。\nresult=${JSON.stringify(downloadPrepareResult, null, 2)}`,
+      );
+    }
+
+    console.log("停止 mock playback server，验证下载后的离线回放");
+    runOrThrow(["adb", "-s", device, "reverse", "--remove", `tcp:${server.port}`], process.cwd(), true);
+    server.stop();
+
+    const downloadOfflinePlayScenario: Scenario = {
+      name: "download-offline-play",
+      expectedRoute: "DOWNLOADED_FILE",
+      payload: {
+        requestId: "smoke-download-play-001",
+        resetBefore: false,
+        storage: {
+          type: "OPEN_LIST",
+          alias: "Smoke Offline OpenList",
+          addr: `${server.baseUrl}/openlist`,
+          username: "user",
+          password: "pass",
+          isAnonymous: false,
+          replaceExistingAlias: false,
+        },
+        playlist: {
+          folderPath: "/music",
+          targetEntryPath: "/music/test-openlist-next.wav",
+          playlistName: "Smoke offline openlist",
+        },
+        existingPlayback: {
+          playlistId: downloadPrepareResult.playlistId,
+          musicId: downloadPrepareResult.musicId,
+        },
+        play: {
+          auto: true,
+          seekToMs: 0,
+          awaitReadyTimeoutMs: 15_000,
+        },
+        assertions: {
+          expectedResolverMode: "DOWNLOADED_FILE",
+          requireCurrentMetadataDuration: true,
+          metadataWaitTimeoutMs: 15_000,
+        },
+      },
+    };
+    smokeSummaryScenarios.push(downloadOfflinePlayScenario);
+    console.log(`运行 scenario: ${downloadOfflinePlayScenario.name}`);
+    await runScenario(device, downloadOfflinePlayScenario, artifactsDir);
+
     const summary = {
       device,
       apkPath,
       serverBaseUrl: server.baseUrl,
-      scenarios: scenarios.map((scenario) => ({
+      scenarios: smokeSummaryScenarios.map((scenario) => ({
         name: scenario.name,
-        expectedRoute: scenario.expectedRoute,
+        expectedRoute: scenario.expectedRoute ?? null,
         assertedSourceTag: "playback",
       })),
     };

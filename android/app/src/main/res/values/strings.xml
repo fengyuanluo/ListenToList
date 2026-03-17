@@ -162,11 +162,20 @@
     <string name="download_empty_title">No downloads yet</string>
     <string name="download_status_queued">Queued</string>
     <string name="download_status_running">Downloading</string>
+    <string name="download_status_paused">Paused</string>
     <string name="download_status_completed">Completed</string>
     <string name="download_status_failed">Failed</string>
     <string name="download_status_cancelled">Cancelled</string>
     <string name="download_status_blocked">Blocked</string>
     <string name="download_action_cancel">Cancel</string>
     <string name="download_action_retry">Retry</string>
+    <string name="download_action_pause">Pause</string>
+    <string name="download_action_start">Start</string>
+    <string name="download_action_delete">Delete</string>
+    <string name="download_settings_title">Download directory</string>
+    <string name="download_settings_change_directory">Choose folder</string>
+    <string name="download_settings_reset_directory">Use default</string>
+    <string name="download_delete_title">Delete download task</string>
+    <string name="download_delete_remove_file">Also delete downloaded file</string>
 
 </resources>

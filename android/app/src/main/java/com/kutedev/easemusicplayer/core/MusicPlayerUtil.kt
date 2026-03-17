@@ -267,20 +267,26 @@ suspend fun probeMusicMetadataDirectly(
 
     val metadataRetriever = MediaMetadataRetriever()
     try {
-        when (resolved) {
-            is ResolvedMusicPlaybackSource.DirectHttp -> {
-                metadataRetriever.setDataSource(
-                    resolved.url,
-                    resolved.headers.associate { it.name to it.value },
-                )
+            when (resolved) {
+                is ResolvedMusicPlaybackSource.DirectHttp -> {
+                    metadataRetriever.setDataSource(
+                        resolved.url,
+                        resolved.headers.associate { it.name to it.value },
+                    )
+                }
+                is ResolvedMusicPlaybackSource.LocalFile -> {
+                    metadataRetriever.setDataSource(resolved.absolutePath)
+                }
+                is ResolvedMusicPlaybackSource.DownloadedFile -> {
+                    metadataRetriever.setDataSource(resolved.absolutePath)
+                }
+                is ResolvedMusicPlaybackSource.ContentUri -> {
+                    return@withContext null
+                }
+                ResolvedMusicPlaybackSource.StreamFallback -> {
+                    return@withContext null
+                }
             }
-            is ResolvedMusicPlaybackSource.LocalFile -> {
-                metadataRetriever.setDataSource(resolved.absolutePath)
-            }
-            ResolvedMusicPlaybackSource.StreamFallback -> {
-                return@withContext null
-            }
-        }
         val duration = extractDuration(metadataRetriever)
         val cover = metadataRetriever.embeddedPicture
         if (duration == null && cover == null) {

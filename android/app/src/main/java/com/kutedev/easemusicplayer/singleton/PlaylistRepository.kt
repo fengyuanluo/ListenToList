@@ -77,6 +77,7 @@ class PlaylistRepository @Inject constructor(
     private val bridge: Bridge,
     private val storageRepository: StorageRepository,
     private val playerRepository: PlayerRepository,
+    private val downloadRepository: DownloadRepository,
     @ApplicationContext private val appContext: Context,
     private val _scope: CoroutineScope
 ) {
@@ -342,7 +343,9 @@ class PlaylistRepository @Inject constructor(
     private suspend fun getMetadataPlayer(): ExoPlayer = withContext(Dispatchers.Main) {
         metadataPlayer?.let { return@withContext it }
         val upstreamFactory = PlaybackDataSourceFactory.create(
+            appContext = appContext,
             bridge = bridge,
+            downloadRepository = downloadRepository,
             scope = _scope,
             sourceTag = PLAYBACK_SOURCE_TAG_METADATA,
         )
