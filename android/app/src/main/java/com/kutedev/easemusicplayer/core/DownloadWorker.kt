@@ -2,6 +2,7 @@ package com.kutedev.easemusicplayer.core
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -53,6 +54,7 @@ class DownloadWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
     companion object {
+        private const val TAG = "DownloadWorker"
         private const val MAX_STREAM_RETRIES = 2
         private const val PROGRESS_STEP_BYTES = 128 * 1024L
         private const val OCTET_STREAM_MIME = "application/octet-stream"
@@ -104,7 +106,12 @@ class DownloadWorker(
             if (error is CancellationException) {
                 throw error
             }
-            failure(error.message ?: "下载失败")
+            Log.e(
+                TAG,
+                "download failed storageId=$storageId sourcePath=$sourcePath target=$target error=${error::class.java.simpleName}: ${error.message}",
+                error,
+            )
+            failure(error.message ?: error.toString())
         }
     }
 
@@ -319,11 +326,19 @@ class DownloadWorker(
         val tree = DocumentFile.fromTreeUri(applicationContext, Uri.parse(target.treeUri))
             ?: throw IOException("下载目录不可用")
         val tempUri = Uri.parse(target.tempUri)
-        val tempDoc = DocumentFile.fromSingleUri(applicationContext, tempUri)
+        val tempName = "${target.fileName}.part"
+        val tempDocFromTree = tree.findFile(tempName)
+        val tempDoc = tempDocFromTree
+            ?: DocumentFile.fromSingleUri(applicationContext, tempUri)
             ?: throw IOException("临时下载文件不存在")
 
-        if (tempDoc.renameTo(target.fileName)) {
-            return FinalizedTarget(destinationUri = tempUri.toString())
+        val renameSucceeded = runCatching { tempDocFromTree?.renameTo(target.fileName) }
+            .onFailure { error ->
+                Log.w(TAG, "finalizeContentTarget rename failed: ${error.message}", error)
+            }
+            .getOrNull() == true
+        if (renameSucceeded) {
+            return FinalizedTarget(destinationUri = tempDocFromTree?.uri?.toString() ?: tempUri.toString())
         }
 
         val existingDestination = target.destinationUri
@@ -334,7 +349,7 @@ class DownloadWorker(
 
         val finalDoc = tree.createFile(guessMimeType(target.fileName), target.fileName)
             ?: throw IOException("无法创建目标下载文件")
-        copyUri(Uri.parse(target.tempUri), finalDoc.uri)
+        copyUri(tempDoc.uri, finalDoc.uri)
         tempDoc.delete()
         return FinalizedTarget(destinationUri = finalDoc.uri.toString())
     }
