@@ -5,12 +5,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,6 +36,7 @@ import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
 import com.kutedev.easemusicplayer.viewmodels.DownloadManagerVM
 
 private val paddingX = SettingPaddingX
+private val taskShape = RoundedCornerShape(EaseTheme.radius.compact)
 
 @Composable
 private fun DownloadStatusChip(
@@ -100,79 +100,64 @@ private fun downloadProgressLabel(task: DownloadTaskItem): String? {
     return "${downloadedText} / ${StorageBrowserUtils.formatSize(totalBytes)}"
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+private data class DownloadTaskSupportText(
+    val text: String,
+    val color: androidx.compose.ui.graphics.Color,
+)
+
+@Composable
+private fun downloadTaskSupportText(task: DownloadTaskItem): DownloadTaskSupportText? {
+    val fallbackColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val errorMessage = task.errorMessage?.takeIf { it.isNotBlank() }
+    return when {
+        task.status == DownloadTaskStatus.FAILED && errorMessage != null -> DownloadTaskSupportText(
+            text = errorMessage,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        else -> downloadProgressLabel(task)?.let { progress ->
+            DownloadTaskSupportText(
+                text = progress,
+                color = fallbackColor,
+            )
+        }
+    }
+}
+
 @Composable
 private fun DownloadTaskCard(
     task: DownloadTaskItem,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
 ) {
+    val supportText = downloadTaskSupportText(task)
+
     Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
         modifier = Modifier
             .fillMaxWidth()
-            .background(EaseTheme.surfaces.card, RoundedCornerShape(EaseTheme.radius.card))
+            .background(EaseTheme.surfaces.secondary, taskShape)
             .border(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f),
-                shape = RoundedCornerShape(EaseTheme.radius.card),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f),
+                shape = taskShape,
             )
-            .padding(EaseTheme.spacing.cardPadding)
+            .padding(horizontal = EaseTheme.spacing.sm, vertical = EaseTheme.spacing.sm)
     ) {
-        Text(
-            text = task.title,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            DownloadStatusChip(task = task)
-            downloadProgressLabel(task)?.let { progressLabel ->
-                Box(
-                    modifier = Modifier
-                        .background(
-                            EaseTheme.surfaces.chip,
-                            RoundedCornerShape(EaseTheme.radius.control),
-                        )
-                        .padding(horizontal = EaseTheme.spacing.sm, vertical = EaseTheme.spacing.xxs + 1.dp)
-                ) {
-                    Text(
-                        text = progressLabel,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = EaseTheme.typography.caption,
-                    )
-                }
-            }
-        }
-        Text(
-            text = task.sourcePath,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = task.destinationPath,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        task.errorMessage?.takeIf { it.isNotBlank() }?.let { error ->
             Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error,
-                style = EaseTheme.typography.bodySmall,
+                text = task.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = EaseTheme.typography.body.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
-        }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+
             if (task.active) {
                 EaseTextButton(
                     text = stringResource(id = R.string.download_action_cancel),
@@ -190,6 +175,24 @@ private fun DownloadTaskCard(
                 )
             }
         }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            DownloadStatusChip(task = task)
+            supportText?.let { detail ->
+                Text(
+                    text = detail.text,
+                    color = detail.color,
+                    style = EaseTheme.typography.caption,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
     }
 }
 
@@ -202,14 +205,14 @@ fun DownloadManagerPage(
 
     LazyColumn(
         contentPadding = PaddingValues(start = paddingX, end = paddingX, top = 24.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
         modifier = Modifier
             .fillMaxSize()
             .background(EaseTheme.surfaces.screen)
     ) {
         item {
             Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xxs),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
@@ -217,39 +220,37 @@ fun DownloadManagerPage(
                     style = EaseTheme.typography.screenTitle,
                 )
                 Text(
-                    text = stringResource(id = R.string.setting_downloads_desc),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = EaseTheme.typography.body,
-                )
-                Text(
                     text = stringResource(id = R.string.setting_downloads_dir, downloadDirectory),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = EaseTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
 
         if (tasks.isEmpty()) {
             item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
                             EaseTheme.surfaces.secondary,
-                            RoundedCornerShape(EaseTheme.radius.card),
+                            taskShape,
                         )
-                        .padding(EaseTheme.spacing.lg)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
+                            shape = taskShape,
+                        )
+                        .padding(horizontal = EaseTheme.spacing.sm, vertical = EaseTheme.spacing.sm)
                 ) {
                     Text(
                         text = stringResource(id = R.string.download_empty_title),
                         color = MaterialTheme.colorScheme.onSurface,
-                        style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
-                    )
-                    Text(
-                        text = stringResource(id = R.string.download_empty_desc),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = EaseTheme.typography.bodySmall,
+                        style = EaseTheme.typography.body.copy(fontWeight = FontWeight.Medium),
                     )
                 }
             }
@@ -261,10 +262,6 @@ fun DownloadManagerPage(
                     onRetry = { downloadManagerVM.retry(task) },
                 )
             }
-        }
-
-        item {
-            Box(modifier = Modifier.height(12.dp))
         }
     }
 }

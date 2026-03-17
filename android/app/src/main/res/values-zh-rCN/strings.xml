@@ -143,7 +143,6 @@
     <string name="setting_downloads_desc">查看进行中、失败与已完成的下载任务</string>
     <string name="setting_downloads_dir">下载文件保存目录：%1$s</string>
     <string name="download_empty_title">还没有下载任务</string>
-    <string name="download_empty_desc">可以从播放页或目录多选中加入下载，稍后回到这里统一查看进度。</string>
     <string name="download_status_queued">排队中</string>
     <string name="download_status_running">下载中</string>
     <string name="download_status_completed">已完成</string>
