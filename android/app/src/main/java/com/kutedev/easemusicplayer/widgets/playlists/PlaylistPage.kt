@@ -368,7 +368,11 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                     }
             ) {
                 Text(
-                    modifier = Modifier.draggableHandle(),
+                    modifier = Modifier.draggableHandle(
+                        onDragStopped = {
+                            playlistVM.commitMusicMove()
+                        }
+                    ),
                     text = (index + 1).toString(),
                     color = dragHandleColor,
                     maxLines = 1,

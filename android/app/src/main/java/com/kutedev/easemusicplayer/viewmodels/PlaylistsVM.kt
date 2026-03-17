@@ -40,4 +40,8 @@ class PlaylistsVM @Inject constructor(
     fun moveTo(fromIndex: Int, toIndex: Int) {
         playlistRepository.playlistMoveTo(fromIndex, toIndex)
     }
+
+    fun commitMove() {
+        playlistRepository.commitPendingPlaylistMove()
+    }
 }

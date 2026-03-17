@@ -14,6 +14,8 @@ import com.kutedev.easemusicplayer.singleton.ImportRepository
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
 import com.kutedev.easemusicplayer.singleton.StorageRepository
+import com.kutedev.easemusicplayer.utils.ReorderCommit
+import com.kutedev.easemusicplayer.utils.buildReorderMutation
 import com.kutedev.easemusicplayer.utils.formatDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.persistentListOf
@@ -27,9 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import uniffi.ease_client_backend.AddedMusic
 import uniffi.ease_client_backend.ArgAddMusicsToPlaylist
-import uniffi.ease_client_backend.ArgRemoveMusicFromPlaylist
 import uniffi.ease_client_backend.ArgReorderMusic
-import uniffi.ease_client_backend.ArgReorderPlaylist
 import uniffi.ease_client_backend.MusicAbstract
 import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_backend.Playlist
@@ -40,10 +40,7 @@ import uniffi.ease_client_backend.StorageEntryType
 import uniffi.ease_client_backend.ToAddMusicEntry
 import uniffi.ease_client_backend.ctAddMusicsToPlaylist
 import uniffi.ease_client_backend.ctGetPlaylist
-import uniffi.ease_client_backend.ctRemoveMusicFromPlaylist
-import uniffi.ease_client_backend.ctsGetMusicAbstract
 import uniffi.ease_client_backend.ctsReorderMusicInPlaylist
-import uniffi.ease_client_backend.ctsReorderPlaylist
 import java.time.Duration
 import javax.inject.Inject
 
@@ -76,6 +73,7 @@ class PlaylistVM @Inject constructor(
     private val _removeModalOpen = MutableStateFlow(false)
     private val _playlistAbstr = MutableStateFlow(defaultPlaylistAbstract())
     private val _playlistMusics = MutableStateFlow(persistentListOf<MusicAbstract>())
+    private var pendingMusicReorder: ReorderCommit<MusicId>? = null
     val removeModalOpen = _removeModalOpen.asStateFlow()
     val playlistAbstr = _playlistAbstr.asStateFlow()
     val playlistMusics = _playlistMusics.asStateFlow()
@@ -131,22 +129,33 @@ class PlaylistVM @Inject constructor(
     }
 
     fun musicMoveTo(fromIndex: Int, toIndex: Int) {
-        val from = _playlistMusics.value.getOrNull(fromIndex) ?: return
+        val mutation = buildReorderMutation(
+            items = _playlistMusics.value,
+            fromIndex = fromIndex,
+            toIndex = toIndex,
+            idOf = { it.meta.id },
+        ) ?: return
 
-        _playlistMusics.value = _playlistMusics.value
-            .removeAt(fromIndex)
-            .add(toIndex, from)
+        _playlistMusics.value = mutation.reorderedItems.toPersistentList()
+        pendingMusicReorder = mutation.commit
+    }
 
-        val a = _playlistMusics.value.getOrNull(toIndex - 1)
-        val b = _playlistMusics.value.getOrNull(toIndex + 1)
+    fun commitMusicMove() {
+        val pending = pendingMusicReorder ?: return
+        pendingMusicReorder = null
 
         viewModelScope.launch {
-            bridge.runSync { ctsReorderMusicInPlaylist(it, ArgReorderMusic(
-                playlistId = _playlistAbstr.value.meta.id,
-                id = from.meta.id,
-                a = a?.meta?.id,
-                b = b?.meta?.id
-            )) }
+            bridge.runSync {
+                ctsReorderMusicInPlaylist(
+                    it,
+                    ArgReorderMusic(
+                        playlistId = _playlistAbstr.value.meta.id,
+                        id = pending.movedId,
+                        a = pending.previousId,
+                        b = pending.nextId,
+                    )
+                )
+            }
             playlistRepository.scheduleReload()
             reload()
         }

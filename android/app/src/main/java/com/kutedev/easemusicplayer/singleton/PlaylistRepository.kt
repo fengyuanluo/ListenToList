@@ -12,6 +12,8 @@ import com.kutedev.easemusicplayer.core.PLAYBACK_SOURCE_TAG_METADATA
 import com.kutedev.easemusicplayer.core.buildMediaItem
 import com.kutedev.easemusicplayer.core.probeMusicMetadataDirectly
 import com.kutedev.easemusicplayer.core.syncMetadataUtil
+import com.kutedev.easemusicplayer.utils.ReorderCommit
+import com.kutedev.easemusicplayer.utils.buildReorderMutation
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -83,6 +85,7 @@ class PlaylistRepository @Inject constructor(
     private val _debouncedReloadEvent = MutableSharedFlow<Unit>()
     private val _preRemovePlaylistEvent = MutableSharedFlow<PlaylistId>()
     private val _preRemoveMusicEvent = MutableSharedFlow<ArgRemoveMusicFromPlaylist>()
+    private var pendingPlaylistReorder: ReorderCommit<PlaylistId>? = null
     private val metadataQueueLock = Any()
     private val metadataQueue = mutableListOf<MetadataSyncRequest>()
     private var metadataQueueJob: Job? = null
@@ -148,22 +151,29 @@ class PlaylistRepository @Inject constructor(
     }
 
     fun playlistMoveTo(fromIndex: Int, toIndex: Int) {
-        val from = _playlists.value.getOrNull(fromIndex) ?: return
+        val mutation = buildReorderMutation(
+            items = _playlists.value,
+            fromIndex = fromIndex,
+            toIndex = toIndex,
+            idOf = { it.meta.id },
+        ) ?: return
 
-        _playlists.value = _playlists.value
-            .removeAt(fromIndex)
-            .add(toIndex, from)
+        _playlists.value = mutation.reorderedItems.toPersistentList()
+        pendingPlaylistReorder = mutation.commit
+    }
 
-        val a = _playlists.value.getOrNull(toIndex - 1)
-        val b = _playlists.value.getOrNull(toIndex + 1)
+    fun commitPendingPlaylistMove() {
+        val pending = pendingPlaylistReorder ?: return
+        pendingPlaylistReorder = null
 
         _scope.launch {
             bridge.runSync {
                 ctsReorderPlaylist(
-                    it, ArgReorderPlaylist(
-                        id = from.meta.id,
-                        a = a?.meta?.id,
-                        b = b?.meta?.id,
+                    it,
+                    ArgReorderPlaylist(
+                        id = pending.movedId,
+                        a = pending.previousId,
+                        b = pending.nextId,
                     )
                 )
             }

@@ -261,7 +261,11 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
     Box(
         modifier = dragModifier.then(
             if (mode == PlaylistsMode.Adjust) {
-                Modifier.draggableHandle()
+                Modifier.draggableHandle(
+                    onDragStopped = {
+                        playlistsVM.commitMove()
+                    }
+                )
             } else {
                 Modifier.clickable(
                     onClick = {
