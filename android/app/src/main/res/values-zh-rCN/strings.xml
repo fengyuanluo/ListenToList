@@ -145,11 +145,20 @@
     <string name="download_empty_title">还没有下载任务</string>
     <string name="download_status_queued">排队中</string>
     <string name="download_status_running">下载中</string>
+    <string name="download_status_paused">已暂停</string>
     <string name="download_status_completed">已完成</string>
     <string name="download_status_failed">失败</string>
     <string name="download_status_cancelled">已取消</string>
     <string name="download_status_blocked">等待中</string>
     <string name="download_action_cancel">取消</string>
     <string name="download_action_retry">重试</string>
+    <string name="download_action_pause">暂停</string>
+    <string name="download_action_start">开始</string>
+    <string name="download_action_delete">删除</string>
+    <string name="download_settings_title">下载目录</string>
+    <string name="download_settings_change_directory">选择文件夹</string>
+    <string name="download_settings_reset_directory">恢复默认</string>
+    <string name="download_delete_title">删除下载任务</string>
+    <string name="download_delete_remove_file">同时删除本地文件</string>
 
 </resources>

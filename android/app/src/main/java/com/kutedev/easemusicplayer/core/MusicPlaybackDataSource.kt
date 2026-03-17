@@ -1,13 +1,16 @@
 package com.kutedev.easemusicplayer.core
 
+import android.content.Context
 import android.net.Uri
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.ContentDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import com.kutedev.easemusicplayer.singleton.Bridge
+import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -16,6 +19,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
 import uniffi.ease_client_backend.PlaybackSourceDescriptor
+import uniffi.ease_client_backend.ctGetMusic
 import uniffi.ease_client_backend.ctResolveMusicPlaybackSource
 import uniffi.ease_client_backend.easeError
 import uniffi.ease_client_backend.easeLog
@@ -47,6 +51,14 @@ sealed class ResolvedMusicPlaybackSource {
 
     data class LocalFile(
         val absolutePath: String,
+    ) : ResolvedMusicPlaybackSource()
+
+    data class DownloadedFile(
+        val absolutePath: String,
+    ) : ResolvedMusicPlaybackSource()
+
+    data class ContentUri(
+        val uri: String,
     ) : ResolvedMusicPlaybackSource()
 
     data object StreamFallback : ResolvedMusicPlaybackSource()
@@ -89,6 +101,8 @@ internal object PlaybackSourceResolverCache {
         val ttlMs = when (resolved) {
             is ResolvedMusicPlaybackSource.DirectHttp -> PLAYBACK_RESOLVER_DIRECT_HTTP_TTL_MS
             is ResolvedMusicPlaybackSource.LocalFile -> PLAYBACK_RESOLVER_LOCAL_FILE_TTL_MS
+            is ResolvedMusicPlaybackSource.DownloadedFile -> PLAYBACK_RESOLVER_LOCAL_FILE_TTL_MS
+            is ResolvedMusicPlaybackSource.ContentUri -> PLAYBACK_RESOLVER_LOCAL_FILE_TTL_MS
             ResolvedMusicPlaybackSource.StreamFallback, null -> PLAYBACK_RESOLVER_STREAM_FALLBACK_TTL_MS
         }
         synchronized(lock) {
@@ -116,7 +130,23 @@ internal object PlaybackSourceResolverCache {
 internal fun resolveMusicPlaybackSourceWithBridge(
     bridge: Bridge,
     musicId: MusicId,
+    downloadRepository: DownloadRepository? = null,
 ): ResolvedMusicPlaybackSource? {
+    if (downloadRepository != null) {
+        val offlineResolved = runBlocking {
+            bridge.run { backend ->
+                ctGetMusic(backend, musicId)
+            }?.let { music ->
+                downloadRepository.resolveCompletedPlaybackSource(
+                    storageId = music.loc.storageId.value,
+                    sourcePath = music.loc.path,
+                )
+            }
+        }
+        if (offlineResolved != null) {
+            return offlineResolved
+        }
+    }
     return PlaybackSourceResolverCache.resolve(musicId) {
         runBlocking {
             bridge.runRaw { backend ->
@@ -131,6 +161,7 @@ class MusicPlaybackDataSource(
     private val resolver: MusicPlaybackSourceResolver,
     private val httpDataSourceFactory: DataSource.Factory,
     private val fileDataSourceFactory: DataSource.Factory,
+    private val contentDataSourceFactory: DataSource.Factory,
     private val streamFallbackFactory: DataSource.Factory,
     private val sourceTag: String = PLAYBACK_SOURCE_TAG_PLAYBACK,
 ) : DataSource {
@@ -155,6 +186,8 @@ class MusicPlaybackDataSource(
             val route = when (resolved) {
                 is ResolvedMusicPlaybackSource.DirectHttp -> PLAYBACK_ROUTE_DIRECT_HTTP
                 is ResolvedMusicPlaybackSource.LocalFile -> PLAYBACK_ROUTE_LOCAL_FILE
+                is ResolvedMusicPlaybackSource.DownloadedFile -> PLAYBACK_ROUTE_DOWNLOADED_FILE
+                is ResolvedMusicPlaybackSource.ContentUri -> PLAYBACK_ROUTE_DOWNLOADED_CONTENT
                 ResolvedMusicPlaybackSource.StreamFallback -> PLAYBACK_ROUTE_STREAM_FALLBACK
             }
 
@@ -177,6 +210,21 @@ class MusicPlaybackDataSource(
                         .setKey(dataSpec.key ?: resolved.absolutePath)
                         .build()
                     fileDataSourceFactory.createDataSource() to spec
+                }
+                is ResolvedMusicPlaybackSource.DownloadedFile -> {
+                    val spec = dataSpec.buildUpon()
+                        .setUri(Uri.fromFile(File(resolved.absolutePath)))
+                        .setKey(dataSpec.key ?: resolved.absolutePath)
+                        .build()
+                    fileDataSourceFactory.createDataSource() to spec
+                }
+                is ResolvedMusicPlaybackSource.ContentUri -> {
+                    val resolvedUri = Uri.parse(resolved.uri)
+                    val spec = dataSpec.buildUpon()
+                        .setUri(resolvedUri)
+                        .setKey(dataSpec.key ?: resolved.uri)
+                        .build()
+                    contentDataSourceFactory.createDataSource() to spec
                 }
                 ResolvedMusicPlaybackSource.StreamFallback -> {
                     streamFallbackFactory.createDataSource() to dataSpec
@@ -260,7 +308,9 @@ class MusicPlaybackDataSource(
 }
 
 fun buildMusicPlaybackDataSourceFactory(
+    appContext: Context,
     bridge: Bridge,
+    downloadRepository: DownloadRepository,
     scope: CoroutineScope,
     sourceTag: String = PLAYBACK_SOURCE_TAG_PLAYBACK,
 ): DataSource.Factory {
@@ -270,7 +320,7 @@ fun buildMusicPlaybackDataSourceFactory(
 
     val resolver = MusicPlaybackSourceResolver { musicId: MusicId ->
         try {
-            resolveMusicPlaybackSourceWithBridge(bridge, musicId)
+            resolveMusicPlaybackSourceWithBridge(bridge, musicId, downloadRepository)
         } catch (error: CancellationException) {
             throw IOException("resolve playback source cancelled for music=${musicId.value}", error)
         } catch (error: FileNotFoundException) {
@@ -287,6 +337,7 @@ fun buildMusicPlaybackDataSourceFactory(
             resolver = resolver,
             httpDataSourceFactory = httpFactory,
             fileDataSourceFactory = DataSource.Factory { FileDataSource() },
+            contentDataSourceFactory = DataSource.Factory { ContentDataSource(appContext) },
             streamFallbackFactory = DataSource.Factory { MusicPlayerDataSource(bridge, scope) },
             sourceTag = sourceTag,
         )

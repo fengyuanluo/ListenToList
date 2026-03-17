@@ -155,7 +155,9 @@ class StorageBrowserVM @Inject constructor(
         PlaybackCache.buildCacheDataSourceFactory(
             appContext,
             PlaybackDataSourceFactory.create(
+                appContext = appContext,
                 bridge = bridge,
+                downloadRepository = downloadRepository,
                 scope = viewModelScope,
                 sourceTag = PLAYBACK_SOURCE_TAG_FOLDER_PREFETCH,
             )

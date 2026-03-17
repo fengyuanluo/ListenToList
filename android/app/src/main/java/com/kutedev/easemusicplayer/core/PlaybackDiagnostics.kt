@@ -9,6 +9,8 @@ data class PlaybackRouteSnapshot(
 
 const val PLAYBACK_ROUTE_DIRECT_HTTP = "direct_http"
 const val PLAYBACK_ROUTE_LOCAL_FILE = "local_file"
+const val PLAYBACK_ROUTE_DOWNLOADED_FILE = "downloaded_file"
+const val PLAYBACK_ROUTE_DOWNLOADED_CONTENT = "downloaded_content"
 const val PLAYBACK_ROUTE_STREAM_FALLBACK = "stream_fallback"
 
 object PlaybackDiagnostics {

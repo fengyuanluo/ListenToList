@@ -14,20 +14,31 @@ class DownloadManagerVM @Inject constructor(
     private val downloadRepository: DownloadRepository,
 ) : ViewModel() {
     val tasks = downloadRepository.tasks
+    val downloadDirectoryState = downloadRepository.downloadDirectoryState
 
-    fun cancel(id: UUID) {
+    fun pause(id: UUID) {
         viewModelScope.launch {
-            downloadRepository.cancel(id)
+            downloadRepository.pause(id)
         }
     }
 
-    fun retry(task: DownloadTaskItem) {
+    fun start(id: UUID) {
         viewModelScope.launch {
-            downloadRepository.retry(task)
+            downloadRepository.start(id)
         }
     }
 
-    fun downloadDirectory(): String {
-        return downloadRepository.downloadDirectory()
+    fun delete(id: UUID, deleteFile: Boolean) {
+        viewModelScope.launch {
+            downloadRepository.delete(id, deleteFile)
+        }
+    }
+
+    fun setDownloadDirectory(uri: String) {
+        downloadRepository.setDownloadDirectory(uri)
+    }
+
+    fun resetDownloadDirectory() {
+        downloadRepository.resetDownloadDirectory()
     }
 }

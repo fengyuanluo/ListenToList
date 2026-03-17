@@ -31,6 +31,7 @@ class MusicPlaybackDataSourceTest {
     fun directHttpDescriptor_usesHttpDelegateAndResolvedSpec() {
         val http = RecordingDataSource()
         val file = RecordingDataSource()
+        val content = RecordingDataSource()
         val fallback = RecordingDataSource()
         val dataSource = MusicPlaybackDataSource(
             resolver = MusicPlaybackSourceResolver {
@@ -44,6 +45,7 @@ class MusicPlaybackDataSourceTest {
             },
             httpDataSourceFactory = DataSource.Factory { http },
             fileDataSourceFactory = DataSource.Factory { file },
+            contentDataSourceFactory = DataSource.Factory { content },
             streamFallbackFactory = DataSource.Factory { fallback },
         )
 
@@ -73,6 +75,7 @@ class MusicPlaybackDataSourceTest {
     fun localFileDescriptor_usesFileDelegateAndResolvedSpec() {
         val http = RecordingDataSource()
         val file = RecordingDataSource()
+        val content = RecordingDataSource()
         val fallback = RecordingDataSource()
         val path = File("/tmp/listentolist-test.wav").absolutePath
         val dataSource = MusicPlaybackDataSource(
@@ -81,6 +84,7 @@ class MusicPlaybackDataSourceTest {
             },
             httpDataSourceFactory = DataSource.Factory { http },
             fileDataSourceFactory = DataSource.Factory { file },
+            contentDataSourceFactory = DataSource.Factory { content },
             streamFallbackFactory = DataSource.Factory { fallback },
         )
 
@@ -96,6 +100,7 @@ class MusicPlaybackDataSourceTest {
     fun streamFallbackDescriptor_usesFallbackDelegateAndReadDelegates() {
         val http = RecordingDataSource()
         val file = RecordingDataSource()
+        val content = RecordingDataSource()
         val fallback = RecordingDataSource(bytes = "data".encodeToByteArray())
         val dataSource = MusicPlaybackDataSource(
             resolver = MusicPlaybackSourceResolver {
@@ -103,6 +108,7 @@ class MusicPlaybackDataSourceTest {
             },
             httpDataSourceFactory = DataSource.Factory { http },
             fileDataSourceFactory = DataSource.Factory { file },
+            contentDataSourceFactory = DataSource.Factory { content },
             streamFallbackFactory = DataSource.Factory { fallback },
         )
 
@@ -137,6 +143,7 @@ class MusicPlaybackDataSourceTest {
                 },
                 httpDataSourceFactory = DataSource.Factory { RecordingDataSource() },
                 fileDataSourceFactory = DataSource.Factory { RecordingDataSource() },
+                contentDataSourceFactory = DataSource.Factory { RecordingDataSource() },
                 streamFallbackFactory = DataSource.Factory { RecordingDataSource() },
             )
         }
@@ -169,6 +176,7 @@ class MusicPlaybackDataSourceTest {
             },
             httpDataSourceFactory = DataSource.Factory { http },
             fileDataSourceFactory = DataSource.Factory { RecordingDataSource() },
+            contentDataSourceFactory = DataSource.Factory { RecordingDataSource() },
             streamFallbackFactory = DataSource.Factory { RecordingDataSource() },
         )
 
@@ -181,6 +189,56 @@ class MusicPlaybackDataSourceTest {
         assertEquals(4L, opened)
         assertEquals(2, resolveCalls)
         assertEquals(Uri.parse("https://example.com/music/2.wav"), http.openedSpec?.uri)
+    }
+
+    @Test
+    fun downloadedFileDescriptor_usesFileDelegateAndDownloadedRoute() {
+        val http = RecordingDataSource()
+        val file = RecordingDataSource()
+        val content = RecordingDataSource()
+        val fallback = RecordingDataSource()
+        val path = File("/tmp/listentolist-download.wav").absolutePath
+        val dataSource = MusicPlaybackDataSource(
+            resolver = MusicPlaybackSourceResolver {
+                ResolvedMusicPlaybackSource.DownloadedFile(absolutePath = path)
+            },
+            httpDataSourceFactory = DataSource.Factory { http },
+            fileDataSourceFactory = DataSource.Factory { file },
+            contentDataSourceFactory = DataSource.Factory { content },
+            streamFallbackFactory = DataSource.Factory { fallback },
+        )
+
+        dataSource.open(DataSpec.Builder().setUri(Uri.parse("ease://data?music=44")).build())
+
+        assertSame(file, dataSource.currentDelegateForTest())
+        assertEquals(Uri.fromFile(File(path)), file.openedSpec?.uri)
+        assertEquals(path, file.openedSpec?.key)
+        assertEquals(PLAYBACK_ROUTE_DOWNLOADED_FILE, PlaybackDiagnostics.currentSnapshot().route)
+    }
+
+    @Test
+    fun contentUriDescriptor_usesContentDelegateAndDownloadedRoute() {
+        val http = RecordingDataSource()
+        val file = RecordingDataSource()
+        val content = RecordingDataSource()
+        val fallback = RecordingDataSource()
+        val targetUri = Uri.parse("content://downloads/documents/song-a")
+        val dataSource = MusicPlaybackDataSource(
+            resolver = MusicPlaybackSourceResolver {
+                ResolvedMusicPlaybackSource.ContentUri(uri = targetUri.toString())
+            },
+            httpDataSourceFactory = DataSource.Factory { http },
+            fileDataSourceFactory = DataSource.Factory { file },
+            contentDataSourceFactory = DataSource.Factory { content },
+            streamFallbackFactory = DataSource.Factory { fallback },
+        )
+
+        dataSource.open(DataSpec.Builder().setUri(Uri.parse("ease://data?music=45")).build())
+
+        assertSame(content, dataSource.currentDelegateForTest())
+        assertEquals(targetUri, content.openedSpec?.uri)
+        assertEquals(targetUri.toString(), content.openedSpec?.key)
+        assertEquals(PLAYBACK_ROUTE_DOWNLOADED_CONTENT, PlaybackDiagnostics.currentSnapshot().route)
     }
 }
 

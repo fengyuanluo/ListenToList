@@ -1,5 +1,8 @@
 package com.kutedev.easemusicplayer.widgets.settings
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,14 +21,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
+import com.kutedev.easemusicplayer.components.EaseCheckbox
+import com.kutedev.easemusicplayer.components.EaseIconButton
+import com.kutedev.easemusicplayer.components.EaseIconButtonSize
+import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
@@ -52,6 +66,11 @@ private fun DownloadStatusChip(
             stringResource(id = R.string.download_status_running),
             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
             MaterialTheme.colorScheme.primary,
+        )
+        DownloadTaskStatus.PAUSED -> Triple(
+            stringResource(id = R.string.download_status_paused),
+            EaseTheme.surfaces.chip,
+            MaterialTheme.colorScheme.onSurfaceVariant,
         )
         DownloadTaskStatus.COMPLETED -> Triple(
             stringResource(id = R.string.download_status_completed),
@@ -127,8 +146,9 @@ private fun downloadTaskSupportText(task: DownloadTaskItem): DownloadTaskSupport
 @Composable
 private fun DownloadTaskCard(
     task: DownloadTaskItem,
-    onCancel: () -> Unit,
-    onRetry: () -> Unit,
+    onPause: () -> Unit,
+    onStart: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val supportText = downloadTaskSupportText(task)
 
@@ -158,22 +178,28 @@ private fun DownloadTaskCard(
                 modifier = Modifier.weight(1f),
             )
 
-            if (task.active) {
+            if (task.pausable) {
                 EaseTextButton(
-                    text = stringResource(id = R.string.download_action_cancel),
-                    type = EaseTextButtonType.Error,
+                    text = stringResource(id = R.string.download_action_pause),
+                    type = EaseTextButtonType.Default,
                     size = EaseTextButtonSize.Small,
-                    onClick = onCancel,
+                    onClick = onPause,
                 )
             }
-            if (task.retryable) {
+            if (task.startable) {
                 EaseTextButton(
-                    text = stringResource(id = R.string.download_action_retry),
+                    text = stringResource(id = R.string.download_action_start),
                     type = EaseTextButtonType.Primary,
                     size = EaseTextButtonSize.Small,
-                    onClick = onRetry,
+                    onClick = onStart,
                 )
             }
+            EaseTextButton(
+                text = stringResource(id = R.string.download_action_delete),
+                type = EaseTextButtonType.Error,
+                size = EaseTextButtonSize.Small,
+                onClick = onDelete,
+            )
         }
 
         Row(
@@ -197,11 +223,159 @@ private fun DownloadTaskCard(
 }
 
 @Composable
+private fun DownloadDirectoryDialog(
+    open: Boolean,
+    summary: String,
+    canReset: Boolean,
+    onPickDirectory: () -> Unit,
+    onResetDirectory: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (!open) {
+        return
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(EaseTheme.radius.card))
+                .background(EaseTheme.surfaces.dialog)
+                .padding(EaseTheme.spacing.dialogPadding),
+            verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
+        ) {
+            Text(
+                text = stringResource(id = R.string.download_settings_title),
+                style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Text(
+                text = stringResource(id = R.string.setting_downloads_dir, summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = EaseTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
+                EaseTextButton(
+                    text = stringResource(id = R.string.download_settings_change_directory),
+                    type = EaseTextButtonType.PrimaryVariant,
+                    size = EaseTextButtonSize.Small,
+                    onClick = onPickDirectory,
+                )
+                EaseTextButton(
+                    text = stringResource(id = R.string.download_settings_reset_directory),
+                    type = EaseTextButtonType.Default,
+                    size = EaseTextButtonSize.Small,
+                    onClick = onResetDirectory,
+                    disabled = !canReset,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                EaseTextButton(
+                    text = stringResource(id = R.string.confirm_dialog_btn_cancel),
+                    type = EaseTextButtonType.Primary,
+                    size = EaseTextButtonSize.Small,
+                    onClick = onDismiss,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteDownloadDialog(
+    task: DownloadTaskItem?,
+    deleteFile: Boolean,
+    onDeleteFileChange: (Boolean) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (task == null) {
+        return
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(EaseTheme.radius.card))
+                .background(EaseTheme.surfaces.dialog)
+                .padding(EaseTheme.spacing.dialogPadding),
+            verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
+        ) {
+            Text(
+                text = stringResource(id = R.string.download_delete_title),
+                color = MaterialTheme.colorScheme.error,
+                style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Text(
+                text = task.title,
+                style = EaseTheme.typography.body,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
+            ) {
+                EaseCheckbox(
+                    value = deleteFile,
+                    onChange = onDeleteFileChange,
+                    size = 18.dp,
+                )
+                Text(
+                    text = stringResource(id = R.string.download_delete_remove_file),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = EaseTheme.typography.bodySmall,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
+                    EaseTextButton(
+                        text = stringResource(id = R.string.confirm_dialog_btn_cancel),
+                        type = EaseTextButtonType.Default,
+                        size = EaseTextButtonSize.Small,
+                        onClick = onDismiss,
+                    )
+                    EaseTextButton(
+                        text = stringResource(id = R.string.download_action_delete),
+                        type = EaseTextButtonType.Error,
+                        size = EaseTextButtonSize.Small,
+                        onClick = onConfirm,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun DownloadManagerPage(
     downloadManagerVM: DownloadManagerVM = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val tasks by downloadManagerVM.tasks.collectAsState(initial = emptyList())
-    val downloadDirectory = downloadManagerVM.downloadDirectory()
+    val directoryState by downloadManagerVM.downloadDirectoryState.collectAsState()
+    var showDirectoryDialog by remember { mutableStateOf(false) }
+    var pendingDeleteTask by remember { mutableStateOf<DownloadTaskItem?>(null) }
+    var deleteFileWithTask by remember { mutableStateOf(false) }
+
+    val pickDirectoryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+            downloadManagerVM.setDownloadDirectory(uri.toString())
+        }
+        showDirectoryDialog = false
+    }
 
     LazyColumn(
         contentPadding = PaddingValues(start = paddingX, end = paddingX, top = 24.dp, bottom = 24.dp),
@@ -211,20 +385,32 @@ fun DownloadManagerPage(
             .background(EaseTheme.surfaces.screen)
     ) {
         item {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xxs),
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
+                verticalAlignment = Alignment.Top,
             ) {
-                Text(
-                    text = stringResource(id = R.string.setting_downloads_title),
-                    style = EaseTheme.typography.screenTitle,
-                )
-                Text(
-                    text = stringResource(id = R.string.setting_downloads_dir, downloadDirectory),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = EaseTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xxs),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.setting_downloads_title),
+                        style = EaseTheme.typography.screenTitle,
+                    )
+                    Text(
+                        text = stringResource(id = R.string.setting_downloads_dir, directoryState.summary),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = EaseTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_adjust),
+                    onClick = { showDirectoryDialog = true },
                 )
             }
         }
@@ -258,10 +444,43 @@ fun DownloadManagerPage(
             items(tasks, key = { task -> task.id }) { task ->
                 DownloadTaskCard(
                     task = task,
-                    onCancel = { downloadManagerVM.cancel(task.id) },
-                    onRetry = { downloadManagerVM.retry(task) },
+                    onPause = { downloadManagerVM.pause(task.id) },
+                    onStart = { downloadManagerVM.start(task.id) },
+                    onDelete = {
+                        pendingDeleteTask = task
+                        deleteFileWithTask = false
+                    },
                 )
             }
         }
     }
+
+    DownloadDirectoryDialog(
+        open = showDirectoryDialog,
+        summary = directoryState.summary,
+        canReset = directoryState.treeUri != null,
+        onPickDirectory = { pickDirectoryLauncher.launch(null) },
+        onResetDirectory = {
+            downloadManagerVM.resetDownloadDirectory()
+            showDirectoryDialog = false
+        },
+        onDismiss = { showDirectoryDialog = false },
+    )
+
+    DeleteDownloadDialog(
+        task = pendingDeleteTask,
+        deleteFile = deleteFileWithTask,
+        onDeleteFileChange = { deleteFileWithTask = it },
+        onConfirm = {
+            pendingDeleteTask?.let { task ->
+                downloadManagerVM.delete(task.id, deleteFileWithTask)
+            }
+            pendingDeleteTask = null
+            deleteFileWithTask = false
+        },
+        onDismiss = {
+            pendingDeleteTask = null
+            deleteFileWithTask = false
+        },
+    )
 }

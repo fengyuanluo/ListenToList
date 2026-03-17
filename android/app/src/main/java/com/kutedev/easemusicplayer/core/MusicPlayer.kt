@@ -24,6 +24,7 @@ import com.kutedev.easemusicplayer.singleton.PlaybackContext
 import com.kutedev.easemusicplayer.singleton.PlaybackContextType
 import com.kutedev.easemusicplayer.singleton.PlaybackCommand
 import com.kutedev.easemusicplayer.singleton.PlaybackCommandBus
+import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
@@ -76,6 +77,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var playerRepository: PlayerRepository
     @Inject lateinit var playlistRepository: PlaylistRepository
     @Inject lateinit var toastRepository: ToastRepository
+    @Inject lateinit var downloadRepository: DownloadRepository
     @Inject lateinit var bridge: Bridge
     @Inject lateinit var playbackRuntimeKernel: PlaybackRuntimeKernel
     @Inject lateinit var playbackCommandBus: PlaybackCommandBus
@@ -97,12 +99,16 @@ class PlaybackService : MediaSessionService() {
 
         val cache = PlaybackCache.getCache(context)
         val playerUpstreamFactory = PlaybackDataSourceFactory.create(
+            appContext = context,
             bridge = bridge,
+            downloadRepository = downloadRepository,
             scope = serviceScope,
             sourceTag = PLAYBACK_SOURCE_TAG_PLAYBACK,
         )
         val prefetchUpstreamFactory = PlaybackDataSourceFactory.create(
+            appContext = context,
             bridge = bridge,
+            downloadRepository = downloadRepository,
             scope = serviceScope,
             sourceTag = PLAYBACK_SOURCE_TAG_NEXT_PREFETCH,
         )

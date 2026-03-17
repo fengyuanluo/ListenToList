@@ -77,4 +77,43 @@ class DownloadRepositoryTest {
         assertFalse(DownloadTaskStatus.valueOf(cancelled.status).active)
         assertEquals("cancelled", cancelled.errorMessage)
     }
+
+    @Test
+    fun mergePersistedDownloadRecords_keepsPausedStatusWhenCancellationIsRepositoryInitiated() {
+        val businessId = UUID.randomUUID()
+        val workId = UUID.randomUUID()
+        val records = listOf(
+            PersistedDownloadRecord(
+                id = businessId.toString(),
+                workId = workId.toString(),
+                title = "song-paused",
+                sourcePath = "/music/song-paused.mp3",
+                fileName = "song-paused.mp3",
+                storageId = 1L,
+                createdAtMs = 30L,
+                status = DownloadTaskStatus.PAUSED.name,
+                bytesDownloaded = 512L,
+                totalBytes = 4096L,
+                destinationPath = "/downloads/song-paused.mp3",
+            ),
+        )
+        val infos = listOf(
+            WorkInfo(
+                workId,
+                WorkInfo.State.CANCELLED,
+                emptySet(),
+                Data.Builder()
+                    .putString(DownloadWorkKeys.OUTPUT_ERROR_MESSAGE, "cancelled")
+                    .build(),
+                Data.EMPTY,
+            ),
+        )
+
+        val merged = mergePersistedDownloadRecords(records, infos)
+        val paused = merged.single()
+
+        assertEquals(DownloadTaskStatus.PAUSED.name, paused.status)
+        assertEquals(null, paused.workId)
+        assertEquals(null, paused.errorMessage)
+    }
 }
