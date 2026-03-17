@@ -1,7 +1,8 @@
 package com.kutedev.easemusicplayer.core
 
+import android.content.ContentResolver
 import android.media.MediaMetadataRetriever
-import androidx.core.net.toUri
+import android.net.Uri
 import androidx.core.text.isDigitsOnly
 import androidx.media3.common.C.TIME_UNSET
 import androidx.media3.common.MediaItem
@@ -10,7 +11,6 @@ import androidx.media3.common.Player
 import androidx.media3.extractor.metadata.flac.PictureFrame
 import androidx.media3.extractor.metadata.id3.ApicFrame
 import com.kutedev.easemusicplayer.singleton.Bridge
-import com.kutedev.easemusicplayer.singleton.DEFAULT_COVER_BASE64
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +32,14 @@ import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_schema.PlayMode
 import java.time.Duration
 
+private const val APPLICATION_PACKAGE = "com.kutedev.easemusicplayer"
+
+private val DEFAULT_COVER_ARTWORK_URI: Uri = Uri.Builder()
+    .scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
+    .authority(APPLICATION_PACKAGE)
+    .appendPath("drawable")
+    .appendPath("cover_default_image")
+    .build()
 
 private fun extractCurrentTracksCover(player: Player): ByteArray? {
     player.currentTracks.groups.forEach { trackGroup ->
@@ -103,11 +111,7 @@ private fun buildMediaItemInternal(
         is MusicOrMusicAbstract.VMusicAbstract -> music.v1.meta
     }
 
-    val coverURI = if (cover != null) {
-        null
-    } else {
-        DEFAULT_COVER_BASE64.toUri()
-    }
+    val coverURI = if (cover != null) null else DEFAULT_COVER_ARTWORK_URI
 
     return MediaItem.Builder()
         .setMediaId(mediaIdOverride ?: meta.id.value.toString())

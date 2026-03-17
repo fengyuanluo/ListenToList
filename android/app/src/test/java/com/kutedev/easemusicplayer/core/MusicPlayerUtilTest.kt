@@ -1,5 +1,6 @@
 package com.kutedev.easemusicplayer.core
 
+import android.content.ContentResolver
 import androidx.media3.common.Player
 import com.kutedev.easemusicplayer.singleton.PlaybackContext
 import com.kutedev.easemusicplayer.singleton.PlaybackContextType
@@ -8,8 +9,10 @@ import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
 import com.kutedev.easemusicplayer.singleton.buildPlaylistQueueEntryId
 import java.time.Duration
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -19,6 +22,7 @@ import uniffi.ease_client_backend.MusicMeta
 import uniffi.ease_client_backend.Playlist
 import uniffi.ease_client_backend.PlaylistAbstract
 import uniffi.ease_client_backend.PlaylistMeta
+import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_schema.PlayMode
 import uniffi.ease_client_schema.PlaylistId
@@ -125,6 +129,62 @@ class MusicPlayerUtilTest {
             MusicId(42L),
             resolveMusicIdFromMediaItem(plan.mediaItems[1]),
         )
+    }
+
+    @Test
+    fun buildPlaybackQueuePlan_missingCoverUsesCompactResourceArtworkUri() {
+        val playlist = testPlaylist(listOf(51L, 52L))
+
+        val plan = buildPlaybackQueuePlan(
+            playlist = playlist,
+            targetId = MusicId(51L),
+            playMode = PlayMode.LIST,
+        )
+
+        val artworkUri = plan!!.mediaItems.first().mediaMetadata.artworkUri
+        assertNotNull(artworkUri)
+        assertEquals(ContentResolver.SCHEME_ANDROID_RESOURCE, artworkUri!!.scheme)
+        assertEquals("com.kutedev.easemusicplayer", artworkUri.authority)
+        assertEquals(listOf("drawable", "cover_default_image"), artworkUri.pathSegments)
+        assertTrue(artworkUri.toString().length < 128)
+        assertFalse(artworkUri.toString().startsWith("data:image"))
+    }
+
+    @Test
+    fun buildPlaybackQueuePlan_existingCoverDoesNotInjectFallbackArtworkUri() {
+        val playlist = Playlist(
+            abstr = PlaylistAbstract(
+                meta = PlaylistMeta(
+                    id = PlaylistId(2L),
+                    title = "playlist",
+                    cover = null,
+                    showCover = null,
+                    createdTime = Duration.ZERO,
+                    order = emptyList(),
+                ),
+                musicCount = 1uL,
+                duration = null,
+            ),
+            musics = listOf(
+                MusicAbstract(
+                    meta = MusicMeta(
+                        id = MusicId(61L),
+                        title = "track-61",
+                        duration = Duration.ofSeconds(61),
+                        order = emptyList(),
+                    ),
+                    cover = DataSourceKey.Cover(MusicId(61L)),
+                ),
+            ),
+        )
+
+        val plan = buildPlaybackQueuePlan(
+            playlist = playlist,
+            targetId = MusicId(61L),
+            playMode = PlayMode.LIST,
+        )
+
+        assertNull(plan!!.mediaItems.first().mediaMetadata.artworkUri)
     }
 
     private fun testPlaylist(ids: List<Long>): Playlist {
