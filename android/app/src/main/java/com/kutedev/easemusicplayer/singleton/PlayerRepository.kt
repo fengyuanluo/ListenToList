@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.ArgUpdateMusicLyric
@@ -69,14 +68,6 @@ class PlayerRepository @Inject constructor(
     val currentQueueEntry = combine(_queue, _currentQueueEntryId) { queue, queueEntryId ->
         queue?.entries?.firstOrNull { it.queueEntryId == queueEntryId }
     }.stateIn(_scope, SharingStarted.Eagerly, null)
-    val removeAction = _queue.map { queue ->
-        if (queue?.context?.type == PlaybackContextType.USER_PLAYLIST) {
-            PlaybackRemoveAction.REMOVE_FROM_PLAYLIST
-        } else {
-            PlaybackRemoveAction.REMOVE_FROM_QUEUE
-        }
-    }.stateIn(_scope, SharingStarted.Eagerly, PlaybackRemoveAction.REMOVE_FROM_QUEUE)
-
     val previousMusic = combine(playMode, _currentQueueIndex, _queue) { playMode, queueIndex, queue ->
         val entries = queue?.entries.orEmpty()
         if (queueIndex == -1 || entries.isEmpty()) {

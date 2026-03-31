@@ -41,7 +41,6 @@ class PlayerVM @Inject constructor(
     val previousMusic = playerRepository.previousMusic
     val nextMusic = playerRepository.nextMusic
     val playing = playerRepository.playing
-    val removeAction = playerRepository.removeAction
     val currentDuration = _currentDuration.asStateFlow()
     val bufferDuration = _bufferDuration.asStateFlow()
     val totalDuration = _totalDuration.asStateFlow()
@@ -112,8 +111,8 @@ class PlayerVM @Inject constructor(
         playerControllerRepository.removeQueueEntry(queueEntryId)
     }
 
-    fun moveQueueEntry(fromIndex: Int, toIndex: Int) {
-        playerControllerRepository.moveQueueEntry(fromIndex, toIndex)
+    fun commitQueueOrder(orderedQueueEntryIds: List<String>) {
+        playerControllerRepository.commitQueueOrder(orderedQueueEntryIds)
     }
 
     fun changePlayModeToNext() {
