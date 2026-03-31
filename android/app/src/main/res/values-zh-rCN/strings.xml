@@ -82,7 +82,7 @@
     <string name="music_lyric_no_desc">找不到歌词</string>
     <string name="music_lyric_try_add_desc">点击尝试添加</string>
     <string name="music_lyric_fail">加载歌词失败</string>
-    <string name="music_queue_sheet_title">当前播放列表</string>
+    <string name="music_queue_sheet_title">当前播放队列</string>
     <string name="music_queue_sheet_temporary">临时播放队列</string>
     <string name="storage_edit_oauth">OAuth</string>
     <string name="storage_edit_onedrive_connect">连接你的账户</string>
@@ -136,7 +136,7 @@
     <string name="storage_search_play_timeout">无法打开所在目录：请求超时。</string>
     <string name="storage_search_target_missing">目标音频已经不在所在目录中。</string>
     <string name="storage_search_located_current_dir">当前已经位于该文件所在目录。</string>
-    <string name="common_add_to_queue">加入播放列表</string>
+    <string name="common_add_to_queue">加入播放队列</string>
     <string name="common_add_to_playlist">加入歌单</string>
     <string name="common_download">下载</string>
     <string name="setting_downloads_title">下载管理</string>

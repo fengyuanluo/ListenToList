@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,7 +85,6 @@ import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
 import com.kutedev.easemusicplayer.singleton.RouteImportType
 import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.toMusicDurationMs
-import com.kutedev.easemusicplayer.singleton.PlaybackRemoveAction
 import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_backend.LyricLine
 import uniffi.ease_client_backend.LyricLoadState
@@ -106,8 +106,6 @@ private fun MusicPlayerHeader(
 ) {
     val navController = LocalNavController.current
     val currentPlaying by playerVM.music.collectAsState()
-    val removeAction by playerVM.removeAction.collectAsState()
-
 
     var moreMenuExpanded by remember {
         mutableStateOf(false)
@@ -167,10 +165,7 @@ private fun MusicPlayerHeader(
                                 )
                             },
                             EaseContextMenuItem(
-                                stringId = when (removeAction) {
-                                    PlaybackRemoveAction.REMOVE_FROM_PLAYLIST -> R.string.music_player_context_menu_remove_from_playlist
-                                    PlaybackRemoveAction.REMOVE_FROM_QUEUE -> R.string.music_player_context_menu_remove_from_queue
-                                },
+                                stringId = R.string.music_player_context_menu_remove_from_queue,
                                 isError = true,
                                 onClick = {
                                     playerVM.remove()
@@ -756,6 +751,7 @@ private fun ReorderableCollectionItemScope.PlaybackQueueRow(
     isDragging: Boolean,
     onPlay: () -> Unit,
     onRemove: () -> Unit,
+    onCommitMove: () -> Unit,
 ) {
     val shape = RoundedCornerShape(EaseTheme.radius.card)
     Row(
@@ -830,7 +826,11 @@ private fun ReorderableCollectionItemScope.PlaybackQueueRow(
             modifier = Modifier
                 .size(28.dp)
                 .clip(RoundedCornerShape(EaseTheme.radius.control))
-                .draggableHandle()
+                .draggableHandle(
+                    onDragStopped = {
+                        onCommitMove()
+                    }
+                )
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.icon_drag),
@@ -851,11 +851,33 @@ private fun PlaybackQueueSheet(
     onDismiss: () -> Unit,
     onPlay: (String) -> Unit,
     onRemove: (String) -> Unit,
-    onMove: (Int, Int) -> Unit,
+    onCommitOrder: (List<String>) -> Unit,
 ) {
+    val baseOrder = queue.entries.map { it.queueEntryId }
+    var draftEntries by remember(baseOrder) {
+        mutableStateOf(queue.entries)
+    }
+    val currentOrder by rememberUpdatedState(queue.entries.map { it.queueEntryId })
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState = lazyListState) { from, to ->
-        onMove(from.index, to.index)
+        if (
+            from.index == to.index ||
+            from.index !in draftEntries.indices ||
+            to.index !in draftEntries.indices
+        ) {
+            return@rememberReorderableLazyListState
+        }
+        draftEntries = draftEntries.toMutableList().apply {
+            val moved = removeAt(from.index)
+            add(to.index, moved)
+        }
+    }
+
+    fun commitDraftOrder() {
+        val draftOrder = draftEntries.map { it.queueEntryId }
+        if (draftOrder != currentOrder) {
+            onCommitOrder(draftOrder)
+        }
     }
 
     ModalBottomSheet(
@@ -889,7 +911,7 @@ private fun PlaybackQueueSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            items(queue.entries, key = { entry -> entry.queueEntryId }) { entry ->
+            items(draftEntries, key = { entry -> entry.queueEntryId }) { entry ->
                 ReorderableItem(reorderState, key = entry.queueEntryId) { isDragging ->
                     PlaybackQueueRow(
                         entry = entry,
@@ -897,6 +919,7 @@ private fun PlaybackQueueSheet(
                         isDragging = isDragging,
                         onPlay = { onPlay(entry.queueEntryId) },
                         onRemove = { onRemove(entry.queueEntryId) },
+                        onCommitMove = ::commitDraftOrder,
                     )
                 }
             }
@@ -1046,8 +1069,8 @@ fun MusicPlayerPage(
                 onRemove = { queueEntryId ->
                     playerVM.removeQueueEntry(queueEntryId)
                 },
-                onMove = { fromIndex, toIndex ->
-                    playerVM.moveQueueEntry(fromIndex, toIndex)
+                onCommitOrder = { orderedQueueEntryIds ->
+                    playerVM.commitQueueOrder(orderedQueueEntryIds)
                 },
             )
         }

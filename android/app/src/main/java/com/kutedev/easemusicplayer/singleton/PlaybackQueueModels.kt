@@ -11,11 +11,6 @@ enum class PlaybackContextType {
     TEMPORARY,
 }
 
-enum class PlaybackRemoveAction {
-    REMOVE_FROM_PLAYLIST,
-    REMOVE_FROM_QUEUE,
-}
-
 data class PlaybackContext(
     val type: PlaybackContextType,
     val playlistId: PlaylistId? = null,

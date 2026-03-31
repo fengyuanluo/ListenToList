@@ -36,9 +36,8 @@ sealed interface PlaybackCommand {
         val entries: List<StorageEntry>,
     ) : PlaybackCommand
 
-    data class MoveQueueEntry(
-        val fromIndex: Int,
-        val toIndex: Int,
+    data class CommitQueueOrder(
+        val orderedQueueEntryIds: List<String>,
     ) : PlaybackCommand
 
     data class RemoveQueueEntry(

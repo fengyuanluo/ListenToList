@@ -175,11 +175,39 @@ class PlaybackRuntimeKernel @Inject constructor(
 
         when (persisted.contextType) {
             PlaybackContextType.USER_PLAYLIST.name -> {
-                val playlistId = persisted.playlistId?.let(::PlaylistId) ?: return false
-                val playlist = bridge.run { ctGetPlaylist(it, playlistId) } ?: return false
-                val snapshot = buildPlaylistSnapshot(playlist, persisted.currentQueueEntryId) ?: return false
-                val entry = snapshot.currentEntry() ?: snapshot.entries.firstOrNull() ?: return false
+                val playlistId = persisted.playlistId?.let(::PlaylistId)
+                val context = PlaybackContext(
+                    type = PlaybackContextType.USER_PLAYLIST,
+                    playlistId = playlistId,
+                )
+                val entries = buildList {
+                    persisted.entries.forEach { persistedEntry ->
+                        val musicId = MusicId(persistedEntry.musicId)
+                        val musicAbstract = bridge.runSync { backend -> ctsGetMusicAbstract(backend, musicId) } ?: return@forEach
+                        add(
+                            PlaybackQueueEntry(
+                                queueEntryId = persistedEntry.queueEntryId,
+                                musicId = musicId,
+                                musicAbstract = musicAbstract,
+                                sourceContext = buildPersistedSourceContext(persistedEntry),
+                            )
+                        )
+                    }
+                }
+                if (entries.isEmpty()) {
+                    playbackSessionStore.clear()
+                    return false
+                }
+                val snapshot = PlaybackQueueSnapshot(
+                    context = context,
+                    entries = entries,
+                    currentQueueEntryId = persisted.currentQueueEntryId,
+                )
+                val entry = snapshot.currentEntry() ?: entries.firstOrNull() ?: return false
                 val music = bridge.run { ctGetMusic(it, entry.musicId) } ?: return false
+                val sourcePlaylist = playlistId?.let { id ->
+                    bridge.run { ctGetPlaylist(it, id) }
+                }
                 playResolvedQueue(
                     player = player,
                     snapshot = snapshot.copy(currentQueueEntryId = entry.queueEntryId),
@@ -187,7 +215,7 @@ class PlaybackRuntimeKernel @Inject constructor(
                     currentQueueEntryId = entry.queueEntryId,
                     startPositionMs = persisted.positionMs,
                     playWhenReady = persisted.playWhenReady,
-                    sourcePlaylist = playlist,
+                    sourcePlaylist = sourcePlaylist,
                 )
             }
 

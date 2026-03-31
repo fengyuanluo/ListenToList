@@ -148,11 +148,10 @@ class PlayerControllerRepository @Inject constructor(
         playbackCommandBus.dispatch(PlaybackCommand.RemoveQueueEntry(queueEntryId))
     }
 
-    fun moveQueueEntry(fromIndex: Int, toIndex: Int) {
+    fun commitQueueOrder(orderedQueueEntryIds: List<String>) {
         playbackCommandBus.dispatch(
-            PlaybackCommand.MoveQueueEntry(
-                fromIndex = fromIndex,
-                toIndex = toIndex,
+            PlaybackCommand.CommitQueueOrder(
+                orderedQueueEntryIds = orderedQueueEntryIds.toList(),
             )
         )
     }
