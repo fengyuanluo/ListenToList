@@ -323,6 +323,13 @@ class EditStorageVM @Inject constructor(
         bindDefaultPathBrowser(forceRemote = true)
     }
 
+    fun openDefaultPathBrowserRoot(forceRemote: Boolean = true) {
+        bindDefaultPathBrowser(
+            forceRemote = forceRemote,
+            preferredPath = "/",
+        )
+    }
+
     fun updateDefaultPathBrowserScrollSnapshot(index: Int, offset: Int) {
         defaultPathBrowser.updateScrollSnapshot(
             BrowserScrollSnapshot(index = index, offset = offset)
@@ -334,13 +341,13 @@ class EditStorageVM @Inject constructor(
         if (normalizedForm.typ != StorageType.OPEN_LIST) {
             return ListStorageEntryChildrenResp.Unknown
         }
-        return bridge.runRaw {
+        return bridge.run {
             ctListStorageEntryChildrenByArg(
                 it,
                 normalizedForm,
                 normalizeStorageDefaultPath(path),
             )
-        }
+        } ?: ListStorageEntryChildrenResp.Unknown
     }
 
     private fun bindDefaultPathBrowser(
@@ -367,9 +374,11 @@ class EditStorageVM @Inject constructor(
                 isLocal = false,
             )
         )
-        val targetPath = normalizeStorageDefaultPath(
-            preferredPath ?: defaultPathBrowser.currentPathValue()
-        )
+        val targetPath = when {
+            preferredPath != null -> normalizeStorageDefaultPath(preferredPath)
+            configChanged -> "/"
+            else -> normalizeStorageDefaultPath(defaultPathBrowser.currentPathValue())
+        }
         defaultPathBrowser.restorePath(targetPath)
         defaultPathBrowser.refresh(forceRemote = forceRemote || configChanged)
     }
@@ -413,13 +422,13 @@ class EditStorageVM @Inject constructor(
     }
 
     private suspend fun validateOpenListDefaultPath(form: ArgUpsertStorage): Boolean {
-        val result = bridge.runRaw {
+        val result = bridge.run {
             ctListStorageEntryChildrenByArg(
                 it,
                 form,
                 form.defaultPath,
             )
-        }
+        } ?: ListStorageEntryChildrenResp.Unknown
         return when (result) {
             is ListStorageEntryChildrenResp.Ok -> {
                 clearDefaultPathFieldError()

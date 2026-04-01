@@ -5,6 +5,7 @@ import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,8 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -277,6 +280,7 @@ private fun WebdavConfig(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun OpenListConfig(
     editStorageVM: EditStorageVM = hiltViewModel()
 ) {
@@ -293,6 +297,8 @@ private fun OpenListConfig(
     val defaultPathBrowserScrollSnapshot by editStorageVM.defaultPathBrowserScrollSnapshot.collectAsState()
     val isAnonymous = form.isAnonymous
     val keyboardController = LocalSoftwareKeyboardController.current
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val coroutineScope = rememberCoroutineScope()
 
     FormSwitch(
         label = stringResource(id = R.string.storage_edit_anonymous),
@@ -370,6 +376,10 @@ private fun OpenListConfig(
                 .onFocusChanged { state ->
                     if (state.isFocused) {
                         editStorageVM.expandDefaultPathBrowser()
+                        coroutineScope.launch {
+                            kotlinx.coroutines.delay(250)
+                            bringIntoViewRequester.bringIntoView()
+                        }
                     }
                 },
             value = form.defaultPath,
@@ -411,6 +421,7 @@ private fun OpenListConfig(
             Column(
                 modifier = Modifier
                     .padding(top = 12.dp)
+                    .bringIntoViewRequester(bringIntoViewRequester)
                     .fillMaxWidth()
                     .height(280.dp)
                     .clip(RoundedCornerShape(EaseTheme.radius.card))
@@ -453,7 +464,9 @@ private fun OpenListConfig(
                     showBlockingError -> {
                         OpenListDefaultPathBrowserError(
                             type = defaultPathBrowserLoadState,
+                            currentPath = defaultPathBrowserCurrentPath,
                             onReload = { editStorageVM.reloadDefaultPathBrowser() },
+                            onOpenRoot = { editStorageVM.openDefaultPathBrowserRoot() },
                         )
                     }
 
@@ -545,7 +558,9 @@ private fun OneDriveConfig(
 @Composable
 private fun OpenListDefaultPathBrowserError(
     type: CurrentStorageStateType,
+    currentPath: String,
     onReload: () -> Unit,
+    onOpenRoot: () -> Unit,
 ) {
     val title = when (type) {
         CurrentStorageStateType.AUTHENTICATION_FAILED -> stringResource(id = R.string.import_musics_error_authentication_title)
@@ -594,6 +609,14 @@ private fun OpenListDefaultPathBrowserError(
                 size = EaseTextButtonSize.Medium,
                 onClick = onReload,
             )
+            if (currentPath != "/") {
+                EaseTextButton(
+                    text = stringResource(id = R.string.storage_edit_default_path_picker_back_to_root),
+                    type = EaseTextButtonType.Default,
+                    size = EaseTextButtonSize.Medium,
+                    onClick = onOpenRoot,
+                )
+            }
         }
     }
 }
