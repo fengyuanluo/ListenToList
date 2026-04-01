@@ -2,8 +2,11 @@ package com.kutedev.easemusicplayer.widgets.devices
 
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,23 +18,27 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -41,9 +48,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.net.toUri
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.ConfirmDialog
 import com.kutedev.easemusicplayer.components.EaseIconButton
@@ -56,18 +65,19 @@ import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.components.FormSwitch
 import com.kutedev.easemusicplayer.components.FormText
 import com.kutedev.easemusicplayer.components.FormWidget
-import com.kutedev.easemusicplayer.viewmodels.EditStorageVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
-import kotlinx.coroutines.flow.update
+import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
+import com.kutedev.easemusicplayer.viewmodels.BrowserScrollSnapshot
+import com.kutedev.easemusicplayer.viewmodels.EditStorageVM
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
+import uniffi.ease_client_backend.CurrentStorageStateType
 import uniffi.ease_client_backend.StorageConnectionTestResult
+import uniffi.ease_client_backend.StorageEntry
 import uniffi.ease_client_backend.ctOnedriveOauthUrl
 import uniffi.ease_client_schema.StorageType
-import androidx.core.net.toUri
-import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.launch
-import uniffi.ease_client_backend.ArgUpsertStorage
-
 
 private fun buildStr(s: String): AnnotatedString {
     val spans = s.split("$$")
@@ -77,9 +87,11 @@ private fun buildStr(s: String): AnnotatedString {
             if (s.startsWith("B__")) {
                 val s = s.slice("B__".length until s.length)
 
-                withStyle(style = SpanStyle(
-                    fontWeight = FontWeight(700)
-                )) {
+                withStyle(
+                    style = SpanStyle(
+                        fontWeight = FontWeight(700)
+                    )
+                ) {
                     append(s)
                 }
             } else {
@@ -136,8 +148,8 @@ private fun StorageBlock(
     onSelect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isActive) { MaterialTheme.colorScheme.primary } else { EaseTheme.surfaces.secondary }
-    val tint = if (isActive) { MaterialTheme.colorScheme.surface } else { MaterialTheme.colorScheme.onSurface }
+    val bgColor = if (isActive) MaterialTheme.colorScheme.primary else EaseTheme.surfaces.secondary
+    val tint = if (isActive) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
     val shape = RoundedCornerShape(EaseTheme.radius.hero)
     val borderModifier = if (isActive) {
         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
@@ -155,8 +167,7 @@ private fun StorageBlock(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .align(Alignment.Center)
+            modifier = Modifier.align(Alignment.Center)
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.icon_cloud),
@@ -182,38 +193,43 @@ private fun StorageBlock(
     }
 }
 
-
 @Composable
 private fun WebdavConfig(
     editStorageVM: EditStorageVM = hiltViewModel()
 ) {
     val form by editStorageVM.form.collectAsState()
     val validated by editStorageVM.validated.collectAsState()
-    val isAnonymous = form.isAnonymous;
+    val isAnonymous = form.isAnonymous
 
     FormSwitch(
         label = stringResource(id = R.string.storage_edit_anonymous),
         value = isAnonymous,
-        onChange = { editStorageVM.updateForm { storage ->
-            storage.isAnonymous = !storage.isAnonymous
-            storage
-        }}
+        onChange = {
+            editStorageVM.updateForm { storage ->
+                storage.isAnonymous = !storage.isAnonymous
+                storage
+            }
+        }
     )
     FormText(
         label = stringResource(id = R.string.storage_edit_alias),
         value = form.alias,
-        onChange = { value -> editStorageVM.updateForm { storage ->
-            storage.alias = value
-            storage
-        } },
+        onChange = { value ->
+            editStorageVM.updateForm { storage ->
+                storage.alias = value
+                storage
+            }
+        },
     )
     FormText(
         label = stringResource(id = R.string.storage_edit_addr),
         value = form.addr,
-        onChange = { value -> editStorageVM.updateForm { storage ->
-            storage.addr = value
-            storage
-        } },
+        onChange = { value ->
+            editStorageVM.updateForm { storage ->
+                storage.addr = value
+                storage
+            }
+        },
         error = if (validated.addrEmpty) {
             R.string.storage_edit_form_address
         } else {
@@ -224,10 +240,12 @@ private fun WebdavConfig(
         FormText(
             label = stringResource(id = R.string.storage_edit_username),
             value = form.username,
-            onChange = { value -> editStorageVM.updateForm { storage ->
-                storage.username = value
-                storage
-            } },
+            onChange = { value ->
+                editStorageVM.updateForm { storage ->
+                    storage.username = value
+                    storage
+                }
+            },
             error = if (validated.usernameEmpty) {
                 R.string.storage_edit_form_username
             } else {
@@ -238,10 +256,12 @@ private fun WebdavConfig(
             label = stringResource(id = R.string.storage_edit_password),
             value = form.password,
             isPassword = true,
-            onChange = { value -> editStorageVM.updateForm { storage ->
-                storage.password = value
-                storage
-            } },
+            onChange = { value ->
+                editStorageVM.updateForm { storage ->
+                    storage.password = value
+                    storage
+                }
+            },
             error = if (validated.passwordEmpty) {
                 R.string.storage_edit_form_password
             } else {
@@ -262,26 +282,32 @@ private fun OpenListConfig(
     FormSwitch(
         label = stringResource(id = R.string.storage_edit_anonymous),
         value = isAnonymous,
-        onChange = { editStorageVM.updateForm { storage ->
-            storage.isAnonymous = !storage.isAnonymous
-            storage
-        } }
+        onChange = {
+            editStorageVM.updateForm { storage ->
+                storage.isAnonymous = !storage.isAnonymous
+                storage
+            }
+        }
     )
     FormText(
         label = stringResource(id = R.string.storage_edit_alias),
         value = form.alias,
-        onChange = { value -> editStorageVM.updateForm { storage ->
-            storage.alias = value
-            storage
-        } },
+        onChange = { value ->
+            editStorageVM.updateForm { storage ->
+                storage.alias = value
+                storage
+            }
+        },
     )
     FormText(
         label = stringResource(id = R.string.storage_edit_addr),
         value = form.addr,
-        onChange = { value -> editStorageVM.updateForm { storage ->
-            storage.addr = value
-            storage
-        } },
+        onChange = { value ->
+            editStorageVM.updateForm { storage ->
+                storage.addr = value
+                storage
+            }
+        },
         error = if (validated.addrEmpty) {
             R.string.storage_edit_form_address
         } else {
@@ -292,10 +318,12 @@ private fun OpenListConfig(
         FormText(
             label = stringResource(id = R.string.storage_edit_username),
             value = form.username,
-            onChange = { value -> editStorageVM.updateForm { storage ->
-                storage.username = value
-                storage
-            } },
+            onChange = { value ->
+                editStorageVM.updateForm { storage ->
+                    storage.username = value
+                    storage
+                }
+            },
             error = if (validated.usernameEmpty) {
                 R.string.storage_edit_form_username
             } else {
@@ -306,15 +334,54 @@ private fun OpenListConfig(
             label = stringResource(id = R.string.storage_edit_password),
             value = form.password,
             isPassword = true,
-            onChange = { value -> editStorageVM.updateForm { storage ->
-                storage.password = value
-                storage
-            } },
+            onChange = { value ->
+                editStorageVM.updateForm { storage ->
+                    storage.password = value
+                    storage
+                }
+            },
             error = if (validated.passwordEmpty) {
                 R.string.storage_edit_form_password
             } else {
                 null
             }
+        )
+    }
+
+    FormText(
+        label = stringResource(id = R.string.storage_edit_default_path),
+        value = form.defaultPath,
+        onChange = { value ->
+            editStorageVM.updateForm { storage ->
+                storage.defaultPath = value
+                storage
+            }
+        },
+    )
+    Text(
+        text = stringResource(id = R.string.storage_edit_default_path_desc),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = EaseTheme.typography.caption,
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        EaseTextButton(
+            text = stringResource(id = R.string.storage_edit_default_path_browse),
+            type = EaseTextButtonType.PrimaryVariant,
+            size = EaseTextButtonSize.Medium,
+            onClick = {
+                editStorageVM.openDefaultPathPicker()
+            },
+        )
+        EaseTextButton(
+            text = stringResource(id = R.string.storage_edit_default_path_reset),
+            type = EaseTextButtonType.Default,
+            size = EaseTextButtonSize.Medium,
+            onClick = {
+                editStorageVM.resetDefaultPathToRoot()
+            },
         )
     }
 }
@@ -331,10 +398,12 @@ private fun OneDriveConfig(
     FormText(
         label = stringResource(id = R.string.storage_edit_alias),
         value = form.alias,
-        onChange = { value -> editStorageVM.updateForm { storage ->
-            storage.alias = value
-            storage
-        } },
+        onChange = { value ->
+            editStorageVM.updateForm { storage ->
+                storage.alias = value
+                storage
+            }
+        },
         error = if (validated.aliasEmpty) {
             R.string.storage_edit_onedrive_alias_not_empty
         } else {
@@ -384,16 +453,339 @@ private fun OneDriveConfig(
 }
 
 @Composable
+private fun OpenListDirectoryPickerError(
+    type: CurrentStorageStateType,
+    onReload: () -> Unit,
+) {
+    val title = when (type) {
+        CurrentStorageStateType.AUTHENTICATION_FAILED -> stringResource(id = R.string.import_musics_error_authentication_title)
+        CurrentStorageStateType.TIMEOUT -> stringResource(id = R.string.import_musics_error_timeout_title)
+        CurrentStorageStateType.UNKNOWN_ERROR -> stringResource(id = R.string.import_musics_error_unknown_title)
+        else -> stringResource(id = R.string.import_musics_error_unknown_title)
+    }
+    val desc = when (type) {
+        CurrentStorageStateType.AUTHENTICATION_FAILED -> stringResource(id = R.string.storage_edit_default_path_picker_error_auth)
+        CurrentStorageStateType.TIMEOUT -> stringResource(id = R.string.storage_edit_default_path_picker_error_timeout)
+        CurrentStorageStateType.UNKNOWN_ERROR -> stringResource(id = R.string.storage_edit_default_path_picker_error_unknown)
+        else -> stringResource(id = R.string.storage_edit_default_path_picker_error_unknown)
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .clip(RoundedCornerShape(EaseTheme.radius.card))
+                .background(EaseTheme.surfaces.secondary)
+                .padding(24.dp)
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.icon_warning),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(40.dp)
+            )
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.error,
+                style = EaseTheme.typography.cardTitle,
+            )
+            Text(
+                text = desc,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = EaseTheme.typography.body,
+            )
+            EaseTextButton(
+                text = stringResource(id = R.string.storage_browser_error_retry),
+                type = EaseTextButtonType.Primary,
+                size = EaseTextButtonSize.Medium,
+                onClick = onReload,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OpenListDirectoryPickerList(
+    currentPath: String,
+    splitPaths: List<BrowserPathItem>,
+    entries: List<StorageEntry>,
+    isRefreshing: Boolean,
+    scrollSnapshot: BrowserScrollSnapshot,
+    onNavigateDir: (String) -> Unit,
+    onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
+) {
+    val listState = remember(currentPath) {
+        LazyListState(
+            firstVisibleItemIndex = scrollSnapshot.index,
+            firstVisibleItemScrollOffset = scrollSnapshot.offset,
+        )
+    }
+
+    LaunchedEffect(currentPath, listState) {
+        snapshotFlow {
+            BrowserScrollSnapshot(
+                index = listState.firstVisibleItemIndex,
+                offset = listState.firstVisibleItemScrollOffset,
+            )
+        }.drop(1).distinctUntilChanged().collect { snapshot ->
+            onScrollSnapshotChange(snapshot)
+        }
+    }
+
+    @Composable
+    fun PathTab(
+        text: String,
+        path: String,
+        disabled: Boolean,
+        isCurrent: Boolean,
+    ) {
+        val color = when {
+            isCurrent -> MaterialTheme.colorScheme.primary
+            !disabled -> MaterialTheme.colorScheme.onSurface
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        }
+        val fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
+        Text(
+            text = text,
+            color = color,
+            style = EaseTheme.typography.bodySmall.copy(fontWeight = fontWeight),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .clickable(
+                    enabled = !disabled,
+                    onClick = {
+                        onNavigateDir(path)
+                    }
+                )
+                .widthIn(10.dp, 160.dp)
+                .padding(6.dp, 4.dp)
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (isRefreshing) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .wrapContentHeight()
+                .padding(24.dp, 8.dp)
+                .horizontalScroll(rememberScrollState())
+        ) {
+            PathTab(
+                text = stringResource(id = R.string.import_musics_paths_root),
+                path = "/",
+                disabled = splitPaths.isEmpty(),
+                isCurrent = splitPaths.isEmpty()
+            )
+            for ((index, item) in splitPaths.withIndex()) {
+                Text(
+                    text = ">",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = EaseTheme.typography.bodySmall,
+                )
+                PathTab(
+                    text = item.name,
+                    path = item.path,
+                    disabled = index == splitPaths.lastIndex,
+                    isCurrent = index == splitPaths.lastIndex,
+                )
+            }
+        }
+        if (entries.isEmpty()) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+            ) {
+                Text(
+                    text = stringResource(id = R.string.storage_edit_default_path_picker_empty),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = EaseTheme.typography.body,
+                )
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            ) {
+                items(entries, key = { entry -> entry.path }) { entry ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(EaseTheme.radius.card))
+                            .clickable {
+                                onNavigateDir(entry.path)
+                            }
+                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.icon_folder),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = entry.name,
+                            style = EaseTheme.typography.body,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                }
+                item {
+                    Box(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpenListDirectoryPickerPanel(
+    currentPath: String,
+    splitPaths: List<BrowserPathItem>,
+    entries: List<StorageEntry>,
+    loadState: CurrentStorageStateType,
+    isRefreshing: Boolean,
+    scrollSnapshot: BrowserScrollSnapshot,
+    onBack: () -> Unit,
+    onConfirm: () -> Unit,
+    onReload: () -> Unit,
+    onNavigateDir: (String) -> Unit,
+    onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
+) {
+    val currentPathLabel = remember(splitPaths) {
+        if (splitPaths.isEmpty()) {
+            "/"
+        } else {
+            splitPaths.joinToString(
+                separator = "/",
+                prefix = "/",
+            ) { item -> item.name }
+        }
+    }
+    val showBlockingLoading = loadState == CurrentStorageStateType.LOADING && entries.isEmpty()
+    val showBlockingError = (
+        loadState == CurrentStorageStateType.TIMEOUT ||
+            loadState == CurrentStorageStateType.AUTHENTICATION_FAILED ||
+            loadState == CurrentStorageStateType.UNKNOWN_ERROR
+        ) && entries.isEmpty()
+
+    Column(
+        modifier = Modifier
+            .background(EaseTheme.surfaces.screen)
+            .fillMaxSize()
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_back),
+                    onClick = onBack,
+                )
+                Column(
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.storage_edit_default_path_picker_title),
+                        style = EaseTheme.typography.body,
+                    )
+                    Text(
+                        text = currentPathLabel,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = EaseTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            EaseTextButton(
+                text = stringResource(id = R.string.storage_edit_default_path_picker_confirm),
+                type = EaseTextButtonType.PrimaryVariant,
+                size = EaseTextButtonSize.Medium,
+                onClick = onConfirm,
+                disabled = loadState != CurrentStorageStateType.OK,
+            )
+        }
+
+        when {
+            showBlockingLoading -> {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(0.6f))
+                        Text(
+                            text = stringResource(id = R.string.storage_edit_default_path_picker_loading),
+                            style = EaseTheme.typography.body,
+                        )
+                    }
+                }
+            }
+
+            showBlockingError -> {
+                OpenListDirectoryPickerError(
+                    type = loadState,
+                    onReload = onReload,
+                )
+            }
+
+            else -> {
+                OpenListDirectoryPickerList(
+                    currentPath = currentPath,
+                    splitPaths = splitPaths,
+                    entries = entries,
+                    isRefreshing = isRefreshing,
+                    scrollSnapshot = scrollSnapshot,
+                    onNavigateDir = onNavigateDir,
+                    onScrollSnapshotChange = onScrollSnapshotChange,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun EditStoragesPage(
     editStorageVM: EditStorageVM = hiltViewModel()
 ) {
     val navController = LocalNavController.current
     val coroutineScope = rememberCoroutineScope()
-    val form by editStorageVM.form.collectAsState();
-    val isCreated by editStorageVM.isCreated.collectAsState();
+    val form by editStorageVM.form.collectAsState()
+    val isCreated by editStorageVM.isCreated.collectAsState()
     val testing by editStorageVM.testResult.collectAsState()
+    val defaultPathPickerOpen by editStorageVM.defaultPathPickerOpen.collectAsState()
+    val pickerCurrentPath by editStorageVM.defaultPathPickerCurrentPath.collectAsState()
+    val pickerSplitPaths by editStorageVM.defaultPathPickerSplitPaths.collectAsState()
+    val pickerEntries by editStorageVM.defaultPathPickerEntries.collectAsState()
+    val pickerLoadState by editStorageVM.defaultPathPickerLoadState.collectAsState()
+    val pickerIsRefreshing by editStorageVM.defaultPathPickerIsRefreshing.collectAsState()
+    val pickerScrollSnapshot by editStorageVM.defaultPathPickerScrollSnapshot.collectAsState()
 
-    val storageType = form.typ;
+    val storageType = form.typ
 
     val testingColors = when (testing) {
         StorageConnectionTestResult.NONE -> null
@@ -411,111 +803,133 @@ fun EditStoragesPage(
         )
     }
 
+    BackHandler(enabled = defaultPathPickerOpen) {
+        editStorageVM.closeDefaultPathPicker()
+    }
+
     Column(
         modifier = Modifier
             .background(EaseTheme.surfaces.screen)
             .fillMaxSize()
     ) {
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth()
-        ) {
-            Row {
-                EaseIconButton(
-                    sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
-                    painter = painterResource(id = R.drawable.icon_back),
-                    onClick = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-            Row {
-                if (!isCreated) {
+        if (defaultPathPickerOpen) {
+            OpenListDirectoryPickerPanel(
+                currentPath = pickerCurrentPath,
+                splitPaths = pickerSplitPaths,
+                entries = pickerEntries,
+                loadState = pickerLoadState,
+                isRefreshing = pickerIsRefreshing,
+                scrollSnapshot = pickerScrollSnapshot,
+                onBack = { editStorageVM.closeDefaultPathPicker() },
+                onConfirm = { editStorageVM.confirmDefaultPathPickerSelection() },
+                onReload = { editStorageVM.reloadDefaultPathPicker() },
+                onNavigateDir = { path -> editStorageVM.navigateDefaultPathPickerDir(path) },
+                onScrollSnapshotChange = { snapshot ->
+                    editStorageVM.updateDefaultPathPickerScrollSnapshot(snapshot.index, snapshot.offset)
+                },
+            )
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth()
+            ) {
+                Row {
                     EaseIconButton(
                         sizeType = EaseIconButtonSize.Medium,
-                        buttonType = EaseIconButtonType.Error,
-                        painter = painterResource(id = R.drawable.icon_deleteseep),
+                        buttonType = EaseIconButtonType.Default,
+                        painter = painterResource(id = R.drawable.icon_back),
                         onClick = {
-                            editStorageVM.openRemoveModal()
+                            navController.popBackStack()
                         }
                     )
                 }
-                EaseIconButton(
-                    sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
-                    disabled = testing == StorageConnectionTestResult.TESTING,
-                    painter = painterResource(id = R.drawable.icon_wifitethering),
-                    overrideColors = testingColors,
-                    onClick = {
-                        editStorageVM.test()
+                Row {
+                    if (!isCreated) {
+                        EaseIconButton(
+                            sizeType = EaseIconButtonSize.Medium,
+                            buttonType = EaseIconButtonType.Error,
+                            painter = painterResource(id = R.drawable.icon_deleteseep),
+                            onClick = {
+                                editStorageVM.openRemoveModal()
+                            }
+                        )
                     }
-                )
-                EaseIconButton(
-                    sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
-                    painter = painterResource(id = R.drawable.icon_ok),
-                    onClick = {
-                        coroutineScope.launch {
-                            val finished = editStorageVM.finish()
-                            if (finished) {
-                                navController.popBackStack()
+                    EaseIconButton(
+                        sizeType = EaseIconButtonSize.Medium,
+                        buttonType = EaseIconButtonType.Default,
+                        disabled = testing == StorageConnectionTestResult.TESTING,
+                        painter = painterResource(id = R.drawable.icon_wifitethering),
+                        overrideColors = testingColors,
+                        onClick = {
+                            editStorageVM.test()
+                        }
+                    )
+                    EaseIconButton(
+                        sizeType = EaseIconButtonSize.Medium,
+                        buttonType = EaseIconButtonType.Default,
+                        painter = painterResource(id = R.drawable.icon_ok),
+                        onClick = {
+                            coroutineScope.launch {
+                                val finished = editStorageVM.finish()
+                                if (finished) {
+                                    navController.popBackStack()
+                                }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
-        }
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .imePadding()
-                    .padding(30.dp, 12.dp)
+            Box(
+                modifier = Modifier.fillMaxSize()
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .imePadding()
+                        .padding(30.dp, 12.dp)
                 ) {
-                    StorageBlock(
-                        title = "WebDAV",
-                        isActive = storageType == StorageType.WEBDAV,
-                        onSelect = {
-                            editStorageVM.changeType(StorageType.WEBDAV)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    StorageBlock(
-                        title = "OneDrive",
-                        isActive = storageType == StorageType.ONE_DRIVE,
-                        onSelect = {
-                            editStorageVM.changeType(StorageType.ONE_DRIVE)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    StorageBlock(
-                        title = "OpenList",
-                        isActive = storageType == StorageType.OPEN_LIST,
-                        onSelect = {
-                            editStorageVM.changeType(StorageType.OPEN_LIST)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Box(modifier = Modifier.height(30.dp))
-                if (storageType == StorageType.WEBDAV) {
-                    WebdavConfig()
-                }
-                if (storageType == StorageType.ONE_DRIVE) {
-                    OneDriveConfig()
-                }
-                if (storageType == StorageType.OPEN_LIST) {
-                    OpenListConfig()
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        StorageBlock(
+                            title = "WebDAV",
+                            isActive = storageType == StorageType.WEBDAV,
+                            onSelect = {
+                                editStorageVM.changeType(StorageType.WEBDAV)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        StorageBlock(
+                            title = "OneDrive",
+                            isActive = storageType == StorageType.ONE_DRIVE,
+                            onSelect = {
+                                editStorageVM.changeType(StorageType.ONE_DRIVE)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        StorageBlock(
+                            title = "OpenList",
+                            isActive = storageType == StorageType.OPEN_LIST,
+                            onSelect = {
+                                editStorageVM.changeType(StorageType.OPEN_LIST)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Box(modifier = Modifier.height(30.dp))
+                    if (storageType == StorageType.WEBDAV) {
+                        WebdavConfig()
+                    }
+                    if (storageType == StorageType.ONE_DRIVE) {
+                        OneDriveConfig()
+                    }
+                    if (storageType == StorageType.OPEN_LIST) {
+                        OpenListConfig()
+                    }
                 }
             }
         }

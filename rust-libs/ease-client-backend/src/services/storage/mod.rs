@@ -62,6 +62,7 @@ pub fn build_storage(model: StorageModel, music_count: u64) -> Storage {
         password: model.password,
         is_anonymous: model.is_anonymous,
         typ: model.typ,
+        default_path: model.default_path,
         music_count,
     }
 }
@@ -138,6 +139,7 @@ pub fn get_storage_backend(
             password: storage.password,
             is_anonymous: storage.is_anonymous,
             typ: storage.typ,
+            default_path: storage.default_path,
         },
     )?;
 

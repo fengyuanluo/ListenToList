@@ -127,6 +127,7 @@ class DebugDownloadProbeExecutor @Inject constructor(
                 password = storagePayload.password,
                 isAnonymous = storagePayload.isAnonymous,
                 typ = storagePayload.type.toStorageType(),
+                defaultPath = "/",
             )
         )
         storageRepository.reload()

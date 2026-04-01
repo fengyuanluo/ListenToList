@@ -68,6 +68,7 @@ impl DatabaseServer {
                     password: Default::default(),
                     is_anonymous: Default::default(),
                     typ: Default::default(),
+                    default_path: "/".to_string(),
                 }
             };
             let id = model.id;
@@ -78,6 +79,7 @@ impl DatabaseServer {
             model.password = arg.password;
             model.is_anonymous = arg.is_anonymous;
             model.typ = arg.typ;
+            model.default_path = arg.default_path;
             table.insert(model.id, model)?;
 
             id

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ease_client_schema::{StorageEntryLoc, StorageId};
+use ease_client_schema::{StorageEntryLoc, StorageId, StorageType};
 use ease_remote_storage::{OneDriveBackend, SearchScope};
 
 use crate::{
@@ -18,10 +18,29 @@ use crate::{
     ArgUpsertStorage, Backend,
 };
 
+fn normalize_default_storage_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() || trimmed == "/" {
+        return "/".to_string();
+    }
+
+    let with_leading_slash = if trimmed.starts_with('/') {
+        trimmed.to_string()
+    } else {
+        format!("/{trimmed}")
+    };
+
+    with_leading_slash.trim_end_matches('/').to_string()
+}
+
 fn normalize_arg_upsert_storage(mut arg: ArgUpsertStorage) -> ArgUpsertStorage {
     if arg.is_anonymous {
         arg.username = Default::default();
         arg.password = Default::default();
+    }
+    arg.default_path = normalize_default_storage_path(arg.default_path.as_str());
+    if arg.typ != StorageType::OpenList {
+        arg.default_path = "/".to_string();
     }
     arg
 }
@@ -67,8 +86,8 @@ pub async fn ct_test_storage(
 ) -> BResult<StorageConnectionTestResult> {
     let arg = normalize_arg_upsert_storage(arg);
     let cx = cx.get_context();
-    let backend = build_storage_backend_by_arg(cx, arg)?;
-    let res = backend.list("/".to_string()).await;
+    let backend = build_storage_backend_by_arg(cx, arg.clone())?;
+    let res = backend.list(arg.default_path.clone()).await;
 
     match res {
         Ok(_) => Ok(StorageConnectionTestResult::Success),
@@ -80,6 +99,45 @@ pub async fn ct_test_storage(
                 Ok(StorageConnectionTestResult::Timeout)
             } else {
                 Ok(StorageConnectionTestResult::OtherError)
+            }
+        }
+    }
+}
+
+#[uniffi::export]
+pub async fn ct_list_storage_entry_children_by_arg(
+    cx: Arc<Backend>,
+    arg: ArgUpsertStorage,
+    path: String,
+) -> BResult<ListStorageEntryChildrenResp> {
+    let arg = normalize_arg_upsert_storage(arg);
+    let storage_id = arg.id.unwrap_or(StorageId::wrap(-1));
+    let cx = cx.get_context();
+    let backend = build_storage_backend_by_arg(cx, arg)?;
+    let res = backend.list(path).await;
+
+    match res {
+        Ok(entries) => {
+            let entries = entries
+                .into_iter()
+                .map(|entry| StorageEntry {
+                    storage_id,
+                    name: entry.name,
+                    path: entry.path,
+                    size: entry.size.map(|s| s as u64),
+                    is_dir: entry.is_dir,
+                })
+                .collect();
+            Ok(ListStorageEntryChildrenResp::Ok(entries))
+        }
+        Err(e) => {
+            tracing::warn!("ct_list_storage_entry_children_by_arg, {e:?}");
+            if e.is_unauthorized() {
+                Ok(ListStorageEntryChildrenResp::AuthenticationFailed)
+            } else if e.is_timeout() {
+                Ok(ListStorageEntryChildrenResp::Timeout)
+            } else {
+                Ok(ListStorageEntryChildrenResp::Unknown)
             }
         }
     }
@@ -207,4 +265,43 @@ pub async fn ct_search_storage_entries(
 #[uniffi::export]
 pub fn ct_onedrive_oauth_url() -> String {
     onedrive_oauth_url()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_arg_upsert_storage, normalize_default_storage_path};
+    use crate::objects::ArgUpsertStorage;
+    use ease_client_schema::StorageType;
+
+    fn sample_arg() -> ArgUpsertStorage {
+        ArgUpsertStorage {
+            id: None,
+            addr: "https://example.com".to_string(),
+            alias: "demo".to_string(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            is_anonymous: false,
+            typ: StorageType::OpenList,
+            default_path: "/".to_string(),
+        }
+    }
+
+    #[test]
+    fn normalize_default_storage_path_handles_blank_and_slashes() {
+        assert_eq!("/", normalize_default_storage_path(""));
+        assert_eq!("/", normalize_default_storage_path(" / "));
+        assert_eq!("/Music", normalize_default_storage_path("Music"));
+        assert_eq!("/Music/Sub", normalize_default_storage_path("/Music/Sub/"));
+    }
+
+    #[test]
+    fn normalize_arg_upsert_storage_clears_non_openlist_default_path() {
+        let mut arg = sample_arg();
+        arg.typ = StorageType::Webdav;
+        arg.default_path = "/Music".to_string();
+
+        let normalized = normalize_arg_upsert_storage(arg);
+
+        assert_eq!("/", normalized.default_path);
+    }
 }

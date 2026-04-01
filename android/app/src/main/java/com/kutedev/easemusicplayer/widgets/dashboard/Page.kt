@@ -131,7 +131,12 @@ private fun ColumnScope.DevicesBlock(
                     modifier = Modifier
                         .weight(1f)
                         .clickable {
-                            navController.navigate(RouteStorageBrowser(item.id.value.toString()))
+                            val route = if (item.typ == StorageType.OPEN_LIST) {
+                                RouteStorageBrowser(item.id.value.toString(), item.defaultPath)
+                            } else {
+                                RouteStorageBrowser(item.id.value.toString())
+                            }
+                            navController.navigate(route)
                         },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
