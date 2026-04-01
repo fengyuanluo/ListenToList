@@ -81,6 +81,33 @@ class DirectoryBrowserControllerTest {
     }
 
     @Test
+    fun clearingStorageStateEvictsCacheAndForcesReload() = runTest {
+        val clock = FakeClock()
+        val service = FakeDirectoryService()
+        val rootV1 = dirEntry("/Music")
+        val rootV2 = dirEntry("/Podcasts")
+        service.enqueue("/") { ok(rootV1) }
+        service.enqueue("/") { ok(rootV2) }
+
+        createController(this, clock, service).use { harness ->
+            val controller = harness.controller
+            controller.setStorage(REMOTE_STORAGE)
+            controller.refresh(forceRemote = false)
+            advanceUntilIdle()
+
+            assertEquals(listOf(rootV1), controller.entries.value)
+            assertEquals(1, service.calls.size)
+
+            controller.clearStorageState(REMOTE_STORAGE.storageId)
+            controller.refresh(forceRemote = false)
+            advanceUntilIdle()
+
+            assertEquals(listOf(rootV2), controller.entries.value)
+            assertEquals(2, service.calls.size)
+        }
+    }
+
+    @Test
     fun backgroundRefreshFailureKeepsVisibleEntries() = runTest {
         val clock = FakeClock()
         val service = FakeDirectoryService()
