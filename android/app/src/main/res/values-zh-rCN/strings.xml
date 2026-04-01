@@ -26,7 +26,6 @@
     <string name="storage_edit_addr">服务器地址</string>
     <string name="storage_edit_alias">服务器名称 (别名)</string>
     <string name="storage_edit_default_path">默认目录</string>
-    <string name="storage_edit_default_path_desc">设备页点击该 OpenList 实例时会直接进入这里。点击输入框可在本页下方直接浏览目录，也可以手动输入路径。留空或填写 / 表示根目录。</string>
     <string name="storage_edit_default_path_browser_requires_config">请先填写 OpenList 地址和认证信息，然后再点击输入框浏览目录。</string>
     <string name="storage_edit_default_path_invalid">默认目录不存在或当前配置无法访问该目录。</string>
     <string name="storage_edit_default_path_picker_loading">正在加载目录...</string>

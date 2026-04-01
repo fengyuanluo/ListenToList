@@ -290,6 +290,13 @@ class EditStorageVM @Inject constructor(
         )
     }
 
+    fun collapseDefaultPathBrowser() {
+        if (form.value.typ != StorageType.OPEN_LIST) {
+            return
+        }
+        setDefaultPathBrowserExpanded(false)
+    }
+
     fun commitDefaultPathInput() {
         if (form.value.typ != StorageType.OPEN_LIST) {
             return
