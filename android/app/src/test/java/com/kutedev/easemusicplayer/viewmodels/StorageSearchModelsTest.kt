@@ -59,6 +59,7 @@ class StorageSearchModelsTest {
             password = "",
             isAnonymous = true,
             typ = StorageType.OPEN_LIST,
+            defaultPath = "/",
             musicCount = 0uL,
         )
         val webDav = openList.copy(typ = StorageType.WEBDAV)

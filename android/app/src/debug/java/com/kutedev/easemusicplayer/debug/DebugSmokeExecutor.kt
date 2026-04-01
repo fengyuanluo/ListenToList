@@ -335,6 +335,7 @@ class DebugSmokeExecutor @Inject constructor(
                 password = request.storage.password,
                 isAnonymous = request.storage.isAnonymous,
                 typ = request.storage.type.toStorageType(),
+                defaultPath = "/",
             )
         )
         storageRepository.reload()

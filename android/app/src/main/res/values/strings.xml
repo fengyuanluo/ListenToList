@@ -25,6 +25,17 @@
     <string name="storage_edit_password">PASSWORD</string>
     <string name="storage_edit_addr">ADDRESS</string>
     <string name="storage_edit_alias">NAME (ALIAS)</string>
+    <string name="storage_edit_default_path">DEFAULT DIRECTORY</string>
+    <string name="storage_edit_default_path_desc">Tapping this OpenList instance from Devices will open here first. Leave blank or use / for the root directory.</string>
+    <string name="storage_edit_default_path_browse">Browse directory</string>
+    <string name="storage_edit_default_path_reset">Reset to root</string>
+    <string name="storage_edit_default_path_picker_title">Choose default directory</string>
+    <string name="storage_edit_default_path_picker_confirm">Use current directory</string>
+    <string name="storage_edit_default_path_picker_loading">Loading directories...</string>
+    <string name="storage_edit_default_path_picker_empty">No subdirectories here. You can confirm the current directory directly.</string>
+    <string name="storage_edit_default_path_picker_error_auth">Authentication failed. Check the current OpenList settings and try again.</string>
+    <string name="storage_edit_default_path_picker_error_timeout">Connection timed out. Please try again.</string>
+    <string name="storage_edit_default_path_picker_error_unknown">Failed to load directories. Please try again.</string>
     <string name="storage_edit_anonymous">ANONYMOUS</string>
     <string name="playlist_empty">Empty Playlists. Tap to add one.</string>
     <string name="storage_edit_form_address">Address cannot be empty</string>

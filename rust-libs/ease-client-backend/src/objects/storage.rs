@@ -21,6 +21,7 @@ pub struct ArgUpsertStorage {
     pub password: String,
     pub is_anonymous: bool,
     pub typ: StorageType,
+    pub default_path: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, uniffi::Enum)]
@@ -52,6 +53,7 @@ pub struct Storage {
     pub password: String,
     pub is_anonymous: bool,
     pub typ: StorageType,
+    pub default_path: String,
     pub music_count: u64,
 }
 

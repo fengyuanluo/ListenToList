@@ -28,6 +28,7 @@ class StorageSearchContentTest {
             password = "",
             isAnonymous = true,
             typ = StorageType.OPEN_LIST,
+            defaultPath = "/",
             musicCount = 0uL,
         )
         val section = StorageSearchSectionUiState(
