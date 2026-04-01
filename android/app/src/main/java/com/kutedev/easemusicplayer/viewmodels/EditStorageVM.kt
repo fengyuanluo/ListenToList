@@ -9,11 +9,15 @@ import com.kutedev.easemusicplayer.singleton.StorageRepository
 import com.kutedev.easemusicplayer.singleton.ToastRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -26,19 +30,19 @@ import uniffi.ease_client_backend.ctTestStorage
 import uniffi.ease_client_schema.StorageId
 import uniffi.ease_client_schema.StorageType
 
-private const val STATE_PICKER_OPEN = "edit_storage_openlist_picker_open"
-private const val STATE_PICKER_CURRENT_PATH = "edit_storage_openlist_picker_current_path"
-private const val STATE_PICKER_SCROLL_INDEX = "edit_storage_openlist_picker_scroll_index"
-private const val STATE_PICKER_SCROLL_OFFSET = "edit_storage_openlist_picker_scroll_offset"
-private const val STATE_PICKER_SESSION_ID = "edit_storage_openlist_picker_session_id"
-private const val STATE_PICKER_SESSION_SEED = "edit_storage_openlist_picker_session_seed"
-private const val STATE_PICKER_ADDR = "edit_storage_openlist_picker_addr"
-private const val STATE_PICKER_ALIAS = "edit_storage_openlist_picker_alias"
-private const val STATE_PICKER_USERNAME = "edit_storage_openlist_picker_username"
-private const val STATE_PICKER_PASSWORD = "edit_storage_openlist_picker_password"
-private const val STATE_PICKER_IS_ANONYMOUS = "edit_storage_openlist_picker_is_anonymous"
-private const val STATE_PICKER_DEFAULT_PATH = "edit_storage_openlist_picker_default_path"
-private const val STATE_PICKER_STORAGE_VALUE = "edit_storage_openlist_picker_storage_value"
+private const val STATE_FORM_TYPE = "edit_storage_form_type"
+private const val STATE_FORM_ADDR = "edit_storage_form_addr"
+private const val STATE_FORM_ALIAS = "edit_storage_form_alias"
+private const val STATE_FORM_USERNAME = "edit_storage_form_username"
+private const val STATE_FORM_PASSWORD = "edit_storage_form_password"
+private const val STATE_FORM_IS_ANONYMOUS = "edit_storage_form_is_anonymous"
+private const val STATE_FORM_DEFAULT_PATH = "edit_storage_form_default_path"
+private const val STATE_FORM_STORAGE_VALUE = "edit_storage_form_storage_value"
+private const val STATE_DEFAULT_PATH_BROWSER_EXPANDED = "edit_storage_default_path_browser_expanded"
+private const val STATE_DEFAULT_PATH_BROWSER_CURRENT_PATH = "edit_storage_default_path_browser_current_path"
+private const val STATE_DEFAULT_PATH_BROWSER_SCROLL_INDEX = "edit_storage_default_path_browser_scroll_index"
+private const val STATE_DEFAULT_PATH_BROWSER_SCROLL_OFFSET = "edit_storage_default_path_browser_scroll_offset"
+private const val DEFAULT_PATH_BROWSER_STORAGE_VALUE = -1L
 
 private fun normalizeStorageDefaultPath(path: String): String {
     val trimmed = path.trim()
@@ -59,6 +63,18 @@ data class Validated(
     }
 }
 
+private data class OpenListBrowserConfig(
+    val addr: String,
+    val username: String,
+    val password: String,
+    val isAnonymous: Boolean,
+)
+
+private data class DefaultPathBrowserBinding(
+    val expanded: Boolean,
+    val config: OpenListBrowserConfig?,
+)
+
 private fun defaultArgUpsertStorage(): ArgUpsertStorage {
     return ArgUpsertStorage(
         id = null,
@@ -72,21 +88,39 @@ private fun defaultArgUpsertStorage(): ArgUpsertStorage {
     )
 }
 
-private fun SavedStateHandle.restoreOpenListPickerSnapshot(): ArgUpsertStorage? {
-    val addr = get<String>(STATE_PICKER_ADDR) ?: return null
+private fun SavedStateHandle.restoreEditStorageForm(): ArgUpsertStorage? {
+    val typRaw = get<String>(STATE_FORM_TYPE) ?: return null
+    val typ = runCatching { StorageType.valueOf(typRaw) }.getOrDefault(StorageType.WEBDAV)
     return ArgUpsertStorage(
-        id = get<Long>(STATE_PICKER_STORAGE_VALUE)?.let(::StorageId),
-        addr = addr,
-        alias = get<String>(STATE_PICKER_ALIAS) ?: "",
-        username = get<String>(STATE_PICKER_USERNAME) ?: "",
-        password = get<String>(STATE_PICKER_PASSWORD) ?: "",
-        isAnonymous = get<Boolean>(STATE_PICKER_IS_ANONYMOUS) ?: true,
-        typ = StorageType.OPEN_LIST,
-        defaultPath = normalizeStorageDefaultPath(get<String>(STATE_PICKER_DEFAULT_PATH) ?: "/"),
+        id = get<Long>(STATE_FORM_STORAGE_VALUE)?.let(::StorageId),
+        addr = get<String>(STATE_FORM_ADDR) ?: "",
+        alias = get<String>(STATE_FORM_ALIAS) ?: "",
+        username = get<String>(STATE_FORM_USERNAME) ?: "",
+        password = get<String>(STATE_FORM_PASSWORD) ?: "",
+        isAnonymous = get<Boolean>(STATE_FORM_IS_ANONYMOUS)
+            ?: if (typ == StorageType.OPEN_LIST) true else false,
+        typ = typ,
+        defaultPath = normalizeStorageDefaultPath(get<String>(STATE_FORM_DEFAULT_PATH) ?: "/"),
+    )
+}
+
+private fun ArgUpsertStorage.openListBrowserConfigOrNull(): OpenListBrowserConfig? {
+    if (typ != StorageType.OPEN_LIST || addr.isBlank()) {
+        return null
+    }
+    if (!isAnonymous && (username.isBlank() || password.isBlank())) {
+        return null
+    }
+    return OpenListBrowserConfig(
+        addr = addr.trim(),
+        username = if (isAnonymous) "" else username,
+        password = if (isAnonymous) "" else password,
+        isAnonymous = isAnonymous,
     )
 }
 
 @HiltViewModel
+@OptIn(FlowPreview::class)
 class EditStorageVM @Inject constructor(
     private val bridge: Bridge,
     private val storageRepository: StorageRepository,
@@ -94,16 +128,15 @@ class EditStorageVM @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val restoredPickerSnapshot = savedStateHandle.restoreOpenListPickerSnapshot()
-    private val restoredPickerPath =
-        savedStateHandle[STATE_PICKER_CURRENT_PATH] ?: restoredPickerSnapshot?.defaultPath ?: "/"
-    private val restoredPickerScrollSnapshot = BrowserScrollSnapshot(
-        index = savedStateHandle[STATE_PICKER_SCROLL_INDEX] ?: 0,
-        offset = savedStateHandle[STATE_PICKER_SCROLL_OFFSET] ?: 0,
+    private val restoredFormDraft = savedStateHandle.restoreEditStorageForm()
+    private val restoredDefaultPathBrowserPath =
+        savedStateHandle[STATE_DEFAULT_PATH_BROWSER_CURRENT_PATH]
+            ?: restoredFormDraft?.defaultPath
+            ?: "/"
+    private val restoredDefaultPathBrowserScrollSnapshot = BrowserScrollSnapshot(
+        index = savedStateHandle[STATE_DEFAULT_PATH_BROWSER_SCROLL_INDEX] ?: 0,
+        offset = savedStateHandle[STATE_DEFAULT_PATH_BROWSER_SCROLL_OFFSET] ?: 0,
     )
-    private val restoredPickerOpen =
-        savedStateHandle.get<Boolean>(STATE_PICKER_OPEN) ?: false
-    private val restoredPickerSessionId = savedStateHandle.get<Long>(STATE_PICKER_SESSION_ID) ?: 0L
 
     private val _title = MutableStateFlow("")
     private val _musicCount = MutableStateFlow(0uL)
@@ -113,26 +146,28 @@ class EditStorageVM @Inject constructor(
     private val _validated = MutableStateFlow(Validated())
     private val _removeModalOpen = MutableStateFlow(false)
     private val _testResult = MutableStateFlow(StorageConnectionTestResult.NONE)
-    private val _openListPickerSnapshot = MutableStateFlow(restoredPickerSnapshot)
-    private val _defaultPathPickerOpen = MutableStateFlow(restoredPickerOpen && restoredPickerSnapshot != null)
+    private val _defaultPathBrowserExpanded = MutableStateFlow(
+        savedStateHandle.get<Boolean>(STATE_DEFAULT_PATH_BROWSER_EXPANDED) ?: false
+    )
+    private val _defaultPathFieldError = MutableStateFlow<Int?>(null)
     private var _testJob: Job? = null
-    private var pickerSessionSeed = savedStateHandle.get<Long>(STATE_PICKER_SESSION_SEED) ?: 0L
+    private var boundDefaultPathBrowserConfig: OpenListBrowserConfig? = null
 
-    private val defaultPathPickerBrowser = DirectoryBrowserController(
+    private val defaultPathBrowser = DirectoryBrowserController(
         scope = viewModelScope,
-        initialPath = restoredPickerPath,
-        initialScrollSnapshot = restoredPickerScrollSnapshot,
+        initialPath = restoredDefaultPathBrowserPath,
+        initialScrollSnapshot = restoredDefaultPathBrowserScrollSnapshot,
         listEntriesRemote = { _, path ->
-            listOpenListPickerEntries(path)
+            listInlineOpenListEntries(path)
         },
         hasLocalPermission = { true },
-        onPersistPath = { savedStateHandle[STATE_PICKER_CURRENT_PATH] = it },
+        onPersistPath = { savedStateHandle[STATE_DEFAULT_PATH_BROWSER_CURRENT_PATH] = it },
         onPersistScrollSnapshot = { snapshot ->
-            savedStateHandle[STATE_PICKER_SCROLL_INDEX] = snapshot.index
-            savedStateHandle[STATE_PICKER_SCROLL_OFFSET] = snapshot.offset
+            savedStateHandle[STATE_DEFAULT_PATH_BROWSER_SCROLL_INDEX] = snapshot.index
+            savedStateHandle[STATE_DEFAULT_PATH_BROWSER_SCROLL_OFFSET] = snapshot.offset
         },
         onBackgroundRefreshFailed = { state ->
-            emitDefaultPathPickerLoadFailureToast(state)
+            emitDefaultPathBrowserLoadFailureToast(state)
         }
     )
 
@@ -144,15 +179,19 @@ class EditStorageVM @Inject constructor(
     val isCreated = form.map { currentForm -> currentForm.id == null }
         .stateIn(viewModelScope, SharingStarted.Lazily, true)
     val testResult = _testResult.asStateFlow()
-    val defaultPathPickerOpen = _defaultPathPickerOpen.asStateFlow()
-    val defaultPathPickerCurrentPath = defaultPathPickerBrowser.currentPath
-    val defaultPathPickerSplitPaths = defaultPathPickerBrowser.splitPaths
-    val defaultPathPickerEntries = defaultPathPickerBrowser.entries
+    val defaultPathBrowserExpanded = _defaultPathBrowserExpanded.asStateFlow()
+    val defaultPathFieldError = _defaultPathFieldError.asStateFlow()
+    val defaultPathBrowserReady = form.map { currentForm ->
+        currentForm.openListBrowserConfigOrNull() != null
+    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    val defaultPathBrowserCurrentPath = defaultPathBrowser.currentPath
+    val defaultPathBrowserSplitPaths = defaultPathBrowser.splitPaths
+    val defaultPathBrowserEntries = defaultPathBrowser.entries
         .map { entries -> entries.filter { entry -> entry.isDir } }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val defaultPathPickerLoadState = defaultPathPickerBrowser.loadState
-    val defaultPathPickerIsRefreshing = defaultPathPickerBrowser.isRefreshing
-    val defaultPathPickerScrollSnapshot = defaultPathPickerBrowser.currentScrollSnapshot
+    val defaultPathBrowserLoadState = defaultPathBrowser.loadState
+    val defaultPathBrowserIsRefreshing = defaultPathBrowser.isRefreshing
+    val defaultPathBrowserScrollSnapshot = defaultPathBrowser.currentScrollSnapshot
 
     init {
         viewModelScope.launch {
@@ -166,36 +205,54 @@ class EditStorageVM @Inject constructor(
             }
         }
 
-        _form.value = defaultArgUpsertStorage()
-        _title.value = ""
-        _musicCount.value = 0u
-
         val id: Long? = savedStateHandle["id"]
         val storage = storageRepository.storages.value.find { v -> id != null && v.id == StorageId(id) }
-        if (storage != null) {
-            _form.value = ArgUpsertStorage(
-                id = storage.id,
-                addr = storage.addr,
-                alias = storage.alias,
-                username = storage.username,
-                password = storage.password,
-                isAnonymous = storage.isAnonymous,
-                typ = storage.typ,
-                defaultPath = storage.defaultPath,
+        val initialForm = restoredFormDraft ?: storage?.let { currentStorage ->
+            ArgUpsertStorage(
+                id = currentStorage.id,
+                addr = currentStorage.addr,
+                alias = currentStorage.alias,
+                username = currentStorage.username,
+                password = currentStorage.password,
+                isAnonymous = currentStorage.isAnonymous,
+                typ = currentStorage.typ,
+                defaultPath = currentStorage.defaultPath,
             )
-            _title.value = VImportStorageEntry(storage).name
-            _musicCount.value = storage.musicCount
+        } ?: defaultArgUpsertStorage()
+
+        setFormValue(initialForm, persist = true)
+        _title.value = storage?.let(::VImportStorageEntry)?.name ?: ""
+        _musicCount.value = storage?.musicCount ?: 0uL
+        if (initialForm.typ != StorageType.OPEN_LIST) {
+            setDefaultPathBrowserExpanded(false)
         }
 
-        if (_defaultPathPickerOpen.value && restoredPickerSnapshot != null) {
-            val sessionId = restoredPickerSessionId.takeIf { it != 0L } ?: nextPickerSessionId()
-            savedStateHandle[STATE_PICKER_SESSION_ID] = sessionId
-            bindDefaultPathPickerSession(
-                sessionId = sessionId,
-                path = restoredPickerPath,
-                scrollSnapshot = restoredPickerScrollSnapshot,
-                forceRemote = false,
-            )
+        viewModelScope.launch {
+            combine(
+                _defaultPathBrowserExpanded,
+                _form.map { currentForm -> currentForm.openListBrowserConfigOrNull() }
+                    .distinctUntilChanged(),
+            ) { expanded, config ->
+                DefaultPathBrowserBinding(expanded = expanded, config = config)
+            }.debounce(300).collect { binding ->
+                when {
+                    !binding.expanded -> {
+                        unbindDefaultPathBrowser()
+                    }
+
+                    binding.config == null -> {
+                        unbindDefaultPathBrowser()
+                    }
+
+                    else -> {
+                        bindDefaultPathBrowser(forceRemote = false)
+                    }
+                }
+            }
+        }
+
+        if (_defaultPathBrowserExpanded.value && initialForm.openListBrowserConfigOrNull() != null) {
+            bindDefaultPathBrowser(forceRemote = false)
         }
     }
 
@@ -205,7 +262,7 @@ class EditStorageVM @Inject constructor(
             return
         }
         val normalizedForm = normalizedFormSnapshot()
-        _form.value = normalizedForm
+        setFormValue(normalizedForm)
         _testResult.value = StorageConnectionTestResult.TESTING
 
         _testJob = viewModelScope.launch {
@@ -217,103 +274,132 @@ class EditStorageVM @Inject constructor(
         }
     }
 
-    fun openDefaultPathPicker() {
+    fun expandDefaultPathBrowser() {
         if (form.value.typ != StorageType.OPEN_LIST) {
             return
         }
-        if (!validate()) {
-            return
+        val preferredPath = if (_defaultPathBrowserExpanded.value) {
+            defaultPathBrowser.currentPathValue()
+        } else {
+            normalizeStorageDefaultPath(form.value.defaultPath)
         }
-        val normalizedForm = normalizedFormSnapshot()
-        _form.value = normalizedForm
-        val sessionId = nextPickerSessionId()
-        _openListPickerSnapshot.value = normalizedForm.copy()
-        persistOpenListPickerSnapshot(_openListPickerSnapshot.value)
-        _defaultPathPickerOpen.value = true
-        savedStateHandle[STATE_PICKER_OPEN] = true
-        savedStateHandle[STATE_PICKER_SESSION_ID] = sessionId
-        bindDefaultPathPickerSession(
-            sessionId = sessionId,
-            path = normalizedForm.defaultPath,
-            scrollSnapshot = BrowserScrollSnapshot(),
-            forceRemote = true,
+        setDefaultPathBrowserExpanded(true)
+        bindDefaultPathBrowser(
+            forceRemote = false,
+            preferredPath = preferredPath,
         )
     }
 
-    fun closeDefaultPathPicker() {
-        _defaultPathPickerOpen.value = false
-        savedStateHandle[STATE_PICKER_OPEN] = false
-        savedStateHandle[STATE_PICKER_SESSION_ID] = 0L
-        _openListPickerSnapshot.value = null
-        persistOpenListPickerSnapshot(null)
-        defaultPathPickerBrowser.clearVisibleState()
+    fun commitDefaultPathInput() {
+        if (form.value.typ != StorageType.OPEN_LIST) {
+            return
+        }
+        clearDefaultPathFieldError()
+        val normalizedPath = normalizeStorageDefaultPath(form.value.defaultPath)
+        setFormValue(form.value.copy(defaultPath = normalizedPath))
+        expandDefaultPathBrowser()
+        bindDefaultPathBrowser(forceRemote = true, preferredPath = normalizedPath)
     }
 
-    fun confirmDefaultPathPickerSelection() {
-        val selectedPath = normalizeStorageDefaultPath(defaultPathPickerBrowser.currentPathValue())
+    fun onDefaultPathInputChange(value: String) {
+        clearDefaultPathFieldError()
         updateForm { storage ->
-            storage.defaultPath = selectedPath
+            storage.defaultPath = value
             storage
         }
-        closeDefaultPathPicker()
     }
 
-    fun navigateDefaultPathPickerDir(path: String) {
-        defaultPathPickerBrowser.navigateTo(normalizeStorageDefaultPath(path))
+    fun navigateDefaultPathBrowserDir(path: String) {
+        if (form.value.typ != StorageType.OPEN_LIST) {
+            return
+        }
+        clearDefaultPathFieldError()
+        val normalizedPath = normalizeStorageDefaultPath(path)
+        setFormValue(form.value.copy(defaultPath = normalizedPath))
+        bindDefaultPathBrowser(forceRemote = false, preferredPath = normalizedPath)
     }
 
-    fun reloadDefaultPathPicker() {
-        defaultPathPickerBrowser.refresh(forceRemote = true)
+    fun reloadDefaultPathBrowser() {
+        bindDefaultPathBrowser(forceRemote = true)
     }
 
-    fun updateDefaultPathPickerScrollSnapshot(index: Int, offset: Int) {
-        defaultPathPickerBrowser.updateScrollSnapshot(
+    fun updateDefaultPathBrowserScrollSnapshot(index: Int, offset: Int) {
+        defaultPathBrowser.updateScrollSnapshot(
             BrowserScrollSnapshot(index = index, offset = offset)
         )
     }
 
-    private suspend fun listOpenListPickerEntries(path: String): ListStorageEntryChildrenResp {
-        val snapshot = _openListPickerSnapshot.value ?: return ListStorageEntryChildrenResp.Unknown
+    private suspend fun listInlineOpenListEntries(path: String): ListStorageEntryChildrenResp {
+        val normalizedForm = normalizedFormSnapshot()
+        if (normalizedForm.typ != StorageType.OPEN_LIST) {
+            return ListStorageEntryChildrenResp.Unknown
+        }
         return bridge.runRaw {
             ctListStorageEntryChildrenByArg(
                 it,
-                snapshot,
+                normalizedForm,
                 normalizeStorageDefaultPath(path),
             )
         }
     }
 
-    private fun bindDefaultPathPickerSession(
-        sessionId: Long,
-        path: String,
-        scrollSnapshot: BrowserScrollSnapshot,
+    private fun bindDefaultPathBrowser(
         forceRemote: Boolean,
+        preferredPath: String? = null,
     ) {
-        defaultPathPickerBrowser.setStorage(
+        if (!_defaultPathBrowserExpanded.value) {
+            return
+        }
+
+        val browserConfig = form.value.openListBrowserConfigOrNull() ?: run {
+            unbindDefaultPathBrowser()
+            return
+        }
+        val configChanged = boundDefaultPathBrowserConfig != browserConfig
+        if (configChanged) {
+            defaultPathBrowser.clearStorageState(StorageId(DEFAULT_PATH_BROWSER_STORAGE_VALUE))
+            boundDefaultPathBrowserConfig = browserConfig
+        }
+
+        defaultPathBrowser.setStorage(
             BrowserStorageContext(
-                storageId = StorageId(sessionId),
+                storageId = StorageId(DEFAULT_PATH_BROWSER_STORAGE_VALUE),
                 isLocal = false,
             )
         )
-        defaultPathPickerBrowser.restorePath(normalizeStorageDefaultPath(path))
-        defaultPathPickerBrowser.restoreCurrentScrollSnapshot(scrollSnapshot)
-        defaultPathPickerBrowser.refresh(forceRemote = forceRemote)
+        val targetPath = normalizeStorageDefaultPath(
+            preferredPath ?: defaultPathBrowser.currentPathValue()
+        )
+        defaultPathBrowser.restorePath(targetPath)
+        defaultPathBrowser.refresh(forceRemote = forceRemote || configChanged)
     }
 
-    private fun nextPickerSessionId(): Long {
-        pickerSessionSeed -= 1L
-        savedStateHandle[STATE_PICKER_SESSION_SEED] = pickerSessionSeed
-        return pickerSessionSeed
+    private fun unbindDefaultPathBrowser() {
+        boundDefaultPathBrowserConfig = null
+        defaultPathBrowser.setStorage(null)
     }
 
-    private fun persistOpenListPickerSnapshot(snapshot: ArgUpsertStorage?) {
-        savedStateHandle[STATE_PICKER_ADDR] = snapshot?.addr
-        savedStateHandle[STATE_PICKER_ALIAS] = snapshot?.alias
-        savedStateHandle[STATE_PICKER_USERNAME] = snapshot?.username
-        savedStateHandle[STATE_PICKER_PASSWORD] = snapshot?.password
-        savedStateHandle[STATE_PICKER_IS_ANONYMOUS] = snapshot?.isAnonymous
-        savedStateHandle[STATE_PICKER_DEFAULT_PATH] = snapshot?.defaultPath
-        savedStateHandle[STATE_PICKER_STORAGE_VALUE] = snapshot?.id?.value
+    private fun setDefaultPathBrowserExpanded(expanded: Boolean) {
+        _defaultPathBrowserExpanded.value = expanded
+        savedStateHandle[STATE_DEFAULT_PATH_BROWSER_EXPANDED] = expanded
+    }
+
+    private fun persistFormDraft(snapshot: ArgUpsertStorage?) {
+        savedStateHandle[STATE_FORM_TYPE] = snapshot?.typ?.name
+        savedStateHandle[STATE_FORM_ADDR] = snapshot?.addr
+        savedStateHandle[STATE_FORM_ALIAS] = snapshot?.alias
+        savedStateHandle[STATE_FORM_USERNAME] = snapshot?.username
+        savedStateHandle[STATE_FORM_PASSWORD] = snapshot?.password
+        savedStateHandle[STATE_FORM_IS_ANONYMOUS] = snapshot?.isAnonymous
+        savedStateHandle[STATE_FORM_DEFAULT_PATH] = snapshot?.defaultPath
+        savedStateHandle[STATE_FORM_STORAGE_VALUE] = snapshot?.id?.value
+    }
+
+    private fun setFormValue(value: ArgUpsertStorage, persist: Boolean = true) {
+        _form.value = value
+        if (persist) {
+            persistFormDraft(value)
+        }
     }
 
     private fun normalizedFormSnapshot(): ArgUpsertStorage {
@@ -322,7 +408,45 @@ class EditStorageVM @Inject constructor(
         return normalized
     }
 
-    private fun emitDefaultPathPickerLoadFailureToast(state: CurrentStorageStateType) {
+    private fun clearDefaultPathFieldError() {
+        _defaultPathFieldError.value = null
+    }
+
+    private suspend fun validateOpenListDefaultPath(form: ArgUpsertStorage): Boolean {
+        val result = bridge.runRaw {
+            ctListStorageEntryChildrenByArg(
+                it,
+                form,
+                form.defaultPath,
+            )
+        }
+        return when (result) {
+            is ListStorageEntryChildrenResp.Ok -> {
+                clearDefaultPathFieldError()
+                true
+            }
+
+            ListStorageEntryChildrenResp.AuthenticationFailed -> {
+                _defaultPathFieldError.value = R.string.storage_edit_default_path_invalid
+                toastRepository.emitToast("认证失败，请检查 OpenList 配置")
+                false
+            }
+
+            ListStorageEntryChildrenResp.Timeout -> {
+                _defaultPathFieldError.value = R.string.storage_edit_default_path_invalid
+                toastRepository.emitToast("目录加载超时，请重试")
+                false
+            }
+
+            ListStorageEntryChildrenResp.Unknown -> {
+                _defaultPathFieldError.value = R.string.storage_edit_default_path_invalid
+                toastRepository.emitToastRes(R.string.storage_edit_default_path_invalid)
+                false
+            }
+        }
+    }
+
+    private fun emitDefaultPathBrowserLoadFailureToast(state: CurrentStorageStateType) {
         when (state) {
             CurrentStorageStateType.AUTHENTICATION_FAILED -> {
                 toastRepository.emitToast("认证失败，请检查 OpenList 配置")
@@ -372,7 +496,15 @@ class EditStorageVM @Inject constructor(
     }
 
     fun updateForm(block: (form: ArgUpsertStorage) -> ArgUpsertStorage) {
-        _form.value = block(form.value.copy())
+        val previous = form.value
+        val next = block(previous.copy())
+        if (
+            previous.defaultPath != next.defaultPath ||
+                previous.openListBrowserConfigOrNull() != next.openListBrowserConfigOrNull()
+        ) {
+            clearDefaultPathFieldError()
+        }
+        setFormValue(next)
     }
 
     fun changeType(typ: StorageType) {
@@ -380,7 +512,7 @@ class EditStorageVM @Inject constructor(
 
         val backup = _formBackups[typ]
         if (backup != null) {
-            _form.value = backup
+            setFormValue(backup)
         } else {
             val isAnonymous = when (typ) {
                 StorageType.OPEN_LIST -> true
@@ -397,7 +529,11 @@ class EditStorageVM @Inject constructor(
                 typ = typ,
                 defaultPath = "/",
             )
-            _form.value = newForm
+            setFormValue(newForm)
+        }
+        clearDefaultPathFieldError()
+        if (typ != StorageType.OPEN_LIST) {
+            setDefaultPathBrowserExpanded(false)
         }
         _validated.value = Validated()
     }
@@ -436,16 +572,13 @@ class EditStorageVM @Inject constructor(
         }
 
         val normalizedForm = normalizedFormSnapshot()
-        _form.value = normalizedForm
-        storageRepository.upsertStorage(normalizedForm)
-        return true
-    }
-
-    fun resetDefaultPathToRoot() {
-        updateForm { storage ->
-            storage.defaultPath = "/"
-            storage
+        setFormValue(normalizedForm)
+        if (normalizedForm.typ == StorageType.OPEN_LIST && !validateOpenListDefaultPath(normalizedForm)) {
+            return false
         }
+        storageRepository.upsertStorage(normalizedForm)
+        persistFormDraft(null)
+        return true
     }
 
     private fun resetTestResult() {

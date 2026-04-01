@@ -2,7 +2,6 @@ package com.kutedev.easemusicplayer.widgets.devices
 
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,14 +42,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -277,7 +282,17 @@ private fun OpenListConfig(
 ) {
     val form by editStorageVM.form.collectAsState()
     val validated by editStorageVM.validated.collectAsState()
+    val defaultPathFieldError by editStorageVM.defaultPathFieldError.collectAsState()
+    val defaultPathBrowserExpanded by editStorageVM.defaultPathBrowserExpanded.collectAsState()
+    val defaultPathBrowserReady by editStorageVM.defaultPathBrowserReady.collectAsState()
+    val defaultPathBrowserCurrentPath by editStorageVM.defaultPathBrowserCurrentPath.collectAsState()
+    val defaultPathBrowserSplitPaths by editStorageVM.defaultPathBrowserSplitPaths.collectAsState()
+    val defaultPathBrowserEntries by editStorageVM.defaultPathBrowserEntries.collectAsState()
+    val defaultPathBrowserLoadState by editStorageVM.defaultPathBrowserLoadState.collectAsState()
+    val defaultPathBrowserIsRefreshing by editStorageVM.defaultPathBrowserIsRefreshing.collectAsState()
+    val defaultPathBrowserScrollSnapshot by editStorageVM.defaultPathBrowserScrollSnapshot.collectAsState()
     val isAnonymous = form.isAnonymous
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     FormSwitch(
         label = stringResource(id = R.string.storage_edit_anonymous),
@@ -348,41 +363,116 @@ private fun OpenListConfig(
         )
     }
 
-    FormText(
-        label = stringResource(id = R.string.storage_edit_default_path),
-        value = form.defaultPath,
-        onChange = { value ->
-            editStorageVM.updateForm { storage ->
-                storage.defaultPath = value
-                storage
+    FormWidget(label = stringResource(id = R.string.storage_edit_default_path)) {
+        TextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { state ->
+                    if (state.isFocused) {
+                        editStorageVM.expandDefaultPathBrowser()
+                    }
+                },
+            value = form.defaultPath,
+            onValueChange = { value ->
+                editStorageVM.onDefaultPathInputChange(value)
+            },
+            isError = defaultPathFieldError != null,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    editStorageVM.commitDefaultPathInput()
+                    keyboardController?.hide()
+                }
+            ),
+        )
+        if (defaultPathFieldError != null) {
+            Text(
+                text = stringResource(id = defaultPathFieldError!!),
+                color = MaterialTheme.colorScheme.error,
+                style = EaseTheme.typography.micro,
+            )
+        }
+        Text(
+            text = stringResource(id = R.string.storage_edit_default_path_desc),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.caption,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        if (defaultPathBrowserExpanded) {
+            val showBlockingLoading = defaultPathBrowserReady &&
+                defaultPathBrowserLoadState == CurrentStorageStateType.LOADING &&
+                defaultPathBrowserEntries.isEmpty()
+            val showBlockingError = defaultPathBrowserReady && (
+                defaultPathBrowserLoadState == CurrentStorageStateType.TIMEOUT ||
+                    defaultPathBrowserLoadState == CurrentStorageStateType.AUTHENTICATION_FAILED ||
+                    defaultPathBrowserLoadState == CurrentStorageStateType.UNKNOWN_ERROR
+                ) && defaultPathBrowserEntries.isEmpty()
+
+            Column(
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .fillMaxWidth()
+                    .height(280.dp)
+                    .clip(RoundedCornerShape(EaseTheme.radius.card))
+                    .background(EaseTheme.surfaces.secondary)
+            ) {
+                when {
+                    !defaultPathBrowserReady -> {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp)
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.storage_edit_default_path_browser_requires_config),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = EaseTheme.typography.body,
+                            )
+                        }
+                    }
+
+                    showBlockingLoading -> {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(0.6f))
+                                Text(
+                                    text = stringResource(id = R.string.storage_edit_default_path_picker_loading),
+                                    style = EaseTheme.typography.body,
+                                )
+                            }
+                        }
+                    }
+
+                    showBlockingError -> {
+                        OpenListDefaultPathBrowserError(
+                            type = defaultPathBrowserLoadState,
+                            onReload = { editStorageVM.reloadDefaultPathBrowser() },
+                        )
+                    }
+
+                    else -> {
+                        OpenListDefaultPathBrowserList(
+                            currentPath = defaultPathBrowserCurrentPath,
+                            splitPaths = defaultPathBrowserSplitPaths,
+                            entries = defaultPathBrowserEntries,
+                            isRefreshing = defaultPathBrowserIsRefreshing,
+                            scrollSnapshot = defaultPathBrowserScrollSnapshot,
+                            onNavigateDir = { path -> editStorageVM.navigateDefaultPathBrowserDir(path) },
+                            onScrollSnapshotChange = { snapshot ->
+                                editStorageVM.updateDefaultPathBrowserScrollSnapshot(snapshot.index, snapshot.offset)
+                            },
+                        )
+                    }
+                }
             }
-        },
-    )
-    Text(
-        text = stringResource(id = R.string.storage_edit_default_path_desc),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = EaseTheme.typography.caption,
-    )
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        EaseTextButton(
-            text = stringResource(id = R.string.storage_edit_default_path_browse),
-            type = EaseTextButtonType.PrimaryVariant,
-            size = EaseTextButtonSize.Medium,
-            onClick = {
-                editStorageVM.openDefaultPathPicker()
-            },
-        )
-        EaseTextButton(
-            text = stringResource(id = R.string.storage_edit_default_path_reset),
-            type = EaseTextButtonType.Default,
-            size = EaseTextButtonSize.Medium,
-            onClick = {
-                editStorageVM.resetDefaultPathToRoot()
-            },
-        )
+        }
     }
 }
 
@@ -453,7 +543,7 @@ private fun OneDriveConfig(
 }
 
 @Composable
-private fun OpenListDirectoryPickerError(
+private fun OpenListDefaultPathBrowserError(
     type: CurrentStorageStateType,
     onReload: () -> Unit,
 ) {
@@ -509,7 +599,7 @@ private fun OpenListDirectoryPickerError(
 }
 
 @Composable
-private fun OpenListDirectoryPickerList(
+private fun OpenListDefaultPathBrowserList(
     currentPath: String,
     splitPaths: List<BrowserPathItem>,
     entries: List<StorageEntry>,
@@ -650,125 +740,6 @@ private fun OpenListDirectoryPickerList(
 }
 
 @Composable
-private fun OpenListDirectoryPickerPanel(
-    currentPath: String,
-    splitPaths: List<BrowserPathItem>,
-    entries: List<StorageEntry>,
-    loadState: CurrentStorageStateType,
-    isRefreshing: Boolean,
-    scrollSnapshot: BrowserScrollSnapshot,
-    onBack: () -> Unit,
-    onConfirm: () -> Unit,
-    onReload: () -> Unit,
-    onNavigateDir: (String) -> Unit,
-    onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
-) {
-    val currentPathLabel = remember(splitPaths) {
-        if (splitPaths.isEmpty()) {
-            "/"
-        } else {
-            splitPaths.joinToString(
-                separator = "/",
-                prefix = "/",
-            ) { item -> item.name }
-        }
-    }
-    val showBlockingLoading = loadState == CurrentStorageStateType.LOADING && entries.isEmpty()
-    val showBlockingError = (
-        loadState == CurrentStorageStateType.TIMEOUT ||
-            loadState == CurrentStorageStateType.AUTHENTICATION_FAILED ||
-            loadState == CurrentStorageStateType.UNKNOWN_ERROR
-        ) && entries.isEmpty()
-
-    Column(
-        modifier = Modifier
-            .background(EaseTheme.surfaces.screen)
-            .fillMaxSize()
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth()
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                EaseIconButton(
-                    sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
-                    painter = painterResource(id = R.drawable.icon_back),
-                    onClick = onBack,
-                )
-                Column(
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.storage_edit_default_path_picker_title),
-                        style = EaseTheme.typography.body,
-                    )
-                    Text(
-                        text = currentPathLabel,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = EaseTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            EaseTextButton(
-                text = stringResource(id = R.string.storage_edit_default_path_picker_confirm),
-                type = EaseTextButtonType.PrimaryVariant,
-                size = EaseTextButtonSize.Medium,
-                onClick = onConfirm,
-                disabled = loadState != CurrentStorageStateType.OK,
-            )
-        }
-
-        when {
-            showBlockingLoading -> {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(0.6f))
-                        Text(
-                            text = stringResource(id = R.string.storage_edit_default_path_picker_loading),
-                            style = EaseTheme.typography.body,
-                        )
-                    }
-                }
-            }
-
-            showBlockingError -> {
-                OpenListDirectoryPickerError(
-                    type = loadState,
-                    onReload = onReload,
-                )
-            }
-
-            else -> {
-                OpenListDirectoryPickerList(
-                    currentPath = currentPath,
-                    splitPaths = splitPaths,
-                    entries = entries,
-                    isRefreshing = isRefreshing,
-                    scrollSnapshot = scrollSnapshot,
-                    onNavigateDir = onNavigateDir,
-                    onScrollSnapshotChange = onScrollSnapshotChange,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun EditStoragesPage(
     editStorageVM: EditStorageVM = hiltViewModel()
 ) {
@@ -777,13 +748,6 @@ fun EditStoragesPage(
     val form by editStorageVM.form.collectAsState()
     val isCreated by editStorageVM.isCreated.collectAsState()
     val testing by editStorageVM.testResult.collectAsState()
-    val defaultPathPickerOpen by editStorageVM.defaultPathPickerOpen.collectAsState()
-    val pickerCurrentPath by editStorageVM.defaultPathPickerCurrentPath.collectAsState()
-    val pickerSplitPaths by editStorageVM.defaultPathPickerSplitPaths.collectAsState()
-    val pickerEntries by editStorageVM.defaultPathPickerEntries.collectAsState()
-    val pickerLoadState by editStorageVM.defaultPathPickerLoadState.collectAsState()
-    val pickerIsRefreshing by editStorageVM.defaultPathPickerIsRefreshing.collectAsState()
-    val pickerScrollSnapshot by editStorageVM.defaultPathPickerScrollSnapshot.collectAsState()
 
     val storageType = form.typ
 
@@ -803,133 +767,111 @@ fun EditStoragesPage(
         )
     }
 
-    BackHandler(enabled = defaultPathPickerOpen) {
-        editStorageVM.closeDefaultPathPicker()
-    }
-
     Column(
         modifier = Modifier
             .background(EaseTheme.surfaces.screen)
             .fillMaxSize()
     ) {
-        if (defaultPathPickerOpen) {
-            OpenListDirectoryPickerPanel(
-                currentPath = pickerCurrentPath,
-                splitPaths = pickerSplitPaths,
-                entries = pickerEntries,
-                loadState = pickerLoadState,
-                isRefreshing = pickerIsRefreshing,
-                scrollSnapshot = pickerScrollSnapshot,
-                onBack = { editStorageVM.closeDefaultPathPicker() },
-                onConfirm = { editStorageVM.confirmDefaultPathPickerSelection() },
-                onReload = { editStorageVM.reloadDefaultPathPicker() },
-                onNavigateDir = { path -> editStorageVM.navigateDefaultPathPickerDir(path) },
-                onScrollSnapshotChange = { snapshot ->
-                    editStorageVM.updateDefaultPathPickerScrollSnapshot(snapshot.index, snapshot.offset)
-                },
-            )
-        } else {
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .padding(12.dp)
-                    .fillMaxWidth()
-            ) {
-                Row {
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Medium,
-                        buttonType = EaseIconButtonType.Default,
-                        painter = painterResource(id = R.drawable.icon_back),
-                        onClick = {
-                            navController.popBackStack()
-                        }
-                    )
-                }
-                Row {
-                    if (!isCreated) {
-                        EaseIconButton(
-                            sizeType = EaseIconButtonSize.Medium,
-                            buttonType = EaseIconButtonType.Error,
-                            painter = painterResource(id = R.drawable.icon_deleteseep),
-                            onClick = {
-                                editStorageVM.openRemoveModal()
-                            }
-                        )
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth()
+        ) {
+            Row {
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_back),
+                    onClick = {
+                        navController.popBackStack()
                     }
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Medium,
-                        buttonType = EaseIconButtonType.Default,
-                        disabled = testing == StorageConnectionTestResult.TESTING,
-                        painter = painterResource(id = R.drawable.icon_wifitethering),
-                        overrideColors = testingColors,
-                        onClick = {
-                            editStorageVM.test()
-                        }
-                    )
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Medium,
-                        buttonType = EaseIconButtonType.Default,
-                        painter = painterResource(id = R.drawable.icon_ok),
-                        onClick = {
-                            coroutineScope.launch {
-                                val finished = editStorageVM.finish()
-                                if (finished) {
-                                    navController.popBackStack()
-                                }
-                            }
-                        }
-                    )
-                }
+                )
             }
-            Box(
-                modifier = Modifier.fillMaxSize()
+            Row {
+                if (!isCreated) {
+                    EaseIconButton(
+                        sizeType = EaseIconButtonSize.Medium,
+                        buttonType = EaseIconButtonType.Error,
+                        painter = painterResource(id = R.drawable.icon_deleteseep),
+                        onClick = {
+                            editStorageVM.openRemoveModal()
+                        }
+                    )
+                }
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    disabled = testing == StorageConnectionTestResult.TESTING,
+                    painter = painterResource(id = R.drawable.icon_wifitethering),
+                    overrideColors = testingColors,
+                    onClick = {
+                        editStorageVM.test()
+                    }
+                )
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_ok),
+                    onClick = {
+                        coroutineScope.launch {
+                            val finished = editStorageVM.finish()
+                            if (finished) {
+                                navController.popBackStack()
+                            }
+                        }
+                    }
+                )
+            }
+        }
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .padding(30.dp, 12.dp)
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .imePadding()
-                        .padding(30.dp, 12.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        StorageBlock(
-                            title = "WebDAV",
-                            isActive = storageType == StorageType.WEBDAV,
-                            onSelect = {
-                                editStorageVM.changeType(StorageType.WEBDAV)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        StorageBlock(
-                            title = "OneDrive",
-                            isActive = storageType == StorageType.ONE_DRIVE,
-                            onSelect = {
-                                editStorageVM.changeType(StorageType.ONE_DRIVE)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        StorageBlock(
-                            title = "OpenList",
-                            isActive = storageType == StorageType.OPEN_LIST,
-                            onSelect = {
-                                editStorageVM.changeType(StorageType.OPEN_LIST)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Box(modifier = Modifier.height(30.dp))
-                    if (storageType == StorageType.WEBDAV) {
-                        WebdavConfig()
-                    }
-                    if (storageType == StorageType.ONE_DRIVE) {
-                        OneDriveConfig()
-                    }
-                    if (storageType == StorageType.OPEN_LIST) {
-                        OpenListConfig()
-                    }
+                    StorageBlock(
+                        title = "WebDAV",
+                        isActive = storageType == StorageType.WEBDAV,
+                        onSelect = {
+                            editStorageVM.changeType(StorageType.WEBDAV)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    StorageBlock(
+                        title = "OneDrive",
+                        isActive = storageType == StorageType.ONE_DRIVE,
+                        onSelect = {
+                            editStorageVM.changeType(StorageType.ONE_DRIVE)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    StorageBlock(
+                        title = "OpenList",
+                        isActive = storageType == StorageType.OPEN_LIST,
+                        onSelect = {
+                            editStorageVM.changeType(StorageType.OPEN_LIST)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Box(modifier = Modifier.height(30.dp))
+                if (storageType == StorageType.WEBDAV) {
+                    WebdavConfig()
+                }
+                if (storageType == StorageType.ONE_DRIVE) {
+                    OneDriveConfig()
+                }
+                if (storageType == StorageType.OPEN_LIST) {
+                    OpenListConfig()
                 }
             }
         }

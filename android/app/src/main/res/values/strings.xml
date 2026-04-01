@@ -26,13 +26,11 @@
     <string name="storage_edit_addr">ADDRESS</string>
     <string name="storage_edit_alias">NAME (ALIAS)</string>
     <string name="storage_edit_default_path">DEFAULT DIRECTORY</string>
-    <string name="storage_edit_default_path_desc">Tapping this OpenList instance from Devices will open here first. Leave blank or use / for the root directory.</string>
-    <string name="storage_edit_default_path_browse">Browse directory</string>
-    <string name="storage_edit_default_path_reset">Reset to root</string>
-    <string name="storage_edit_default_path_picker_title">Choose default directory</string>
-    <string name="storage_edit_default_path_picker_confirm">Use current directory</string>
+    <string name="storage_edit_default_path_desc">Tapping this OpenList instance from Devices will open here first. Tap the field to browse below on this page, or type a path manually. Leave blank or use / for the root directory.</string>
+    <string name="storage_edit_default_path_browser_requires_config">Fill in the OpenList address and authentication info first, then tap the field again to browse directories here.</string>
+    <string name="storage_edit_default_path_invalid">The default directory does not exist or cannot be accessed.</string>
     <string name="storage_edit_default_path_picker_loading">Loading directories...</string>
-    <string name="storage_edit_default_path_picker_empty">No subdirectories here. You can confirm the current directory directly.</string>
+    <string name="storage_edit_default_path_picker_empty">No subdirectories here. You can keep using the current directory.</string>
     <string name="storage_edit_default_path_picker_error_auth">Authentication failed. Check the current OpenList settings and try again.</string>
     <string name="storage_edit_default_path_picker_error_timeout">Connection timed out. Please try again.</string>
     <string name="storage_edit_default_path_picker_error_unknown">Failed to load directories. Please try again.</string>

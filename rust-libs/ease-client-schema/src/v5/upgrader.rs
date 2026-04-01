@@ -193,15 +193,15 @@ mod tests {
             txn.open_table(v4::TABLE_STORAGE)
                 .unwrap()
                 .insert(
-                    &v4::StorageId::wrap(7),
+                    &crate::StorageId::wrap(7),
                     &v4::StorageModel {
-                        id: v4::StorageId::wrap(7),
+                        id: crate::StorageId::wrap(7),
                         addr: "https://openlist.example".to_string(),
                         alias: "Demo".to_string(),
                         username: "user".to_string(),
                         password: "pass".to_string(),
                         is_anonymous: false,
-                        typ: v4::StorageType::OpenList,
+                        typ: crate::StorageType::OpenList,
                     },
                 )
                 .unwrap();

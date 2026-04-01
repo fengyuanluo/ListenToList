@@ -231,6 +231,19 @@ class DirectoryBrowserController(
         _isRefreshing.value = false
     }
 
+    fun clearStorageState(storageId: StorageId) {
+        cancelActiveLoad()
+        val keysToRemove = cache.keys.filter { key -> key.storageId == storageId }
+        keysToRemove.forEach { key ->
+            cache.remove(key)
+            scrollSnapshots.remove(key)
+        }
+        if (_storageContext.value?.storageId == storageId) {
+            clearVisibleState()
+            syncCurrentScrollSnapshot()
+        }
+    }
+
     fun currentPathValue(): String {
         return _currentPath.value
     }

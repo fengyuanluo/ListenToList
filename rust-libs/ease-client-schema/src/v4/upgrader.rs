@@ -296,14 +296,14 @@ mod tests {
         let txn = db.begin_read().unwrap();
         let playlist_music = txn.open_multimap_table(v4::TABLE_PLAYLIST_MUSIC).unwrap();
         let mut values = Vec::new();
-        for value in playlist_music.get(v4::PlaylistId::wrap(1)).unwrap() {
+        for value in playlist_music.get(crate::PlaylistId::wrap(1)).unwrap() {
             values.push(value.unwrap().value());
         }
         values.sort_by(|lhs, rhs| lhs.order.cmp(&rhs.order));
 
         assert_eq!(2, values.len());
-        assert_eq!(v4::MusicId::wrap(11), values[0].music_id);
-        assert_eq!(v4::MusicId::wrap(10), values[1].music_id);
+        assert_eq!(crate::MusicId::wrap(11), values[0].music_id);
+        assert_eq!(crate::MusicId::wrap(10), values[1].music_id);
 
         let schema_version = txn
             .open_table(v4::TABLE_SCHEMA_VERSION)
