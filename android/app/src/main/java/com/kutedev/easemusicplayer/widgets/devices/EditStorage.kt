@@ -370,31 +370,37 @@ private fun OpenListConfig(
     }
 
     FormWidget(label = stringResource(id = R.string.storage_edit_default_path)) {
-        TextField(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .onFocusChanged { state ->
-                    if (state.isFocused) {
-                        editStorageVM.expandDefaultPathBrowser()
-                        coroutineScope.launch {
-                            kotlinx.coroutines.delay(250)
-                            bringIntoViewRequester.bringIntoView()
+                .bringIntoViewRequester(bringIntoViewRequester)
+        ) {
+            TextField(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            editStorageVM.expandDefaultPathBrowser()
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(250)
+                                bringIntoViewRequester.bringIntoView()
+                            }
                         }
-                    }
+                    },
+                value = form.defaultPath,
+                onValueChange = { value ->
+                    editStorageVM.onDefaultPathInputChange(value)
                 },
-            value = form.defaultPath,
-            onValueChange = { value ->
-                editStorageVM.onDefaultPathInputChange(value)
-            },
-            isError = defaultPathFieldError != null,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    editStorageVM.commitDefaultPathInput()
-                    keyboardController?.hide()
-                }
-            ),
-        )
+                isError = defaultPathFieldError != null,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        editStorageVM.commitDefaultPathInput()
+                        keyboardController?.hide()
+                    }
+                ),
+            )
+        }
         if (defaultPathFieldError != null) {
             Text(
                 text = stringResource(id = defaultPathFieldError!!),
@@ -402,89 +408,26 @@ private fun OpenListConfig(
                 style = EaseTheme.typography.micro,
             )
         }
-        Text(
-            text = stringResource(id = R.string.storage_edit_default_path_desc),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.caption,
-            modifier = Modifier.padding(top = 4.dp),
-        )
         if (defaultPathBrowserExpanded) {
-            val showBlockingLoading = defaultPathBrowserReady &&
-                defaultPathBrowserLoadState == CurrentStorageStateType.LOADING &&
-                defaultPathBrowserEntries.isEmpty()
-            val showBlockingError = defaultPathBrowserReady && (
-                defaultPathBrowserLoadState == CurrentStorageStateType.TIMEOUT ||
-                    defaultPathBrowserLoadState == CurrentStorageStateType.AUTHENTICATION_FAILED ||
-                    defaultPathBrowserLoadState == CurrentStorageStateType.UNKNOWN_ERROR
-                ) && defaultPathBrowserEntries.isEmpty()
-
-            Column(
-                modifier = Modifier
-                    .padding(top = 12.dp)
-                    .bringIntoViewRequester(bringIntoViewRequester)
-                    .fillMaxWidth()
-                    .height(280.dp)
-                    .clip(RoundedCornerShape(EaseTheme.radius.card))
-                    .background(EaseTheme.surfaces.secondary)
-            ) {
-                when {
-                    !defaultPathBrowserReady -> {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp)
-                        ) {
-                            Text(
-                                text = stringResource(id = R.string.storage_edit_default_path_browser_requires_config),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = EaseTheme.typography.body,
-                            )
-                        }
-                    }
-
-                    showBlockingLoading -> {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(0.6f))
-                                Text(
-                                    text = stringResource(id = R.string.storage_edit_default_path_picker_loading),
-                                    style = EaseTheme.typography.body,
-                                )
-                            }
-                        }
-                    }
-
-                    showBlockingError -> {
-                        OpenListDefaultPathBrowserError(
-                            type = defaultPathBrowserLoadState,
-                            currentPath = defaultPathBrowserCurrentPath,
-                            onReload = { editStorageVM.reloadDefaultPathBrowser() },
-                            onOpenRoot = { editStorageVM.openDefaultPathBrowserRoot() },
-                        )
-                    }
-
-                    else -> {
-                        OpenListDefaultPathBrowserList(
-                            currentPath = defaultPathBrowserCurrentPath,
-                            splitPaths = defaultPathBrowserSplitPaths,
-                            entries = defaultPathBrowserEntries,
-                            isRefreshing = defaultPathBrowserIsRefreshing,
-                            scrollSnapshot = defaultPathBrowserScrollSnapshot,
-                            onNavigateDir = { path -> editStorageVM.navigateDefaultPathBrowserDir(path) },
-                            onScrollSnapshotChange = { snapshot ->
-                                editStorageVM.updateDefaultPathBrowserScrollSnapshot(snapshot.index, snapshot.offset)
-                            },
-                        )
-                    }
-                }
-            }
+            OpenListDefaultPathBrowserDropdown(
+                modifier = Modifier.padding(top = 6.dp),
+                defaultPathBrowserReady = defaultPathBrowserReady,
+                defaultPathBrowserLoadState = defaultPathBrowserLoadState,
+                defaultPathBrowserEntries = defaultPathBrowserEntries,
+                defaultPathBrowserCurrentPath = defaultPathBrowserCurrentPath,
+                defaultPathBrowserSplitPaths = defaultPathBrowserSplitPaths,
+                defaultPathBrowserIsRefreshing = defaultPathBrowserIsRefreshing,
+                defaultPathBrowserScrollSnapshot = defaultPathBrowserScrollSnapshot,
+                onReload = { editStorageVM.reloadDefaultPathBrowser() },
+                onOpenRoot = { editStorageVM.openDefaultPathBrowserRoot() },
+                onNavigateDir = { path -> editStorageVM.navigateDefaultPathBrowserDir(path) },
+                onScrollSnapshotChange = { snapshot ->
+                    editStorageVM.updateDefaultPathBrowserScrollSnapshot(
+                        snapshot.index,
+                        snapshot.offset,
+                    )
+                },
+            )
         }
     }
 }
@@ -615,6 +558,95 @@ private fun OpenListDefaultPathBrowserError(
                     type = EaseTextButtonType.Default,
                     size = EaseTextButtonSize.Medium,
                     onClick = onOpenRoot,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpenListDefaultPathBrowserDropdown(
+    modifier: Modifier = Modifier,
+    defaultPathBrowserReady: Boolean,
+    defaultPathBrowserLoadState: CurrentStorageStateType,
+    defaultPathBrowserEntries: List<StorageEntry>,
+    defaultPathBrowserCurrentPath: String,
+    defaultPathBrowserSplitPaths: List<BrowserPathItem>,
+    defaultPathBrowserIsRefreshing: Boolean,
+    defaultPathBrowserScrollSnapshot: BrowserScrollSnapshot,
+    onReload: () -> Unit,
+    onOpenRoot: () -> Unit,
+    onNavigateDir: (String) -> Unit,
+    onScrollSnapshotChange: (BrowserScrollSnapshot) -> Unit,
+) {
+    val showBlockingLoading = defaultPathBrowserReady &&
+        defaultPathBrowserLoadState == CurrentStorageStateType.LOADING &&
+        defaultPathBrowserEntries.isEmpty()
+    val showBlockingError = defaultPathBrowserReady && (
+        defaultPathBrowserLoadState == CurrentStorageStateType.TIMEOUT ||
+            defaultPathBrowserLoadState == CurrentStorageStateType.AUTHENTICATION_FAILED ||
+            defaultPathBrowserLoadState == CurrentStorageStateType.UNKNOWN_ERROR
+        ) && defaultPathBrowserEntries.isEmpty()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .clip(RoundedCornerShape(EaseTheme.radius.card))
+            .background(EaseTheme.surfaces.secondary)
+    ) {
+        when {
+            !defaultPathBrowserReady -> {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.storage_edit_default_path_browser_requires_config),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = EaseTheme.typography.body,
+                    )
+                }
+            }
+
+            showBlockingLoading -> {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(0.6f))
+                        Text(
+                            text = stringResource(id = R.string.storage_edit_default_path_picker_loading),
+                            style = EaseTheme.typography.body,
+                        )
+                    }
+                }
+            }
+
+            showBlockingError -> {
+                OpenListDefaultPathBrowserError(
+                    type = defaultPathBrowserLoadState,
+                    currentPath = defaultPathBrowserCurrentPath,
+                    onReload = onReload,
+                    onOpenRoot = onOpenRoot,
+                )
+            }
+
+            else -> {
+                OpenListDefaultPathBrowserList(
+                    currentPath = defaultPathBrowserCurrentPath,
+                    splitPaths = defaultPathBrowserSplitPaths,
+                    entries = defaultPathBrowserEntries,
+                    isRefreshing = defaultPathBrowserIsRefreshing,
+                    scrollSnapshot = defaultPathBrowserScrollSnapshot,
+                    onNavigateDir = onNavigateDir,
+                    onScrollSnapshotChange = onScrollSnapshotChange,
                 )
             }
         }
