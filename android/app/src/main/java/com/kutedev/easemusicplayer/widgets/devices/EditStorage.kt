@@ -277,15 +277,16 @@ private fun WebdavConfig(
             }
         )
     }
+
+    DefaultPathConfigSection()
 }
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun OpenListConfig(
+private fun DefaultPathConfigSection(
     editStorageVM: EditStorageVM = hiltViewModel()
 ) {
     val form by editStorageVM.form.collectAsState()
-    val validated by editStorageVM.validated.collectAsState()
     val defaultPathFieldError by editStorageVM.defaultPathFieldError.collectAsState()
     val defaultPathBrowserExpanded by editStorageVM.defaultPathBrowserExpanded.collectAsState()
     val defaultPathBrowserReady by editStorageVM.defaultPathBrowserReady.collectAsState()
@@ -295,10 +296,80 @@ private fun OpenListConfig(
     val defaultPathBrowserLoadState by editStorageVM.defaultPathBrowserLoadState.collectAsState()
     val defaultPathBrowserIsRefreshing by editStorageVM.defaultPathBrowserIsRefreshing.collectAsState()
     val defaultPathBrowserScrollSnapshot by editStorageVM.defaultPathBrowserScrollSnapshot.collectAsState()
-    val isAnonymous = form.isAnonymous
     val keyboardController = LocalSoftwareKeyboardController.current
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val coroutineScope = rememberCoroutineScope()
+
+    FormWidget(label = stringResource(id = R.string.storage_edit_default_path)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .bringIntoViewRequester(bringIntoViewRequester)
+        ) {
+            TextField(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            editStorageVM.expandDefaultPathBrowser()
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(250)
+                                bringIntoViewRequester.bringIntoView()
+                            }
+                        }
+                    },
+                value = form.defaultPath,
+                onValueChange = { value ->
+                    editStorageVM.onDefaultPathInputChange(value)
+                },
+                isError = defaultPathFieldError != null,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        editStorageVM.commitDefaultPathInput()
+                        keyboardController?.hide()
+                    }
+                ),
+            )
+        }
+        if (defaultPathFieldError != null) {
+            Text(
+                text = stringResource(id = defaultPathFieldError!!),
+                color = MaterialTheme.colorScheme.error,
+                style = EaseTheme.typography.micro,
+            )
+        }
+        if (defaultPathBrowserExpanded) {
+            DefaultPathBrowserDropdown(
+                modifier = Modifier.padding(top = 6.dp),
+                defaultPathBrowserReady = defaultPathBrowserReady,
+                defaultPathBrowserLoadState = defaultPathBrowserLoadState,
+                defaultPathBrowserEntries = defaultPathBrowserEntries,
+                defaultPathBrowserCurrentPath = defaultPathBrowserCurrentPath,
+                defaultPathBrowserSplitPaths = defaultPathBrowserSplitPaths,
+                defaultPathBrowserIsRefreshing = defaultPathBrowserIsRefreshing,
+                defaultPathBrowserScrollSnapshot = defaultPathBrowserScrollSnapshot,
+                onReload = { editStorageVM.reloadDefaultPathBrowser() },
+                onOpenRoot = { editStorageVM.openDefaultPathBrowserRoot() },
+                onNavigateDir = { path -> editStorageVM.navigateDefaultPathBrowserDir(path) },
+                onScrollSnapshotChange = { snapshot ->
+                    editStorageVM.updateDefaultPathBrowserScrollSnapshot(
+                        snapshot.index,
+                        snapshot.offset,
+                    )
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun OpenListConfig(
+    editStorageVM: EditStorageVM = hiltViewModel()
+) {
+    val form by editStorageVM.form.collectAsState()
+    val validated by editStorageVM.validated.collectAsState()
+    val isAnonymous = form.isAnonymous
 
     FormSwitch(
         label = stringResource(id = R.string.storage_edit_anonymous),
@@ -369,67 +440,7 @@ private fun OpenListConfig(
         )
     }
 
-    FormWidget(label = stringResource(id = R.string.storage_edit_default_path)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .bringIntoViewRequester(bringIntoViewRequester)
-        ) {
-            TextField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { state ->
-                        if (state.isFocused) {
-                            editStorageVM.expandDefaultPathBrowser()
-                            coroutineScope.launch {
-                                kotlinx.coroutines.delay(250)
-                                bringIntoViewRequester.bringIntoView()
-                            }
-                        }
-                    },
-                value = form.defaultPath,
-                onValueChange = { value ->
-                    editStorageVM.onDefaultPathInputChange(value)
-                },
-                isError = defaultPathFieldError != null,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                        editStorageVM.commitDefaultPathInput()
-                        keyboardController?.hide()
-                    }
-                ),
-            )
-        }
-        if (defaultPathFieldError != null) {
-            Text(
-                text = stringResource(id = defaultPathFieldError!!),
-                color = MaterialTheme.colorScheme.error,
-                style = EaseTheme.typography.micro,
-            )
-        }
-        if (defaultPathBrowserExpanded) {
-            OpenListDefaultPathBrowserDropdown(
-                modifier = Modifier.padding(top = 6.dp),
-                defaultPathBrowserReady = defaultPathBrowserReady,
-                defaultPathBrowserLoadState = defaultPathBrowserLoadState,
-                defaultPathBrowserEntries = defaultPathBrowserEntries,
-                defaultPathBrowserCurrentPath = defaultPathBrowserCurrentPath,
-                defaultPathBrowserSplitPaths = defaultPathBrowserSplitPaths,
-                defaultPathBrowserIsRefreshing = defaultPathBrowserIsRefreshing,
-                defaultPathBrowserScrollSnapshot = defaultPathBrowserScrollSnapshot,
-                onReload = { editStorageVM.reloadDefaultPathBrowser() },
-                onOpenRoot = { editStorageVM.openDefaultPathBrowserRoot() },
-                onNavigateDir = { path -> editStorageVM.navigateDefaultPathBrowserDir(path) },
-                onScrollSnapshotChange = { snapshot ->
-                    editStorageVM.updateDefaultPathBrowserScrollSnapshot(
-                        snapshot.index,
-                        snapshot.offset,
-                    )
-                },
-            )
-        }
-    }
+    DefaultPathConfigSection()
 }
 
 @Composable
@@ -496,10 +507,12 @@ private fun OneDriveConfig(
             )
         }
     }
+
+    DefaultPathConfigSection()
 }
 
 @Composable
-private fun OpenListDefaultPathBrowserError(
+private fun DefaultPathBrowserError(
     type: CurrentStorageStateType,
     currentPath: String,
     onReload: () -> Unit,
@@ -565,7 +578,7 @@ private fun OpenListDefaultPathBrowserError(
 }
 
 @Composable
-private fun OpenListDefaultPathBrowserDropdown(
+private fun DefaultPathBrowserDropdown(
     modifier: Modifier = Modifier,
     defaultPathBrowserReady: Boolean,
     defaultPathBrowserLoadState: CurrentStorageStateType,
@@ -630,7 +643,7 @@ private fun OpenListDefaultPathBrowserDropdown(
             }
 
             showBlockingError -> {
-                OpenListDefaultPathBrowserError(
+                DefaultPathBrowserError(
                     type = defaultPathBrowserLoadState,
                     currentPath = defaultPathBrowserCurrentPath,
                     onReload = onReload,
@@ -639,7 +652,7 @@ private fun OpenListDefaultPathBrowserDropdown(
             }
 
             else -> {
-                OpenListDefaultPathBrowserList(
+                DefaultPathBrowserList(
                     currentPath = defaultPathBrowserCurrentPath,
                     splitPaths = defaultPathBrowserSplitPaths,
                     entries = defaultPathBrowserEntries,
@@ -654,7 +667,7 @@ private fun OpenListDefaultPathBrowserDropdown(
 }
 
 @Composable
-private fun OpenListDefaultPathBrowserList(
+private fun DefaultPathBrowserList(
     currentPath: String,
     splitPaths: List<BrowserPathItem>,
     entries: List<StorageEntry>,

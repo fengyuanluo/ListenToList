@@ -278,9 +278,9 @@ mod tests {
     }
 
     #[test]
-    fn normalize_arg_upsert_storage_clears_non_openlist_default_path() {
+    fn normalize_arg_upsert_storage_clears_unsupported_default_path() {
         let mut arg = sample_arg();
-        arg.typ = StorageType::Webdav;
+        arg.typ = StorageType::Local;
         arg.default_path = "/Music".to_string();
 
         let normalized = normalize_arg_upsert_storage(arg);
@@ -289,10 +289,21 @@ mod tests {
     }
 
     #[test]
-    fn only_openlist_supports_default_path_for_now() {
+    fn openlist_webdav_and_onedrive_support_default_path() {
         assert!(storage_type_supports_default_path(StorageType::OpenList));
-        assert!(!storage_type_supports_default_path(StorageType::Webdav));
-        assert!(!storage_type_supports_default_path(StorageType::OneDrive));
+        assert!(storage_type_supports_default_path(StorageType::Webdav));
+        assert!(storage_type_supports_default_path(StorageType::OneDrive));
         assert!(!storage_type_supports_default_path(StorageType::Local));
+    }
+
+    #[test]
+    fn normalize_arg_upsert_storage_keeps_supported_default_path() {
+        let mut arg = sample_arg();
+        arg.typ = StorageType::Webdav;
+        arg.default_path = "Music/Sub/".to_string();
+
+        let normalized = normalize_arg_upsert_storage(arg);
+
+        assert_eq!("/Music/Sub", normalized.default_path);
     }
 }

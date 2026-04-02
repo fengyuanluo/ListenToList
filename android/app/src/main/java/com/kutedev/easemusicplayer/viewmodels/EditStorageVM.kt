@@ -56,6 +56,7 @@ data class Validated(
 }
 
 private data class DefaultPathBrowserConfig(
+    val typ: StorageType,
     val addr: String,
     val username: String,
     val password: String,
@@ -97,13 +98,25 @@ private fun SavedStateHandle.restoreEditStorageForm(): ArgUpsertStorage? {
 }
 
 private fun ArgUpsertStorage.defaultPathBrowserConfigOrNull(): DefaultPathBrowserConfig? {
-    if (!supportsStorageDefaultPath() || addr.isBlank()) {
+    if (!supportsStorageDefaultPath()) {
         return null
     }
-    if (!isAnonymous && (username.isBlank() || password.isBlank())) {
+
+    val ready = when (typ) {
+        StorageType.OPEN_LIST,
+        StorageType.WEBDAV -> {
+            addr.isNotBlank() && (isAnonymous || (username.isNotBlank() && password.isNotBlank()))
+        }
+
+        StorageType.ONE_DRIVE -> password.isNotBlank()
+        StorageType.LOCAL -> false
+    }
+    if (!ready) {
         return null
     }
+
     return DefaultPathBrowserConfig(
+        typ = typ,
         addr = addr.trim(),
         username = if (isAnonymous) "" else username,
         password = if (isAnonymous) "" else password,
@@ -436,7 +449,7 @@ class EditStorageVM @Inject constructor(
 
             ListStorageEntryChildrenResp.AuthenticationFailed -> {
                 _defaultPathFieldError.value = R.string.storage_edit_default_path_invalid
-                toastRepository.emitToast("认证失败，请检查 OpenList 配置")
+                toastRepository.emitToast("认证失败，请检查当前设备配置")
                 false
             }
 
@@ -457,7 +470,7 @@ class EditStorageVM @Inject constructor(
     private fun emitDefaultPathBrowserLoadFailureToast(state: CurrentStorageStateType) {
         when (state) {
             CurrentStorageStateType.AUTHENTICATION_FAILED -> {
-                toastRepository.emitToast("认证失败，请检查 OpenList 配置")
+                toastRepository.emitToast("认证失败，请检查当前设备配置")
             }
 
             CurrentStorageStateType.TIMEOUT -> {

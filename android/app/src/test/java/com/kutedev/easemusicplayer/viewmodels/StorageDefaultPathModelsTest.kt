@@ -20,29 +20,41 @@ class StorageDefaultPathModelsTest {
     }
 
     @Test
-    fun onlyOpenListSupportsDefaultPathForNow() {
+    fun openListWebdavAndOneDriveSupportDefaultPath() {
         assertTrue(StorageType.OPEN_LIST.supportsStorageDefaultPath())
-        assertFalse(StorageType.WEBDAV.supportsStorageDefaultPath())
-        assertFalse(StorageType.ONE_DRIVE.supportsStorageDefaultPath())
+        assertTrue(StorageType.WEBDAV.supportsStorageDefaultPath())
+        assertTrue(StorageType.ONE_DRIVE.supportsStorageDefaultPath())
         assertFalse(StorageType.LOCAL.supportsStorageDefaultPath())
     }
 
     @Test
-    fun browserEntryDefaultPathOnlyExistsForSupportedStorage() {
+    fun browserEntryDefaultPathExistsForSupportedStorages() {
         val openList = sampleStorage(StorageType.OPEN_LIST, defaultPath = "/Media")
         val webDav = sampleStorage(StorageType.WEBDAV, defaultPath = "/Media")
+        val oneDrive = sampleStorage(StorageType.ONE_DRIVE, defaultPath = "/Documents")
 
         assertEquals("/Media", openList.browserEntryDefaultPathOrNull())
-        assertNull(webDav.browserEntryDefaultPathOrNull())
+        assertEquals("/Media", webDav.browserEntryDefaultPathOrNull())
+        assertEquals("/Documents", oneDrive.browserEntryDefaultPathOrNull())
+    }
+
+    @Test
+    fun resolveStorageBrowserStartPathUsesExplicitPathWhenProvided() {
+        val storage = sampleStorage(StorageType.WEBDAV, defaultPath = "/Media")
+
+        assertEquals("/Target", storage.resolveStorageBrowserStartPath("/Target/"))
+        assertEquals("/Media", storage.resolveStorageBrowserStartPath())
     }
 
     @Test
     fun argSupportTracksStorageTypeMatrix() {
         val openList = sampleArg(StorageType.OPEN_LIST)
         val webDav = sampleArg(StorageType.WEBDAV)
+        val oneDrive = sampleArg(StorageType.ONE_DRIVE)
 
         assertTrue(openList.supportsStorageDefaultPath())
-        assertFalse(webDav.supportsStorageDefaultPath())
+        assertTrue(webDav.supportsStorageDefaultPath())
+        assertTrue(oneDrive.supportsStorageDefaultPath())
     }
 
     private fun sampleStorage(typ: StorageType, defaultPath: String): Storage {

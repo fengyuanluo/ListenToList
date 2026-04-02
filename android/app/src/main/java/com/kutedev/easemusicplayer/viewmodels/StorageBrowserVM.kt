@@ -88,8 +88,9 @@ class StorageBrowserVM @Inject constructor(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val storageId: StorageId = StorageId(savedStateHandle["id"]!!)
-    private val routePath = Uri.decode(savedStateHandle.get<String>(ARG_PATH) ?: "/")
-    private val restoredPath = savedStateHandle[STATE_CURRENT_PATH] ?: routePath
+    private val explicitRoutePath = savedStateHandle.get<String>(ARG_PATH)?.let(Uri::decode)
+    private val persistedPath = savedStateHandle.get<String>(STATE_CURRENT_PATH)
+    private val restoredPath = persistedPath ?: explicitRoutePath ?: "/"
     private val restoredScrollSnapshot = BrowserScrollSnapshot(
         index = savedStateHandle[STATE_SCROLL_INDEX] ?: 0,
         offset = savedStateHandle[STATE_SCROLL_OFFSET] ?: 0,
@@ -204,7 +205,10 @@ class StorageBrowserVM @Inject constructor(
                 }
                 browser.setStorage(storage.toBrowserContext())
                 if (!hasBoundStorage) {
-                    browser.restorePath(restoredPath)
+                    val initialPath = storage.resolveStorageBrowserStartPath(
+                        explicitPath = persistedPath ?: explicitRoutePath
+                    )
+                    browser.restorePath(initialPath)
                     browser.restoreCurrentScrollSnapshot(restoredScrollSnapshot)
                     browser.refresh(forceRemote = false)
                     hasBoundStorage = true
