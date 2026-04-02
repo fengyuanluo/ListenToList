@@ -786,6 +786,7 @@ class StorageBrowserVM @Inject constructor(
         return BrowserStorageContext(
             storageId = id,
             isLocal = typ == StorageType.LOCAL,
+            navigationRootCandidate = browserEntryDefaultPathOrNull(),
         )
     }
 
