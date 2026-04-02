@@ -40,6 +40,7 @@ import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.viewmodels.StoragesVM
+import com.kutedev.easemusicplayer.viewmodels.browserEntryDefaultPathOrNull
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
 import com.kutedev.easemusicplayer.core.RouteStorageBrowser
@@ -131,8 +132,9 @@ private fun ColumnScope.DevicesBlock(
                     modifier = Modifier
                         .weight(1f)
                         .clickable {
-                            val route = if (item.typ == StorageType.OPEN_LIST) {
-                                RouteStorageBrowser(item.id.value.toString(), item.defaultPath)
+                            val defaultPath = item.browserEntryDefaultPathOrNull()
+                            val route = if (defaultPath != null) {
+                                RouteStorageBrowser(item.id.value.toString(), defaultPath)
                             } else {
                                 RouteStorageBrowser(item.id.value.toString())
                             }

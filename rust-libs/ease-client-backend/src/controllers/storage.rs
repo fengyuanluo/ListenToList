@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ease_client_schema::{StorageEntryLoc, StorageId, StorageType};
+use ease_client_schema::{StorageEntryLoc, StorageId};
 use ease_remote_storage::{OneDriveBackend, SearchScope};
 
 use crate::{
@@ -13,35 +13,17 @@ use crate::{
     onedrive_oauth_url,
     services::{
         build_storage_backend_by_arg, evict_storage_backend_cache, get_storage_backend,
-        list_storage,
+        list_storage, normalize_storage_default_path_for_type,
     },
     ArgUpsertStorage, Backend,
 };
-
-fn normalize_default_storage_path(path: &str) -> String {
-    let trimmed = path.trim();
-    if trimmed.is_empty() || trimmed == "/" {
-        return "/".to_string();
-    }
-
-    let with_leading_slash = if trimmed.starts_with('/') {
-        trimmed.to_string()
-    } else {
-        format!("/{trimmed}")
-    };
-
-    with_leading_slash.trim_end_matches('/').to_string()
-}
 
 fn normalize_arg_upsert_storage(mut arg: ArgUpsertStorage) -> ArgUpsertStorage {
     if arg.is_anonymous {
         arg.username = Default::default();
         arg.password = Default::default();
     }
-    arg.default_path = normalize_default_storage_path(arg.default_path.as_str());
-    if arg.typ != StorageType::OpenList {
-        arg.default_path = "/".to_string();
-    }
+    arg.default_path = normalize_storage_default_path_for_type(arg.typ, arg.default_path.as_str());
     arg
 }
 
@@ -269,8 +251,9 @@ pub fn ct_onedrive_oauth_url() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_arg_upsert_storage, normalize_default_storage_path};
+    use super::normalize_arg_upsert_storage;
     use crate::objects::ArgUpsertStorage;
+    use crate::services::{normalize_default_storage_path, storage_type_supports_default_path};
     use ease_client_schema::StorageType;
 
     fn sample_arg() -> ArgUpsertStorage {
@@ -303,5 +286,13 @@ mod tests {
         let normalized = normalize_arg_upsert_storage(arg);
 
         assert_eq!("/", normalized.default_path);
+    }
+
+    #[test]
+    fn only_openlist_supports_default_path_for_now() {
+        assert!(storage_type_supports_default_path(StorageType::OpenList));
+        assert!(!storage_type_supports_default_path(StorageType::Webdav));
+        assert!(!storage_type_supports_default_path(StorageType::OneDrive));
+        assert!(!storage_type_supports_default_path(StorageType::Local));
     }
 }
