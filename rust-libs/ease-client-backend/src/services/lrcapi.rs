@@ -50,30 +50,18 @@ pub(crate) async fn fetch_lrcapi_music_supplement(
     query: &LrcApiQuery,
 ) -> LrcApiFetchResult {
     if !config.enabled {
-        return LrcApiFetchResult {
-            lyrics_status: LrcApiFetchStatus::Disabled,
-            cover_status: LrcApiFetchStatus::Disabled,
-            ..Default::default()
-        };
+        return status_only_result(LrcApiFetchStatus::Disabled);
     }
 
     let Some(base_url) = normalize_base_url(config.base_url.as_str()) else {
-        return LrcApiFetchResult {
-            lyrics_status: LrcApiFetchStatus::InvalidConfig,
-            cover_status: LrcApiFetchStatus::InvalidConfig,
-            ..Default::default()
-        };
+        return status_only_result(LrcApiFetchStatus::InvalidConfig);
     };
 
     let client = match build_client() {
         Ok(client) => client,
         Err(error) => {
             tracing::error!("failed to build lrcapi client: {error}");
-            return LrcApiFetchResult {
-                lyrics_status: LrcApiFetchStatus::Failed,
-                cover_status: LrcApiFetchStatus::Failed,
-                ..Default::default()
-            };
+            return status_only_result(LrcApiFetchStatus::Failed);
         }
     };
 
@@ -83,22 +71,43 @@ pub(crate) async fn fetch_lrcapi_music_supplement(
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
-    let (lyrics, lyrics_status) = if query.title.trim().is_empty() {
-        (None, LrcApiFetchStatus::Missing)
-    } else {
-        fetch_lyrics(&client, base_url.as_str(), query, auth_key).await
-    };
-    let (cover, cover_status) = if is_cover_query_empty(query) {
-        (None, LrcApiFetchStatus::Missing)
-    } else {
-        fetch_cover(&client, base_url.as_str(), query, auth_key).await
-    };
+    let query = query.clone();
+    let base_url = base_url.to_string();
+    let auth_key = auth_key.map(str::to_string);
+    let task = ease_client_tokio::tokio_runtime().spawn(async move {
+        let (lyrics, lyrics_status) = if query.title.trim().is_empty() {
+            (None, LrcApiFetchStatus::Missing)
+        } else {
+            fetch_lyrics(&client, base_url.as_str(), &query, auth_key.as_deref()).await
+        };
+        let (cover, cover_status) = if is_cover_query_empty(&query) {
+            (None, LrcApiFetchStatus::Missing)
+        } else {
+            fetch_cover(&client, base_url.as_str(), &query, auth_key.as_deref()).await
+        };
 
+        LrcApiFetchResult {
+            lyrics,
+            lyrics_status,
+            cover,
+            cover_status,
+        }
+    });
+
+    match task.await {
+        Ok(result) => result,
+        Err(error) => {
+            tracing::error!("lrcapi runtime task failed: {error}");
+            status_only_result(LrcApiFetchStatus::Failed)
+        }
+    }
+}
+
+fn status_only_result(status: LrcApiFetchStatus) -> LrcApiFetchResult {
     LrcApiFetchResult {
-        lyrics,
-        lyrics_status,
-        cover,
-        cover_status,
+        lyrics_status: status,
+        cover_status: status,
+        ..Default::default()
     }
 }
 
@@ -270,6 +279,7 @@ mod tests {
         routing::get,
         Router,
     };
+    use futures::executor::block_on;
     use std::{collections::HashMap, net::TcpListener};
     use tokio::sync::oneshot;
 
@@ -433,5 +443,27 @@ mod tests {
             assert_eq!(result.cover.expect("cover"), vec![1_u8, 2, 3, 4]);
             let _ = shutdown_tx.send(());
         });
+    }
+
+    #[test]
+    fn fetches_without_tokio_reactor_context() {
+        let (base_url, shutdown_tx) =
+            ease_client_tokio::tokio_runtime().block_on(spawn_test_server());
+        let result = block_on(fetch_lrcapi_music_supplement(
+            &LrcApiConfig {
+                enabled: true,
+                base_url,
+                auth_key: None,
+            },
+            &LrcApiQuery {
+                title: "found".to_string(),
+                artist: "Artist".to_string(),
+                album: "Album".to_string(),
+            },
+        ));
+
+        assert_eq!(result.lyrics_status, LrcApiFetchStatus::Loaded);
+        assert_eq!(result.lyrics.expect("lyrics").lines[0].text, "Hello");
+        let _ = shutdown_tx.send(());
     }
 }

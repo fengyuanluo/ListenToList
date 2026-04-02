@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 ease-remote-storage = { path = "../ease-remote-storage" }
+ease-client-tokio = { workspace = true }
 once_cell = "1.18.0"
 tracing = { workspace = true }
 num-traits = "0.2"
@@ -44,3 +45,4 @@ reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"
 ease-client-tokio = { workspace = true }
 tempfile = "3.17.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
+futures = "0.3"
