@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -452,15 +453,16 @@ private fun ReorderableCollectionItemScope.PlaylistListItem(
             shape = RoundedCornerShape(EaseTheme.radius.compact),
         )
         Column(
-            verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xxs),
+            verticalArrangement = Arrangement.Center,
             modifier = Modifier.weight(1f),
         ) {
             Text(
                 text = playlist.meta.title,
                 color = MaterialTheme.colorScheme.onSurface,
-                style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
+                style = EaseTheme.typography.sectionTitle.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.offset(y = (-2).dp),
             )
             Text(
                 text = buildAnnotatedString {
@@ -472,6 +474,7 @@ private fun ReorderableCollectionItemScope.PlaylistListItem(
                 style = EaseTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = EaseTheme.spacing.xxs + 2.dp),
             )
         }
         if (mode == PlaylistsMode.Adjust) {
