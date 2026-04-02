@@ -1,5 +1,7 @@
 package com.kutedev.easemusicplayer.widgets.musics
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -35,29 +37,35 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseContextMenu
@@ -85,7 +93,9 @@ import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
 import com.kutedev.easemusicplayer.singleton.isReadyForFetch
 import com.kutedev.easemusicplayer.utils.formatDuration
+import com.kutedev.easemusicplayer.utils.resolveCenteredLyricIndex
 import com.kutedev.easemusicplayer.utils.resolveLyricIndex
+import com.kutedev.easemusicplayer.utils.LyricViewportItem
 import com.kutedev.easemusicplayer.utils.toMusicDurationMs
 import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_backend.LyricLine
@@ -96,9 +106,50 @@ import java.time.Duration
 import kotlin.collections.emptyList
 import kotlin.math.absoluteValue
 import kotlin.math.sign
+import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+
+private val LyricFontFamily = FontFamily(Font(R.font.noto_sans))
+
+private fun lyricTextAlpha(distance: Int): Float {
+    return when {
+        distance == 0 -> 1f
+        distance == 1 -> 0.86f
+        distance <= 3 -> 0.66f
+        else -> 0.46f
+    }
+}
+
+@Composable
+private fun lyricTextStyle(distance: Int) = when {
+    distance == 0 -> EaseTheme.typography.heroTitle.copy(
+        fontFamily = LyricFontFamily,
+        fontWeight = FontWeight.Bold,
+    )
+    distance == 1 -> EaseTheme.typography.sectionTitle.copy(
+        fontFamily = LyricFontFamily,
+        fontWeight = FontWeight.SemiBold,
+    )
+    distance <= 3 -> EaseTheme.typography.cardTitle.copy(
+        fontFamily = LyricFontFamily,
+        fontWeight = FontWeight.Medium,
+    )
+    else -> EaseTheme.typography.body.copy(
+        fontFamily = LyricFontFamily,
+        fontWeight = FontWeight.Normal,
+    )
+}
+
+@Composable
+private fun lyricTextColor(distance: Int): Color {
+    return when {
+        distance == 0 -> MaterialTheme.colorScheme.primary
+        distance == 1 -> MaterialTheme.colorScheme.onSurface
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
 
 @Composable
 private fun MusicPlayerHeader(
@@ -321,10 +372,18 @@ internal fun MusicSlider(
 
 
 @Composable
-private fun CoverImage(dataSourceKey: DataSourceKey?) {
+private fun CoverImage(
+    dataSourceKey: DataSourceKey?,
+    enableLyricTap: Boolean = false,
+    onClick: () -> Unit = {},
+) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
+            .clickable(
+                enabled = enableLyricTap,
+                onClick = onClick,
+            )
             .fillMaxSize()
     ) {
         MusicCover(
@@ -350,6 +409,8 @@ private fun MusicLyric(
     lyricLoadedState: LyricLoadState,
     emptyActionLabel: String,
     onClickEmptyAction: () -> Unit,
+    onTapLyric: () -> Unit,
+    onSeekToLyric: (ULong) -> Unit,
     widgetHeight: Int,
 ) {
     val density = LocalDensity.current
@@ -357,10 +418,51 @@ private fun MusicLyric(
         widgetHeight.toDp()
     }
     val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val interactionSource = remember { MutableInteractionSource() }
+    var manualSeeking by remember(lyrics) { mutableStateOf(false) }
+    var pendingSeekLyricIndex by remember(lyrics) { mutableStateOf<Int?>(null) }
+    val highlightedLyricIndex by remember(lyricIndex, manualSeeking, listState, lyrics) {
+        derivedStateOf {
+            if (!manualSeeking) {
+                pendingSeekLyricIndex ?: lyricIndex
+            } else {
+                resolveCenteredLyricIndex(
+                    viewportStartOffset = listState.layoutInfo.viewportStartOffset,
+                    viewportEndOffset = listState.layoutInfo.viewportEndOffset,
+                    visibleItems = listState.layoutInfo.visibleItemsInfo.map { item ->
+                        LyricViewportItem(
+                            index = item.index,
+                            offset = item.offset,
+                            size = item.size,
+                        )
+                    },
+                    lyricCount = lyrics.size,
+                ) ?: lyricIndex
+            }
+        }
+    }
+    val currentHighlightedLyricIndex by rememberUpdatedState(highlightedLyricIndex)
+    val currentLyricIndex by rememberUpdatedState(lyricIndex)
+    val currentLyrics by rememberUpdatedState(lyrics)
 
-    LaunchedEffect(lyricIndex, widgetHeight, lyricLoadedState) {
-        if (lyricLoadedState == LyricLoadState.LOADED) {
-            listState.animateScrollToItem(lyricIndex + 1, -(widgetHeight / 2))
+    LaunchedEffect(lyricIndex, pendingSeekLyricIndex) {
+        val targetIndex = pendingSeekLyricIndex ?: return@LaunchedEffect
+        if (lyricIndex >= 0 && (lyricIndex - targetIndex).absoluteValue <= 1) {
+            pendingSeekLyricIndex = null
+        }
+    }
+
+    LaunchedEffect(lyricIndex, widgetHeight, lyricLoadedState, manualSeeking, lyrics) {
+        if (
+            !manualSeeking &&
+            lyricLoadedState == LyricLoadState.LOADED &&
+            lyrics.isNotEmpty()
+        ) {
+            val targetLyricIndex = (pendingSeekLyricIndex ?: lyricIndex)
+                .coerceAtLeast(0)
+                .coerceAtMost(lyrics.lastIndex)
+            listState.animateScrollToItem(targetLyricIndex + 1, -(widgetHeight / 2))
         }
     }
 
@@ -426,33 +528,124 @@ private fun MusicLyric(
             return
         }
 
-        Column {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onTapLyric,
+                )
+                .draggable(
+                    state = rememberDraggableState { delta ->
+                        listState.dispatchRawDelta(-delta)
+                    },
+                    orientation = Orientation.Vertical,
+                    enabled = lyrics.isNotEmpty(),
+                    onDragStarted = {
+                        manualSeeking = true
+                    },
+                    onDragStopped = {
+                        val targetLyricIndex = currentHighlightedLyricIndex.takeIf { it in currentLyrics.indices }
+                            ?: currentLyricIndex.takeIf { it in currentLyrics.indices }
+                        if (targetLyricIndex != null) {
+                            val targetLyric = currentLyrics[targetLyricIndex]
+                            pendingSeekLyricIndex = targetLyricIndex
+                            coroutineScope.launch {
+                                listState.animateScrollToItem(targetLyricIndex + 1, -(widgetHeight / 2))
+                            }
+                            onSeekToLyric(targetLyric.duration.toMillis().toULong())
+                        }
+                        manualSeeking = false
+                    },
+                ),
+        ) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 userScrollEnabled = false,
             ) {
                 item {
                     Box(modifier = Modifier.height(widgetHeightDp / 2))
                 }
                 itemsIndexed(lyrics) { index, lyric ->
-                    val isCurrent = index == lyricIndex
-                    val textColor =
-                        if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    val distance = if (highlightedLyricIndex >= 0) {
+                        (index - highlightedLyricIndex).absoluteValue
+                    } else {
+                        Int.MAX_VALUE
+                    }
+                    val animatedColor by animateColorAsState(
+                        targetValue = lyricTextColor(distance),
+                        label = "lyric-color",
+                    )
+                    val animatedAlpha by animateFloatAsState(
+                        targetValue = lyricTextAlpha(distance),
+                        label = "lyric-alpha",
+                    )
+                    val animatedScale by animateFloatAsState(
+                        targetValue = when {
+                            distance == 0 -> 1.08f
+                            distance == 1 -> 1.0f
+                            else -> 0.96f
+                        },
+                        label = "lyric-scale",
+                    )
 
                     Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp)
+                            .padding(vertical = EaseTheme.spacing.sm)
                     ) {
                         Text(
                             text = lyric.text,
-                            color = textColor,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.align(Alignment.CenterStart)
+                            color = animatedColor,
+                            style = lyricTextStyle(distance),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = EaseTheme.spacing.xs)
+                                .graphicsLayer {
+                                    alpha = animatedAlpha
+                                    scaleX = animatedScale
+                                    scaleY = animatedScale
+                                }
                         )
                     }
+                }
+                item {
+                    Box(modifier = Modifier.height(widgetHeightDp / 2))
+                }
+            }
+
+            if (manualSeeking && highlightedLyricIndex in lyrics.indices) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    Text(
+                        text = formatDuration(lyrics[highlightedLyricIndex].duration),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = EaseTheme.typography.caption.copy(
+                            fontFamily = LyricFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(EaseTheme.radius.control))
+                            .background(EaseTheme.surfaces.card)
+                            .padding(
+                                horizontal = EaseTheme.spacing.sm,
+                                vertical = EaseTheme.spacing.xxs,
+                            )
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(top = EaseTheme.spacing.xs)
+                            .width(56.dp)
+                            .height(2.dp)
+                            .clip(RoundedCornerShape(EaseTheme.radius.control))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.32f))
+                    )
                 }
             }
         }
@@ -474,7 +667,9 @@ private fun MusicPlayerBody(
     lyricLoadedState: LyricLoadState,
     emptyActionLabel: String,
     onClickLyricAction: () -> Unit,
-    onResetLyric: () -> Unit,
+    onShowLyric: () -> Unit,
+    onHideLyric: () -> Unit,
+    onSeekToLyric: (ULong) -> Unit,
 ) {
     val density = LocalDensity.current
     val anchoredDraggableState = rememberCustomAnchoredDraggableState(
@@ -513,13 +708,13 @@ private fun MusicPlayerBody(
                     nextTickOnMain {
                         onPrev()
                         anchoredDraggableState.update(0f)
-                        onResetLyric()
+                        onHideLyric()
                     }
                 } else if (value == -widgetWidth.toFloat()) {
                     nextTickOnMain {
                         onNext()
                         anchoredDraggableState.update(0f)
-                        onResetLyric()
+                        onHideLyric()
                     }
                 }
             }
@@ -583,7 +778,11 @@ private fun MusicPlayerBody(
             contentAlignment = Alignment.Center,
         ) {
             if (!showLyric) {
-                CoverImage(dataSourceKey = cover)
+                CoverImage(
+                    dataSourceKey = cover,
+                    enableLyricTap = lyricLoadedState == LyricLoadState.LOADED,
+                    onClick = onShowLyric,
+                )
             } else {
                 MusicLyric(
                     lyricIndex = lyricIndex,
@@ -592,6 +791,8 @@ private fun MusicPlayerBody(
                     emptyActionLabel = emptyActionLabel,
                     onClickEmptyAction = onClickLyricAction,
                     widgetHeight = widgetHeight,
+                    onTapLyric = onHideLyric,
+                    onSeekToLyric = onSeekToLyric,
                 )
             }
         }
@@ -1062,7 +1263,15 @@ fun MusicPlayerPage(
                     lyrics = displayLyrics,
                     emptyActionLabel = lyricActionLabel,
                     onClickLyricAction = onLyricAction,
-                    onResetLyric = { showLyric = false }
+                    onShowLyric = {
+                        if (hasLyric) {
+                            showLyric = true
+                        }
+                    },
+                    onHideLyric = { showLyric = false },
+                    onSeekToLyric = { targetMs ->
+                        playerVM.seek(targetMs)
+                    },
                 )
             }
             Column(
@@ -1236,7 +1445,9 @@ private fun MusicPlayerBodyPreview() {
                 lyricLoadedState = LyricLoadState.LOADING,
                 emptyActionLabel = "Retry",
                 onClickLyricAction = {},
-                onResetLyric = {}
+                onShowLyric = {},
+                onHideLyric = {},
+                onSeekToLyric = {}
             )
         }
         Box(
@@ -1322,7 +1533,9 @@ private fun MusicLyricPreview() {
                 lyricLoadedState = lyricLoadedState,
                 emptyActionLabel = "Retry",
                 widgetHeight = widgetHeight,
-                onClickEmptyAction = {}
+                onClickEmptyAction = {},
+                onTapLyric = {},
+                onSeekToLyric = {}
             )
         }
     }

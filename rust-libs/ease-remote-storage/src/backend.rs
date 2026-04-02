@@ -168,12 +168,47 @@ pub trait StorageBackend {
 
 #[cfg(test)]
 mod test {
-    use std::{convert::Infallible, net::SocketAddr, time::Duration};
+    use std::{
+        convert::Infallible,
+        fs,
+        future::Future,
+        net::SocketAddr,
+        pin::Pin,
+        sync::Arc,
+        task::{Context, Poll, Wake, Waker},
+        thread,
+        time::Duration,
+    };
 
     use bytes::Bytes;
     use hyper::{Body, Response, StatusCode};
 
     use super::{StorageBackendError, StreamFile};
+
+    struct ThreadWaker(thread::Thread);
+
+    impl Wake for ThreadWaker {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+
+    fn block_on_without_tokio<F: Future>(future: F) -> F::Output {
+        let waker: Waker = Waker::from(Arc::new(ThreadWaker(thread::current())));
+        let mut context = Context::from_waker(&waker);
+        let mut future = Box::pin(future);
+
+        loop {
+            match Pin::as_mut(&mut future).poll(&mut context) {
+                Poll::Ready(value) => return value,
+                Poll::Pending => thread::park(),
+            }
+        }
+    }
 
     #[tokio::test]
     async fn stream_file_chunk_timeout_surfaces_timeout_error() {
@@ -212,6 +247,33 @@ mod test {
         }
 
         handle.abort();
+    }
+
+    #[test]
+    fn stream_file_bytes_reads_local_file_outside_tokio_context() {
+        let dir = std::env::temp_dir().join(format!(
+            "listen-to-list-stream-file-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let file_path = dir.join("lyric.lrc");
+        fs::write(&file_path, b"[00:01.00]hello\n").expect("write file");
+
+        let file = StreamFile::new_from_file(
+            file_path.to_string_lossy().to_string(),
+            fs::metadata(&file_path).expect("metadata").len() as usize,
+            0,
+        );
+
+        let bytes = block_on_without_tokio(file.bytes()).expect("read bytes");
+        assert_eq!(bytes.as_ref(), b"[00:01.00]hello\n");
+
+        let _ = fs::remove_file(&file_path);
+        let _ = fs::remove_dir(&dir);
     }
 }
 
@@ -378,7 +440,9 @@ impl StreamFile {
             StreamFileInner::Response(response) => response.bytes().await?,
             StreamFileInner::Total(buf) => buf,
             StreamFileInner::FilePath(path) => {
-                let buf = tokio::fs::read(path).await?;
+                let buf = tokio_runtime()
+                    .spawn(async move { tokio::fs::read(path).await })
+                    .await??;
                 Bytes::from(buf)
             }
         };
