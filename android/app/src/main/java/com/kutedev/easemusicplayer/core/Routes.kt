@@ -68,6 +68,10 @@ fun RouteThemeSettings(): String {
     return "Settings/Theme"
 }
 
+fun RouteLrcApiSettings(): String {
+    return "Settings/LrcApi"
+}
+
 fun RouteDownloadManager(): String {
     return "Settings/Downloads"
 }

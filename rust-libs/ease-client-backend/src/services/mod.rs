@@ -1,4 +1,5 @@
 mod app;
+mod lrcapi;
 mod lyrics;
 mod music;
 mod playlist;
@@ -6,6 +7,7 @@ mod preference;
 mod storage;
 
 pub use app::*;
+pub use lrcapi::*;
 pub use music::*;
 pub use playlist::*;
 pub(crate) use preference::*;

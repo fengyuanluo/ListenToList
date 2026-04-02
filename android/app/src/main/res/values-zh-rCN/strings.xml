@@ -19,6 +19,16 @@
     <string name="setting_theme_background_pick">选择图片</string>
     <string name="setting_theme_background_clear">清除背景</string>
     <string name="setting_theme_background_empty">未设置背景图片</string>
+    <string name="setting_lrcapi_entry_title">LrcApi</string>
+    <string name="setting_lrcapi_entry_desc">为当前播放歌曲自动补全封面与歌词</string>
+    <string name="setting_lrcapi_page_desc">连接你自建的 LrcApi legacy /lyrics 与 /cover 接口。封面会保存到本地数据库；歌词只在播放器界面内缓存显示。</string>
+    <string name="setting_lrcapi_enabled">启用自动补全</string>
+    <string name="setting_lrcapi_base_url">服务地址</string>
+    <string name="setting_lrcapi_base_url_hint">示例：https://example.com</string>
+    <string name="setting_lrcapi_auth_key">鉴权密钥（可选）</string>
+    <string name="setting_lrcapi_apply">应用更改</string>
+    <string name="setting_lrcapi_unsaved_hint">当前修改只是草稿，点击“应用更改”后才会生效。</string>
+    <string name="setting_lrcapi_reset">重置 LrcApi 设置</string>
     <string name="setting_git_repo">Git 仓库</string>
     <string name="setting_version">版本</string>
     <string name="storage_edit_username">用户名</string>
@@ -91,6 +101,10 @@
     <string name="music_lyric_no_desc">找不到歌词</string>
     <string name="music_lyric_try_add_desc">点击尝试添加</string>
     <string name="music_lyric_fail">加载歌词失败</string>
+    <string name="music_lyric_retry_fetch">通过 LrcApi 重试</string>
+    <string name="music_lyric_configure_lrcapi">配置 LrcApi</string>
+    <string name="music_lyric_fetch_from_lrcapi">从 LrcApi 获取歌词</string>
+    <string name="music_lyric_open_lrcapi_settings">打开 LrcApi 设置</string>
     <string name="music_queue_sheet_title">当前播放队列</string>
     <string name="music_queue_sheet_temporary">临时播放队列</string>
     <string name="storage_edit_oauth">OAuth</string>
@@ -169,5 +183,8 @@
     <string name="download_settings_reset_directory">恢复默认</string>
     <string name="download_delete_title">删除下载任务</string>
     <string name="download_delete_remove_file">同时删除本地文件</string>
+    <string name="lrcapi_toast_auth_failed">LrcApi 认证失败，或当前配置无效。</string>
+    <string name="lrcapi_toast_fetch_failed">从 LrcApi 获取歌词失败。</string>
+    <string name="lrcapi_toast_lyric_missing">LrcApi 中未找到歌词。</string>
 
 </resources>

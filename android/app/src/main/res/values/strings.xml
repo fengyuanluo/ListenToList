@@ -19,6 +19,16 @@
     <string name="setting_theme_background_pick">选择图片</string>
     <string name="setting_theme_background_clear">清除背景</string>
     <string name="setting_theme_background_empty">未设置背景图片</string>
+    <string name="setting_lrcapi_entry_title">LrcApi</string>
+    <string name="setting_lrcapi_entry_desc">Auto-fill cover art and lyrics for the current song</string>
+    <string name="setting_lrcapi_page_desc">Connect your self-hosted LrcApi legacy /lyrics and /cover endpoints. Cover art will be saved locally; lyrics are only cached for playback UI.</string>
+    <string name="setting_lrcapi_enabled">Enable auto fill</string>
+    <string name="setting_lrcapi_base_url">SERVICE URL</string>
+    <string name="setting_lrcapi_base_url_hint">Example: https://example.com</string>
+    <string name="setting_lrcapi_auth_key">AUTH KEY (OPTIONAL)</string>
+    <string name="setting_lrcapi_apply">Apply changes</string>
+    <string name="setting_lrcapi_unsaved_hint">Draft changes are only applied after you tap Apply.</string>
+    <string name="setting_lrcapi_reset">Reset LrcApi settings</string>
     <string name="setting_git_repo">Git Repository</string>
     <string name="setting_version">Version</string>
     <string name="storage_edit_username">USERNAME</string>
@@ -91,6 +101,10 @@
     <string name="music_lyric_no_desc">No Lyric.</string>
     <string name="music_lyric_try_add_desc">Try add one.</string>
     <string name="music_lyric_fail">Failed to load lyric.</string>
+    <string name="music_lyric_retry_fetch">Retry from LrcApi</string>
+    <string name="music_lyric_configure_lrcapi">Configure LrcApi</string>
+    <string name="music_lyric_fetch_from_lrcapi">Fetch from LrcApi</string>
+    <string name="music_lyric_open_lrcapi_settings">Open LrcApi Settings</string>
     <string name="music_queue_sheet_title">Current Queue</string>
     <string name="music_queue_sheet_temporary">Temporary queue</string>
     <string name="storage_edit_oauth">OAuth</string>
@@ -186,5 +200,8 @@
     <string name="download_settings_reset_directory">Use default</string>
     <string name="download_delete_title">Delete download task</string>
     <string name="download_delete_remove_file">Also delete downloaded file</string>
+    <string name="lrcapi_toast_auth_failed">LrcApi authentication failed or the config is invalid.</string>
+    <string name="lrcapi_toast_fetch_failed">Failed to fetch lyrics from LrcApi.</string>
+    <string name="lrcapi_toast_lyric_missing">No lyrics found in LrcApi.</string>
 
 </resources>

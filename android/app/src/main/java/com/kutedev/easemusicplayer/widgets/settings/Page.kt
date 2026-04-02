@@ -31,6 +31,7 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteDebugMore
 import com.kutedev.easemusicplayer.core.RouteDownloadManager
+import com.kutedev.easemusicplayer.core.RouteLrcApiSettings
 import com.kutedev.easemusicplayer.core.RouteLog
 import com.kutedev.easemusicplayer.core.RouteThemeSettings
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
@@ -132,6 +133,14 @@ fun SettingSubpage() {
             content = stringResource(id = R.string.setting_theme_entry_desc),
             onClick = {
                 navController.navigate(RouteThemeSettings())
+            }
+        )
+        Item(
+            iconPainter = painterResource(R.drawable.icon_lyrics),
+            title = stringResource(id = R.string.setting_lrcapi_entry_title),
+            content = stringResource(id = R.string.setting_lrcapi_entry_desc),
+            onClick = {
+                navController.navigate(RouteLrcApiSettings())
             }
         )
         Item(

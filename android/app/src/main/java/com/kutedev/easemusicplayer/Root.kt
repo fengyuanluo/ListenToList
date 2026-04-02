@@ -26,12 +26,13 @@ import androidx.navigation.navArgument
 import androidx.compose.ui.graphics.Color
 import com.kutedev.easemusicplayer.ui.theme.EaseMusicPlayerTheme
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
-    import com.kutedev.easemusicplayer.core.LocalNavController
+import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
 import com.kutedev.easemusicplayer.core.RouteDebugMore
 import com.kutedev.easemusicplayer.core.RouteDownloadManager
 import com.kutedev.easemusicplayer.core.RouteHome
 import com.kutedev.easemusicplayer.core.RouteImport
+import com.kutedev.easemusicplayer.core.RouteLrcApiSettings
 import com.kutedev.easemusicplayer.core.RouteLog
 import com.kutedev.easemusicplayer.core.RouteMusicPlayer
 import com.kutedev.easemusicplayer.core.RoutePlaylist
@@ -55,6 +56,7 @@ import com.kutedev.easemusicplayer.widgets.playlists.PlaylistPage
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchPage
 import com.kutedev.easemusicplayer.widgets.settings.DebugMorePage
 import com.kutedev.easemusicplayer.widgets.settings.DownloadManagerPage
+import com.kutedev.easemusicplayer.widgets.settings.LrcApiSettingsPage
 import com.kutedev.easemusicplayer.widgets.settings.LogPage
 import com.kutedev.easemusicplayer.widgets.settings.ThemeSettingsPage
 
@@ -201,6 +203,9 @@ fun Root() {
                                 }
                                 composable(RouteThemeSettings()) {
                                     ThemeSettingsPage()
+                                }
+                                composable(RouteLrcApiSettings()) {
+                                    LrcApiSettingsPage()
                                 }
                                 composable(RouteDownloadManager()) {
                                     DownloadManagerPage()
