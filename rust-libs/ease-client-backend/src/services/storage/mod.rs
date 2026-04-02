@@ -24,23 +24,38 @@ pub(crate) struct StorageState {
     cache: RwLock<HashMap<StorageId, Arc<dyn StorageBackend + Send + Sync + 'static>>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LoadedStorageEntryData {
+    pub bytes: Vec<u8>,
+    pub content_type: Option<String>,
+    pub name: String,
+}
+
 #[instrument]
 pub(crate) async fn load_storage_entry_data(
     cx: &BackendContext,
     loc: &StorageEntryLoc,
-) -> BResult<Option<Vec<u8>>> {
+) -> BResult<Option<LoadedStorageEntryData>> {
     let loc = loc.clone();
     let backend = get_storage_backend(cx, loc.storage_id)?;
     if let Some(backend) = backend {
         tracing::trace!("start load");
         let ret = match backend.get(loc.path, 0).await {
-            Ok(data) => match data.bytes().await {
-                Ok(bytes) => Ok(Some(bytes.to_vec())),
-                Err(e) => {
-                    tracing::warn!("load storage entry bytes failed: {:?}", e);
-                    Ok(None)
+            Ok(data) => {
+                let content_type = data.content_type().map(ToOwned::to_owned);
+                let name = data.name().to_string();
+                match data.bytes().await {
+                    Ok(bytes) => Ok(Some(LoadedStorageEntryData {
+                        bytes: bytes.to_vec(),
+                        content_type,
+                        name,
+                    })),
+                    Err(e) => {
+                        tracing::warn!("load storage entry bytes failed: {:?}", e);
+                        Ok(None)
+                    }
                 }
-            },
+            }
             Err(e) => {
                 tracing::warn!("load storage entry failed: {:?}", e);
                 Ok(None)
