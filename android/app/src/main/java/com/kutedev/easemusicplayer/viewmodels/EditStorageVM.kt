@@ -44,14 +44,6 @@ private const val STATE_DEFAULT_PATH_BROWSER_SCROLL_INDEX = "edit_storage_defaul
 private const val STATE_DEFAULT_PATH_BROWSER_SCROLL_OFFSET = "edit_storage_default_path_browser_scroll_offset"
 private const val DEFAULT_PATH_BROWSER_STORAGE_VALUE = -1L
 
-private fun normalizeStorageDefaultPath(path: String): String {
-    val trimmed = path.trim()
-    if (trimmed.isBlank()) {
-        return "/"
-    }
-    return normalizeBrowserPath(trimmed)
-}
-
 data class Validated(
     val addrEmpty: Boolean = false,
     val aliasEmpty: Boolean = false,
@@ -63,7 +55,7 @@ data class Validated(
     }
 }
 
-private data class OpenListBrowserConfig(
+private data class DefaultPathBrowserConfig(
     val addr: String,
     val username: String,
     val password: String,
@@ -72,7 +64,7 @@ private data class OpenListBrowserConfig(
 
 private data class DefaultPathBrowserBinding(
     val expanded: Boolean,
-    val config: OpenListBrowserConfig?,
+    val config: DefaultPathBrowserConfig?,
 )
 
 private fun defaultArgUpsertStorage(): ArgUpsertStorage {
@@ -104,14 +96,14 @@ private fun SavedStateHandle.restoreEditStorageForm(): ArgUpsertStorage? {
     )
 }
 
-private fun ArgUpsertStorage.openListBrowserConfigOrNull(): OpenListBrowserConfig? {
-    if (typ != StorageType.OPEN_LIST || addr.isBlank()) {
+private fun ArgUpsertStorage.defaultPathBrowserConfigOrNull(): DefaultPathBrowserConfig? {
+    if (!supportsStorageDefaultPath() || addr.isBlank()) {
         return null
     }
     if (!isAnonymous && (username.isBlank() || password.isBlank())) {
         return null
     }
-    return OpenListBrowserConfig(
+    return DefaultPathBrowserConfig(
         addr = addr.trim(),
         username = if (isAnonymous) "" else username,
         password = if (isAnonymous) "" else password,
@@ -151,14 +143,14 @@ class EditStorageVM @Inject constructor(
     )
     private val _defaultPathFieldError = MutableStateFlow<Int?>(null)
     private var _testJob: Job? = null
-    private var boundDefaultPathBrowserConfig: OpenListBrowserConfig? = null
+    private var boundDefaultPathBrowserConfig: DefaultPathBrowserConfig? = null
 
     private val defaultPathBrowser = DirectoryBrowserController(
         scope = viewModelScope,
         initialPath = restoredDefaultPathBrowserPath,
         initialScrollSnapshot = restoredDefaultPathBrowserScrollSnapshot,
         listEntriesRemote = { _, path ->
-            listInlineOpenListEntries(path)
+            listInlineDefaultPathEntries(path)
         },
         hasLocalPermission = { true },
         onPersistPath = { savedStateHandle[STATE_DEFAULT_PATH_BROWSER_CURRENT_PATH] = it },
@@ -182,7 +174,7 @@ class EditStorageVM @Inject constructor(
     val defaultPathBrowserExpanded = _defaultPathBrowserExpanded.asStateFlow()
     val defaultPathFieldError = _defaultPathFieldError.asStateFlow()
     val defaultPathBrowserReady = form.map { currentForm ->
-        currentForm.openListBrowserConfigOrNull() != null
+        currentForm.defaultPathBrowserConfigOrNull() != null
     }.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val defaultPathBrowserCurrentPath = defaultPathBrowser.currentPath
     val defaultPathBrowserSplitPaths = defaultPathBrowser.splitPaths
@@ -230,7 +222,7 @@ class EditStorageVM @Inject constructor(
         viewModelScope.launch {
             combine(
                 _defaultPathBrowserExpanded,
-                _form.map { currentForm -> currentForm.openListBrowserConfigOrNull() }
+                _form.map { currentForm -> currentForm.defaultPathBrowserConfigOrNull() }
                     .distinctUntilChanged(),
             ) { expanded, config ->
                 DefaultPathBrowserBinding(expanded = expanded, config = config)
@@ -251,7 +243,7 @@ class EditStorageVM @Inject constructor(
             }
         }
 
-        if (_defaultPathBrowserExpanded.value && initialForm.openListBrowserConfigOrNull() != null) {
+        if (_defaultPathBrowserExpanded.value && initialForm.defaultPathBrowserConfigOrNull() != null) {
             bindDefaultPathBrowser(forceRemote = false)
         }
     }
@@ -275,7 +267,7 @@ class EditStorageVM @Inject constructor(
     }
 
     fun expandDefaultPathBrowser() {
-        if (form.value.typ != StorageType.OPEN_LIST) {
+        if (!form.value.supportsStorageDefaultPath()) {
             return
         }
         val preferredPath = if (_defaultPathBrowserExpanded.value) {
@@ -291,14 +283,14 @@ class EditStorageVM @Inject constructor(
     }
 
     fun collapseDefaultPathBrowser() {
-        if (form.value.typ != StorageType.OPEN_LIST) {
+        if (!form.value.supportsStorageDefaultPath()) {
             return
         }
         setDefaultPathBrowserExpanded(false)
     }
 
     fun commitDefaultPathInput() {
-        if (form.value.typ != StorageType.OPEN_LIST) {
+        if (!form.value.supportsStorageDefaultPath()) {
             return
         }
         clearDefaultPathFieldError()
@@ -317,7 +309,7 @@ class EditStorageVM @Inject constructor(
     }
 
     fun navigateDefaultPathBrowserDir(path: String) {
-        if (form.value.typ != StorageType.OPEN_LIST) {
+        if (!form.value.supportsStorageDefaultPath()) {
             return
         }
         clearDefaultPathFieldError()
@@ -343,9 +335,9 @@ class EditStorageVM @Inject constructor(
         )
     }
 
-    private suspend fun listInlineOpenListEntries(path: String): ListStorageEntryChildrenResp {
+    private suspend fun listInlineDefaultPathEntries(path: String): ListStorageEntryChildrenResp {
         val normalizedForm = normalizedFormSnapshot()
-        if (normalizedForm.typ != StorageType.OPEN_LIST) {
+        if (!normalizedForm.supportsStorageDefaultPath()) {
             return ListStorageEntryChildrenResp.Unknown
         }
         return bridge.run {
@@ -365,7 +357,7 @@ class EditStorageVM @Inject constructor(
             return
         }
 
-        val browserConfig = form.value.openListBrowserConfigOrNull() ?: run {
+        val browserConfig = form.value.defaultPathBrowserConfigOrNull() ?: run {
             unbindDefaultPathBrowser()
             return
         }
@@ -428,7 +420,7 @@ class EditStorageVM @Inject constructor(
         _defaultPathFieldError.value = null
     }
 
-    private suspend fun validateOpenListDefaultPath(form: ArgUpsertStorage): Boolean {
+    private suspend fun validateDefaultPath(form: ArgUpsertStorage): Boolean {
         val result = bridge.run {
             ctListStorageEntryChildrenByArg(
                 it,
@@ -516,7 +508,7 @@ class EditStorageVM @Inject constructor(
         val next = block(previous.copy())
         if (
             previous.defaultPath != next.defaultPath ||
-                previous.openListBrowserConfigOrNull() != next.openListBrowserConfigOrNull()
+            previous.defaultPathBrowserConfigOrNull() != next.defaultPathBrowserConfigOrNull()
         ) {
             clearDefaultPathFieldError()
         }
@@ -548,7 +540,7 @@ class EditStorageVM @Inject constructor(
             setFormValue(newForm)
         }
         clearDefaultPathFieldError()
-        if (typ != StorageType.OPEN_LIST) {
+        if (!typ.supportsStorageDefaultPath()) {
             setDefaultPathBrowserExpanded(false)
         }
         _validated.value = Validated()
@@ -589,7 +581,7 @@ class EditStorageVM @Inject constructor(
 
         val normalizedForm = normalizedFormSnapshot()
         setFormValue(normalizedForm)
-        if (normalizedForm.typ == StorageType.OPEN_LIST && !validateOpenListDefaultPath(normalizedForm)) {
+        if (normalizedForm.supportsStorageDefaultPath() && !validateDefaultPath(normalizedForm)) {
             return false
         }
         storageRepository.upsertStorage(normalizedForm)

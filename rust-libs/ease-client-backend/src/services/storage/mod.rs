@@ -31,6 +31,33 @@ pub(crate) struct LoadedStorageEntryData {
     pub name: String,
 }
 
+pub(crate) fn normalize_default_storage_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() || trimmed == "/" {
+        return "/".to_string();
+    }
+
+    let with_leading_slash = if trimmed.starts_with('/') {
+        trimmed.to_string()
+    } else {
+        format!("/{trimmed}")
+    };
+
+    with_leading_slash.trim_end_matches('/').to_string()
+}
+
+pub(crate) fn storage_type_supports_default_path(typ: StorageType) -> bool {
+    matches!(typ, StorageType::OpenList)
+}
+
+pub(crate) fn normalize_storage_default_path_for_type(typ: StorageType, path: &str) -> String {
+    if storage_type_supports_default_path(typ) {
+        normalize_default_storage_path(path)
+    } else {
+        "/".to_string()
+    }
+}
+
 #[instrument]
 pub(crate) async fn load_storage_entry_data(
     cx: &BackendContext,
