@@ -88,6 +88,9 @@ internal data class PlaybackQueuePlan(
 data class ProbedMusicMetadata(
     val duration: Duration?,
     val cover: ByteArray?,
+    val title: String?,
+    val artist: String?,
+    val album: String?,
 )
 
 internal fun repeatModeFor(playMode: PlayMode): Int {
@@ -257,6 +260,16 @@ private fun extractDuration(metadataRetriever: MediaMetadataRetriever): Duration
     return Duration.ofMillis(durationMs)
 }
 
+private fun extractMetadataText(
+    metadataRetriever: MediaMetadataRetriever,
+    keyCode: Int,
+): String? {
+    return metadataRetriever
+        .extractMetadata(keyCode)
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+}
+
 suspend fun probeMusicMetadataDirectly(
     bridge: Bridge,
     musicId: MusicId,
@@ -289,10 +302,19 @@ suspend fun probeMusicMetadataDirectly(
             }
         val duration = extractDuration(metadataRetriever)
         val cover = metadataRetriever.embeddedPicture
-        if (duration == null && cover == null) {
+        val title = extractMetadataText(metadataRetriever, MediaMetadataRetriever.METADATA_KEY_TITLE)
+        val artist = extractMetadataText(metadataRetriever, MediaMetadataRetriever.METADATA_KEY_ARTIST)
+        val album = extractMetadataText(metadataRetriever, MediaMetadataRetriever.METADATA_KEY_ALBUM)
+        if (duration == null && cover == null && title == null && artist == null && album == null) {
             return@withContext null
         }
-        ProbedMusicMetadata(duration = duration, cover = cover)
+        ProbedMusicMetadata(
+            duration = duration,
+            cover = cover,
+            title = title,
+            artist = artist,
+            album = album,
+        )
     } catch (_: Throwable) {
         null
     } finally {

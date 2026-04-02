@@ -3,6 +3,7 @@ package com.kutedev.easemusicplayer.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kutedev.easemusicplayer.singleton.DownloadRepository
+import com.kutedev.easemusicplayer.singleton.LrcApiRepository
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
 import com.kutedev.easemusicplayer.utils.formatDuration
@@ -15,7 +16,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_schema.PlaylistId
 import java.time.Duration
@@ -29,6 +29,7 @@ class PlayerVM @Inject constructor(
     private val playerRepository: PlayerRepository,
     private val playerControllerRepository: PlayerControllerRepository,
     private val downloadRepository: DownloadRepository,
+    private val lrcApiRepository: LrcApiRepository,
 ) : ViewModel() {
     private val _currentDuration = MutableStateFlow(Duration.ZERO)
     private val _bufferDuration = MutableStateFlow(Duration.ZERO)
@@ -46,11 +47,6 @@ class PlayerVM @Inject constructor(
     val totalDuration = _totalDuration.asStateFlow()
     val playMode = playerRepository.playMode
     val loading = playerRepository.loading
-
-    val lyricIndex = combine(currentDuration, music) {
-        currentDuration, music ->
-            music?.lyric?.data?.lines?.indexOfLast { it.duration <= currentDuration } ?: -1
-    }.stateIn(viewModelScope, SharingStarted.Lazily, -1)
 
     val displayTotalDuration = combine(totalDuration, music) {
         runtimeDuration, currentMusic ->

@@ -75,20 +75,21 @@ import com.kutedev.easemusicplayer.components.dropShadow
 import com.kutedev.easemusicplayer.components.rememberCustomAnchoredDraggableState
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.utils.nextTickOnMain
+import com.kutedev.easemusicplayer.viewmodels.LrcApiVM
 import com.kutedev.easemusicplayer.viewmodels.PlayerVM
 import com.kutedev.easemusicplayer.viewmodels.SleepModeVM
 import com.kutedev.easemusicplayer.core.LocalNavController
-import com.kutedev.easemusicplayer.core.RouteImport
+import com.kutedev.easemusicplayer.core.RouteLrcApiSettings
 import com.kutedev.easemusicplayer.singleton.PlaybackContextType
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
-import com.kutedev.easemusicplayer.singleton.RouteImportType
+import com.kutedev.easemusicplayer.singleton.isReadyForFetch
 import com.kutedev.easemusicplayer.utils.formatDuration
+import com.kutedev.easemusicplayer.utils.resolveLyricIndex
 import com.kutedev.easemusicplayer.utils.toMusicDurationMs
 import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_backend.LyricLine
 import uniffi.ease_client_backend.LyricLoadState
-import uniffi.ease_client_backend.Lyrics
 import uniffi.ease_client_backend.Playlist
 import uniffi.ease_client_schema.PlayMode
 import java.time.Duration
@@ -101,11 +102,13 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
 private fun MusicPlayerHeader(
-    hasLyric: Boolean,
+    hasRemovableLyric: Boolean,
+    lrcApiReady: Boolean,
+    onRetryLrcApiLyric: () -> Unit,
+    onOpenLrcApiSettings: () -> Unit,
     playerVM: PlayerVM = hiltViewModel(),
 ) {
     val navController = LocalNavController.current
-    val currentPlaying by playerVM.music.collectAsState()
 
     var moreMenuExpanded by remember {
         mutableStateOf(false)
@@ -145,7 +148,7 @@ private fun MusicPlayerHeader(
                         expanded = moreMenuExpanded,
                         onDismissRequest = { moreMenuExpanded = false; },
                         items = listOf(
-                            if (hasLyric) {
+                            if (hasRemovableLyric) {
                                 EaseContextMenuItem(
                                     stringId = R.string.music_lyric_remove,
                                     onClick = {
@@ -154,12 +157,16 @@ private fun MusicPlayerHeader(
                                 )
                             } else {
                                 EaseContextMenuItem(
-                                    stringId = R.string.music_lyric_add,
+                                    stringId = if (lrcApiReady) {
+                                        R.string.music_lyric_fetch_from_lrcapi
+                                    } else {
+                                        R.string.music_lyric_open_lrcapi_settings
+                                    },
                                     onClick = {
-                                        if (currentPlaying?.meta?.id != null) {
-                                            navController.navigate(
-                                                RouteImport(RouteImportType.Lyric)
-                                            )
+                                        if (lrcApiReady) {
+                                            onRetryLrcApiLyric()
+                                        } else {
+                                            onOpenLrcApiSettings()
                                         }
                                     }
                                 )
@@ -341,7 +348,8 @@ private fun MusicLyric(
     lyrics: List<LyricLine>,
     lyricIndex: Int,
     lyricLoadedState: LyricLoadState,
-    onClickAdd: () -> Unit,
+    emptyActionLabel: String,
+    onClickEmptyAction: () -> Unit,
     widgetHeight: Int,
 ) {
     val density = LocalDensity.current
@@ -386,19 +394,29 @@ private fun MusicLyric(
                             style = EaseTheme.typography.body,
                         )
                         EaseTextButton(
-                            text = stringResource(R.string.music_lyric_try_add_desc),
+                            text = emptyActionLabel,
                             type = EaseTextButtonType.Primary,
                             size = EaseTextButtonSize.Medium,
                             onClick = {
-                                onClickAdd()
+                                onClickEmptyAction()
                             }
                         )
                     }
                 } else {
-                    Text(
-                        text = stringResource(R.string.music_lyric_fail),
-                        style = EaseTheme.typography.body,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.music_lyric_fail),
+                            style = EaseTheme.typography.body,
+                        )
+                        EaseTextButton(
+                            text = emptyActionLabel,
+                            type = EaseTextButtonType.Primary,
+                            size = EaseTextButtonSize.Medium,
+                            onClick = onClickEmptyAction,
+                        )
+                    }
                 }
             }
             return
@@ -454,7 +472,8 @@ private fun MusicPlayerBody(
     lyricIndex: Int,
     lyrics: List<LyricLine>,
     lyricLoadedState: LyricLoadState,
-    onClickAddLyric: () -> Unit,
+    emptyActionLabel: String,
+    onClickLyricAction: () -> Unit,
     onResetLyric: () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -570,7 +589,8 @@ private fun MusicPlayerBody(
                     lyricIndex = lyricIndex,
                     lyrics = lyrics,
                     lyricLoadedState = lyricLoadedState,
-                    onClickAdd = onClickAddLyric,
+                    emptyActionLabel = emptyActionLabel,
+                    onClickEmptyAction = onClickLyricAction,
                     widgetHeight = widgetHeight,
                 )
             }
@@ -933,6 +953,7 @@ private fun PlaybackQueueSheet(
 @Composable
 fun MusicPlayerPage(
     playerVM: PlayerVM = hiltViewModel(),
+    lrcApiVM: LrcApiVM = hiltViewModel(),
 ) {
     val navController = LocalNavController.current
     val currentMusic by playerVM.music.collectAsState()
@@ -942,16 +963,52 @@ fun MusicPlayerPage(
     val currentDuration by playerVM.currentDuration.collectAsState()
     val previousMusic by playerVM.previousMusic.collectAsState()
     val nextMusic by playerVM.nextMusic.collectAsState()
+    val lrcApiSettings by lrcApiVM.settings.collectAsState()
+    val remoteLyricsState by lrcApiVM.currentLyricsState.collectAsState()
     val bufferDuration by playerVM.bufferDuration.collectAsState()
     val displayTotalDuration by playerVM.displayTotalDuration.collectAsState()
-    val currentLyricIndex by playerVM.lyricIndex.collectAsState()
-    val lyricLoadedState = currentMusic?.lyric?.loadedState ?: LyricLoadState.LOADING
-    val lyrics = currentMusic?.lyric?.data?.lines ?: emptyList()
+    val localLyricState = currentMusic?.lyric?.loadedState
+    val activeRemoteLyricsState = if (remoteLyricsState.musicId == currentMusic?.meta?.id) {
+        remoteLyricsState
+    } else {
+        null
+    }
+    val lyricLoadedState = when {
+        localLyricState == LyricLoadState.LOADED -> LyricLoadState.LOADED
+        activeRemoteLyricsState?.state == LyricLoadState.LOADED -> LyricLoadState.LOADED
+        localLyricState != null -> localLyricState
+        activeRemoteLyricsState != null -> activeRemoteLyricsState.state
+        else -> LyricLoadState.MISSING
+    }
+    val displayLyrics = when {
+        localLyricState == LyricLoadState.LOADED -> currentMusic?.lyric?.data?.lines ?: emptyList()
+        activeRemoteLyricsState?.state == LyricLoadState.LOADED -> activeRemoteLyricsState.lyrics?.lines
+            ?: emptyList()
+        else -> emptyList()
+    }
+    val currentLyricIndex = resolveLyricIndex(currentDuration, displayLyrics)
     var showLyric by rememberSaveable { mutableStateOf(false) }
     var queueSheetOpen by rememberSaveable { mutableStateOf(false) }
 
-    val hasLyric = lyricLoadedState != LyricLoadState.MISSING
+    val hasLyric = lyricLoadedState == LyricLoadState.LOADED
     val hasQueue = playbackQueue?.entries?.isNotEmpty() == true
+    val hasRemovableLyric = currentMusic?.lyric?.loadedState != null &&
+        currentMusic?.lyric?.loadedState != LyricLoadState.MISSING
+    val lrcApiReady = lrcApiSettings.isReadyForFetch()
+    val lyricActionLabel = stringResource(
+        id = if (lrcApiReady) {
+            R.string.music_lyric_retry_fetch
+        } else {
+            R.string.music_lyric_configure_lrcapi
+        }
+    )
+    val onLyricAction = {
+        if (lrcApiReady) {
+            lrcApiVM.retryCurrentMusic()
+        } else {
+            navController.navigate(RouteLrcApiSettings())
+        }
+    }
 
     LaunchedEffect(currentMusic?.meta?.id) {
         showLyric = false
@@ -976,7 +1033,12 @@ fun MusicPlayerPage(
     ) {
         Column {
             MusicPlayerHeader(
-                hasLyric = hasLyric,
+                hasRemovableLyric = hasRemovableLyric,
+                lrcApiReady = lrcApiReady,
+                onRetryLrcApiLyric = onLyricAction,
+                onOpenLrcApiSettings = {
+                    navController.navigate(RouteLrcApiSettings())
+                },
             )
             Column(
                 modifier = Modifier
@@ -997,12 +1059,9 @@ fun MusicPlayerPage(
                     showLyric = showLyric,
                     lyricIndex = currentLyricIndex,
                     lyricLoadedState = lyricLoadedState,
-                    lyrics = lyrics,
-                    onClickAddLyric = {
-                        if (currentMusic != null) {
-                            navController.navigate(RouteImport(RouteImportType.Lyric))
-                        }
-                    },
+                    lyrics = displayLyrics,
+                    emptyActionLabel = lyricActionLabel,
+                    onClickLyricAction = onLyricAction,
                     onResetLyric = { showLyric = false }
                 )
             }
@@ -1175,7 +1234,8 @@ private fun MusicPlayerBodyPreview() {
                 lyricIndex = 0,
                 lyrics = listOf(),
                 lyricLoadedState = LyricLoadState.LOADING,
-                onClickAddLyric = {},
+                emptyActionLabel = "Retry",
+                onClickLyricAction = {},
                 onResetLyric = {}
             )
         }
@@ -1260,8 +1320,9 @@ private fun MusicLyricPreview() {
                 lyricIndex = lyricIndex,
                 lyrics = lyricLines,
                 lyricLoadedState = lyricLoadedState,
+                emptyActionLabel = "Retry",
                 widgetHeight = widgetHeight,
-                onClickAdd = {}
+                onClickEmptyAction = {}
             )
         }
     }

@@ -38,7 +38,9 @@ ease-client-schema = { workspace = true }
 ease-order-key = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 
 [dev-dependencies]
 ease-client-tokio = { workspace = true }
 tempfile = "3.17.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
