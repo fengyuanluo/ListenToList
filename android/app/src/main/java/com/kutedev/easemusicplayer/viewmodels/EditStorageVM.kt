@@ -228,7 +228,7 @@ class EditStorageVM @Inject constructor(
         setFormValue(initialForm, persist = true)
         _title.value = storage?.let(::VImportStorageEntry)?.name ?: ""
         _musicCount.value = storage?.musicCount ?: 0uL
-        if (initialForm.typ != StorageType.OPEN_LIST) {
+        if (!initialForm.typ.supportsStorageDefaultPath()) {
             setDefaultPathBrowserExpanded(false)
         }
 
@@ -257,7 +257,10 @@ class EditStorageVM @Inject constructor(
         }
 
         if (_defaultPathBrowserExpanded.value && initialForm.defaultPathBrowserConfigOrNull() != null) {
-            bindDefaultPathBrowser(forceRemote = false)
+            bindDefaultPathBrowser(
+                forceRemote = false,
+                preferredPath = restoredDefaultPathBrowserPath,
+            )
         }
     }
 
