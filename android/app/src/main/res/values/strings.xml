@@ -36,12 +36,12 @@
     <string name="storage_edit_addr">ADDRESS</string>
     <string name="storage_edit_alias">NAME (ALIAS)</string>
     <string name="storage_edit_default_path">DEFAULT DIRECTORY</string>
-    <string name="storage_edit_default_path_browser_requires_config">Fill in the OpenList address and authentication info first, then tap the field again to browse directories here.</string>
+    <string name="storage_edit_default_path_browser_requires_config">Complete the current storage connection info first, then tap the field again to browse directories here.</string>
     <string name="storage_edit_default_path_invalid">The default directory does not exist or cannot be accessed.</string>
     <string name="storage_edit_default_path_picker_loading">Loading directories...</string>
     <string name="storage_edit_default_path_picker_empty">No subdirectories here. You can keep using the current directory.</string>
     <string name="storage_edit_default_path_picker_back_to_root">Open root directory</string>
-    <string name="storage_edit_default_path_picker_error_auth">Authentication failed. Check the current OpenList settings and try again.</string>
+    <string name="storage_edit_default_path_picker_error_auth">Authentication failed. Check the current storage settings and try again.</string>
     <string name="storage_edit_default_path_picker_error_timeout">Connection timed out. Please try again.</string>
     <string name="storage_edit_default_path_picker_error_unknown">Failed to load directories. Please try again.</string>
     <string name="storage_edit_anonymous">ANONYMOUS</string>

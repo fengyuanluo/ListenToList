@@ -13,7 +13,13 @@ fun normalizeStorageDefaultPath(path: String): String {
 }
 
 fun StorageType.supportsStorageDefaultPath(): Boolean {
-    return this == StorageType.OPEN_LIST
+    return when (this) {
+        StorageType.OPEN_LIST,
+        StorageType.WEBDAV,
+        StorageType.ONE_DRIVE -> true
+
+        StorageType.LOCAL -> false
+    }
 }
 
 fun Storage.supportsStorageDefaultPath(): Boolean {
@@ -29,4 +35,11 @@ fun Storage.browserEntryDefaultPathOrNull(): String? {
         return null
     }
     return normalizeStorageDefaultPath(defaultPath)
+}
+
+fun Storage.resolveStorageBrowserStartPath(explicitPath: String? = null): String {
+    if (explicitPath != null) {
+        return normalizeStorageDefaultPath(explicitPath)
+    }
+    return browserEntryDefaultPathOrNull() ?: "/"
 }

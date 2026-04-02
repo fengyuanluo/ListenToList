@@ -47,7 +47,10 @@ pub(crate) fn normalize_default_storage_path(path: &str) -> String {
 }
 
 pub(crate) fn storage_type_supports_default_path(typ: StorageType) -> bool {
-    matches!(typ, StorageType::OpenList)
+    matches!(
+        typ,
+        StorageType::OpenList | StorageType::Webdav | StorageType::OneDrive
+    )
 }
 
 pub(crate) fn normalize_storage_default_path_for_type(typ: StorageType, path: &str) -> String {
