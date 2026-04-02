@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -389,6 +388,15 @@ private fun MusicLyric(
     val interactionSource = remember { MutableInteractionSource() }
     var manualSeeking by remember(lyrics) { mutableStateOf(false) }
     var pendingSeekLyricIndex by remember(lyrics) { mutableStateOf<Int?>(null) }
+    var highlightedTextRightPx by remember(lyrics) { mutableFloatStateOf(Float.NaN) }
+    var seekIndicatorLabelWidthPx by remember(lyrics) { mutableIntStateOf(0) }
+    val highlightedTextStartPaddingPx = with(density) { EaseTheme.spacing.xs.toPx() }
+    val seekLineGap = EaseTheme.spacing.xs
+    val seekTextGap = EaseTheme.spacing.md
+    val seekIndicatorEndPadding = EaseTheme.spacing.xxl
+    val seekLineGapPx = with(density) { seekLineGap.toPx() }
+    val seekTextGapPx = with(density) { seekTextGap.toPx() }
+    val seekIndicatorEndPaddingPx = with(density) { seekIndicatorEndPadding.toPx() }
     val highlightedLyricIndex by remember(lyricIndex, manualSeeking, listState, lyrics) {
         derivedStateOf {
             if (!manualSeeking) {
@@ -417,6 +425,12 @@ private fun MusicLyric(
         val targetIndex = pendingSeekLyricIndex ?: return@LaunchedEffect
         if (lyricIndex >= 0 && (lyricIndex - targetIndex).absoluteValue <= 1) {
             pendingSeekLyricIndex = null
+        }
+    }
+
+    LaunchedEffect(highlightedLyricIndex, manualSeeking) {
+        if (manualSeeking) {
+            highlightedTextRightPx = Float.NaN
         }
     }
 
@@ -569,6 +583,14 @@ private fun MusicLyric(
                             color = animatedColor,
                             style = lyricTextStyle(distance),
                             textAlign = TextAlign.Center,
+                            onTextLayout = { result ->
+                                if (index == highlightedLyricIndex) {
+                                    val maxLineRight = (0 until result.lineCount)
+                                        .maxOfOrNull { lineIndex -> result.getLineRight(lineIndex) }
+                                        ?: 0f
+                                    highlightedTextRightPx = highlightedTextStartPaddingPx + maxLineRight
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = EaseTheme.spacing.xs)
@@ -587,42 +609,50 @@ private fun MusicLyric(
 
             if (manualSeeking && highlightedLyricIndex in lyrics.indices) {
                 val seekIndicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.Center)
-                        .padding(
-                            start = EaseTheme.spacing.hero,
-                            end = EaseTheme.spacing.xl,
-                        )
                 ) {
-                    Spacer(modifier = Modifier.weight(1f))
                     Canvas(
                         modifier = Modifier
-                            .width(88.dp)
+                            .fillMaxWidth()
                             .height(2.dp)
+                            .align(Alignment.Center)
                     ) {
+                        val lineStart = (if (highlightedTextRightPx.isNaN()) {
+                            size.width * 0.64f
+                        } else {
+                            highlightedTextRightPx
+                        }) + seekLineGapPx
+                        val lineEnd = size.width - seekIndicatorEndPaddingPx - seekIndicatorLabelWidthPx - seekTextGapPx
                         val strokeWidth = size.height
-                        drawLine(
-                            color = seekIndicatorColor,
-                            start = Offset(0f, size.height / 2f),
-                            end = Offset(size.width, size.height / 2f),
-                            strokeWidth = strokeWidth,
-                            pathEffect = PathEffect.dashPathEffect(
-                                floatArrayOf(12.dp.toPx(), 8.dp.toPx()),
-                                0f,
-                            ),
-                        )
+                        if (lineEnd > lineStart) {
+                            drawLine(
+                                color = seekIndicatorColor,
+                                start = Offset(lineStart, size.height / 2f),
+                                end = Offset(lineEnd, size.height / 2f),
+                                strokeWidth = strokeWidth,
+                                pathEffect = PathEffect.dashPathEffect(
+                                    floatArrayOf(12.dp.toPx(), 8.dp.toPx()),
+                                    0f,
+                                ),
+                            )
+                        }
                     }
-                    Box(modifier = Modifier.width(EaseTheme.spacing.sm))
                     Text(
                         text = formatDuration(lyrics[highlightedLyricIndex].duration),
                         color = MaterialTheme.colorScheme.primary,
-                        style = EaseTheme.typography.caption.copy(
+                        style = EaseTheme.typography.bodySmall.copy(
                             fontFamily = LyricFontFamily,
                             fontWeight = FontWeight.SemiBold,
                         ),
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = seekIndicatorEndPadding)
+                            .onSizeChanged { size ->
+                                seekIndicatorLabelWidthPx = size.width
+                            },
                     )
                 }
             }
