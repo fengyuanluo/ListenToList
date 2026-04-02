@@ -6,7 +6,7 @@ use reqwest::{
     Client, StatusCode,
 };
 
-use super::lyrics::parse_lrc;
+use super::lyrics::{decode_lyric_text, parse_lrc};
 
 const LRCAPI_USER_AGENT: &str = "ListenToList/0.3.0 (+https://github.com/fengyuanluo/ListenToList)";
 const AUTHENTICATION_HEADER: &str = "authentication";
@@ -202,13 +202,29 @@ async fn fetch_lyrics(
 
     match response.status() {
         StatusCode::OK => {
-            let body = match response.text().await {
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned);
+            let body = match response.bytes().await {
                 Ok(body) => body,
                 Err(error) => {
                     tracing::error!("lrcapi lyrics body read failed: {error}");
                     return (None, LrcApiFetchStatus::Failed);
                 }
             };
+            let decoded = decode_lyric_text(body.as_ref(), content_type.as_deref());
+            tracing::info!(
+                lyric_path = "lrcapi:/lyrics",
+                lyric_file = "lyrics",
+                content_type = ?content_type,
+                encoding = decoded.encoding_name,
+                decode_source = decoded.source.as_str(),
+                had_errors = decoded.had_errors,
+                "decoded lrcapi lyric text"
+            );
+            let body = decoded.text;
             let body = body.trim();
             if body.is_empty() || body.eq_ignore_ascii_case(LYRICS_NOT_FOUND_TEXT) {
                 return (None, LrcApiFetchStatus::Missing);
@@ -279,6 +295,7 @@ mod tests {
         routing::get,
         Router,
     };
+    use encoding_rs::GBK;
     use futures::executor::block_on;
     use std::{collections::HashMap, net::TcpListener};
     use tokio::sync::oneshot;
@@ -298,6 +315,16 @@ mod tests {
                 return (
                     StatusCode::OK,
                     "[ar:Artist]\n[al:Album]\n[ti:found]\n[00:01.00]Hello",
+                )
+                    .into_response();
+            }
+            if title == "gbk" {
+                let (body, _, had_errors) = GBK.encode("[00:01.00]后来");
+                assert!(!had_errors, "gbk fixture should encode cleanly");
+                return (
+                    StatusCode::OK,
+                    [("content-type", "text/plain; charset=gb18030")],
+                    body.into_owned(),
                 )
                     .into_response();
             }
@@ -390,6 +417,30 @@ mod tests {
 
             assert_eq!(result.lyrics_status, LrcApiFetchStatus::Missing);
             assert!(result.lyrics.is_none());
+            let _ = shutdown_tx.send(());
+        });
+    }
+
+    #[test]
+    fn decodes_legacy_charset_from_lrcapi_response() {
+        ease_client_tokio::tokio_runtime().block_on(async {
+            let (base_url, shutdown_tx) = spawn_test_server().await;
+            let result = fetch_lrcapi_music_supplement(
+                &LrcApiConfig {
+                    enabled: true,
+                    base_url,
+                    auth_key: None,
+                },
+                &LrcApiQuery {
+                    title: "gbk".to_string(),
+                    artist: "".to_string(),
+                    album: "".to_string(),
+                },
+            )
+            .await;
+
+            assert_eq!(result.lyrics_status, LrcApiFetchStatus::Loaded);
+            assert_eq!(result.lyrics.expect("lyrics").lines[0].text, "后来");
             let _ = shutdown_tx.send(());
         });
     }

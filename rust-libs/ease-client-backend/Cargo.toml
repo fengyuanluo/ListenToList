@@ -40,6 +40,8 @@ ease-order-key = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
+encoding_rs = "0.8.35"
+chardetng = "1.0.0"
 
 [dev-dependencies]
 ease-client-tokio = { workspace = true }

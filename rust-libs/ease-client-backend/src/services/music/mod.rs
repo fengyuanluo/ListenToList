@@ -9,7 +9,10 @@ use crate::{
     StorageEntry,
 };
 
-use super::{lyrics::parse_lrc, storage::load_storage_entry_data};
+use super::{
+    lyrics::{decode_lyric_text, parse_lrc},
+    storage::load_storage_entry_data,
+};
 
 #[derive(Debug, uniffi::Record)]
 pub struct ArgUpdatePlaylist {
@@ -91,8 +94,17 @@ async fn load_lyric(
         });
     }
     let data = data.unwrap();
-    let data = String::from_utf8_lossy(&data).to_string();
-    let lyric = parse_lrc(data);
+    let decoded = decode_lyric_text(data.bytes.as_slice(), data.content_type.as_deref());
+    tracing::info!(
+        lyric_path = %loc.path,
+        lyric_file = %data.name,
+        content_type = ?data.content_type,
+        encoding = decoded.encoding_name,
+        decode_source = decoded.source.as_str(),
+        had_errors = decoded.had_errors,
+        "decoded lyric text"
+    );
+    let lyric = parse_lrc(decoded.text);
     if lyric.is_err() {
         let e = lyric.unwrap_err();
         tracing::error!("fail to parse lyric: {}", e);
@@ -243,4 +255,134 @@ pub(crate) fn get_music_abstract(
 
     let abstract_music = MusicAbstract { cover, meta };
     Ok(Some(abstract_music))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use ease_client_schema::StorageType;
+    use encoding_rs::GBK;
+    use tempfile::TempDir;
+
+    use crate::{
+        create_backend,
+        objects::LyricLoadState,
+        repositories::music::ArgDBAddMusic,
+        services::{list_storage, ArgInitializeApp},
+    };
+
+    use super::get_music;
+
+    fn setup_backend() -> (TempDir, Arc<crate::Backend>) {
+        let tempdir = tempfile::tempdir().expect("create tempdir");
+        let documents_dir = tempdir.path().join("documents");
+        let cache_dir = tempdir.path().join("cache");
+        std::fs::create_dir_all(&documents_dir).expect("create documents dir");
+        std::fs::create_dir_all(&cache_dir).expect("create cache dir");
+
+        let backend = create_backend(ArgInitializeApp {
+            app_document_dir: format!("{}/", documents_dir.display()),
+            app_cache_dir: format!("{}/", cache_dir.display()),
+            storage_path: "/".to_string(),
+        });
+        backend.init().expect("init backend");
+        (tempdir, backend)
+    }
+
+    #[test]
+    fn loads_gbk_fallback_lyric_file() {
+        ease_client_tokio::tokio_runtime().block_on(async {
+            let (tempdir, backend) = setup_backend();
+            let media_dir = tempdir.path().join("media");
+            std::fs::create_dir_all(&media_dir).expect("create media dir");
+
+            let music_path = media_dir.join("gbk-song.mp3");
+            let lyric_path = media_dir.join("gbk-song.lrc");
+            std::fs::write(&music_path, b"ID3").expect("write fake music");
+
+            let (encoded, _, had_errors) = GBK.encode("[00:01.00]后来\n");
+            assert!(!had_errors, "gbk sample should encode cleanly");
+            std::fs::write(&lyric_path, encoded.as_ref()).expect("write gbk lyric");
+
+            let local_storage = list_storage(backend.get_context())
+                .await
+                .expect("list storages")
+                .into_iter()
+                .find(|storage| storage.typ == StorageType::Local)
+                .expect("local storage");
+
+            let created = backend
+                .get_context()
+                .database_server()
+                .upsert_musics(vec![ArgDBAddMusic {
+                    loc: ease_client_schema::StorageEntryLoc {
+                        storage_id: local_storage.id,
+                        path: music_path.to_string_lossy().to_string(),
+                    },
+                    title: "gbk-song".to_string(),
+                }])
+                .expect("create music");
+
+            let music = get_music(backend.get_context(), created[0].id)
+                .await
+                .expect("load music")
+                .expect("music");
+            let lyric = music.lyric.expect("fallback lyric should load");
+            assert_eq!(lyric.loaded_state, LyricLoadState::Loaded);
+            assert_eq!(lyric.data.lines.len(), 1);
+            assert_eq!(lyric.data.lines[0].text, "后来");
+        });
+    }
+
+    #[test]
+    fn loads_utf16le_fallback_lyric_file_without_bom() {
+        ease_client_tokio::tokio_runtime().block_on(async {
+            let (tempdir, backend) = setup_backend();
+            let media_dir = tempdir.path().join("media");
+            std::fs::create_dir_all(&media_dir).expect("create media dir");
+
+            let music_path = media_dir.join("utf16-song.mp3");
+            let lyric_path = media_dir.join("utf16-song.lrc");
+            std::fs::write(&music_path, b"ID3").expect("write fake music");
+            std::fs::write(&lyric_path, utf16le_bytes_without_bom("[00:01.00]后来\n"))
+                .expect("write utf16 lyric");
+
+            let local_storage = list_storage(backend.get_context())
+                .await
+                .expect("list storages")
+                .into_iter()
+                .find(|storage| storage.typ == StorageType::Local)
+                .expect("local storage");
+
+            let created = backend
+                .get_context()
+                .database_server()
+                .upsert_musics(vec![ArgDBAddMusic {
+                    loc: ease_client_schema::StorageEntryLoc {
+                        storage_id: local_storage.id,
+                        path: music_path.to_string_lossy().to_string(),
+                    },
+                    title: "utf16-song".to_string(),
+                }])
+                .expect("create music");
+
+            let music = get_music(backend.get_context(), created[0].id)
+                .await
+                .expect("load music")
+                .expect("music");
+            let lyric = music.lyric.expect("fallback lyric should load");
+            assert_eq!(lyric.loaded_state, LyricLoadState::Loaded);
+            assert_eq!(lyric.data.lines.len(), 1);
+            assert_eq!(lyric.data.lines[0].text, "后来");
+        });
+    }
+
+    fn utf16le_bytes_without_bom(text: &str) -> Vec<u8> {
+        let mut out = Vec::new();
+        for unit in text.encode_utf16() {
+            out.extend_from_slice(unit.to_le_bytes().as_slice());
+        }
+        out
+    }
 }
