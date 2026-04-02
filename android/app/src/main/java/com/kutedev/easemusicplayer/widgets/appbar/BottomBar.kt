@@ -71,12 +71,12 @@ private object BSetting: IBottomItem {
 
 @Composable
 fun getBottomBarSpace(
-    isPlaying: Boolean,
+    hasCurrentMusic: Boolean,
     scaffoldPadding: PaddingValues
 ): Dp {
     val bottomInset = bottomSafePadding(scaffoldPadding)
     var total = 60.dp + bottomInset
-    if (isPlaying) {
+    if (hasCurrentMusic) {
         total += 124.dp;
     }
     return total;

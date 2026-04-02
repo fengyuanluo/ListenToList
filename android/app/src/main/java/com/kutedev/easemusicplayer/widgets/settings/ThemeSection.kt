@@ -46,9 +46,11 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
+import com.kutedev.easemusicplayer.components.FormSwitch
 import com.kutedev.easemusicplayer.components.ThemeBackgroundImage
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.ui.theme.ThemePresets
+import com.kutedev.easemusicplayer.singleton.PlaylistDisplayMode
 import com.kutedev.easemusicplayer.viewmodels.ThemeVM
 import kotlin.math.roundToInt
 
@@ -127,6 +129,7 @@ fun ThemeSection(
 ) {
     val context = LocalContext.current
     val settings by themeVM.settings.collectAsState()
+    val homePlaylistDisplayMode by themeVM.homePlaylistDisplayMode.collectAsState()
 
     val pickBackgroundLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -319,6 +322,31 @@ fun ThemeSection(
                 disabled = settings.backgroundImageUri.isNullOrBlank(),
             )
         }
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(id = R.string.setting_theme_home_playlist),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.bodySmall,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        FormSwitch(
+            label = stringResource(id = R.string.setting_theme_home_playlist_list_mode),
+            value = homePlaylistDisplayMode == PlaylistDisplayMode.List,
+            onChange = { enabled ->
+                themeVM.setHomePlaylistDisplayMode(
+                    if (enabled) {
+                        PlaylistDisplayMode.List
+                    } else {
+                        PlaylistDisplayMode.Grid
+                    }
+                )
+            },
+        )
+        Text(
+            text = stringResource(id = R.string.setting_theme_home_playlist_list_mode_hint),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.micro,
+        )
         Spacer(modifier = Modifier.height(16.dp))
     }
 }

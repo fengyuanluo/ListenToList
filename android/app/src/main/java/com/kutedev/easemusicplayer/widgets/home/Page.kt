@@ -32,7 +32,8 @@ fun HomePage(
         initialPage = savedPage.intValue,
         pageCount = { 3 }
     )
-    val isPlaying by playerVM.playing.collectAsState()
+    val currentMusic by playerVM.music.collectAsState()
+    val hasCurrentMusic = currentMusic?.meta?.id != null
 
     LaunchedEffect(pagerState.currentPage) {
         if (savedPage.intValue != pagerState.currentPage) {
@@ -45,7 +46,7 @@ fun HomePage(
     ) {
         HorizontalPager(
             modifier = Modifier.padding(
-                bottom = getBottomBarSpace(isPlaying, scaffoldPadding),
+                bottom = getBottomBarSpace(hasCurrentMusic, scaffoldPadding),
             ),
             state = pagerState
         ) { page ->
