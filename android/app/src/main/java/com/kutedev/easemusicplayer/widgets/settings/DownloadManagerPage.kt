@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -377,80 +376,74 @@ fun DownloadManagerPage(
         showDirectoryDialog = false
     }
 
-    LazyColumn(
-        contentPadding = PaddingValues(start = paddingX, end = paddingX, top = 24.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
-        modifier = Modifier
-            .fillMaxSize()
-            .background(EaseTheme.surfaces.screen)
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xxs),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.setting_downloads_title),
-                        style = EaseTheme.typography.screenTitle,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.setting_downloads_dir, directoryState.summary),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = EaseTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                EaseIconButton(
-                    sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
-                    painter = painterResource(id = R.drawable.icon_adjust),
-                    onClick = { showDirectoryDialog = true },
-                )
-            }
-        }
-
-        if (tasks.isEmpty()) {
+    SettingsSubpageScaffold(
+        title = stringResource(id = R.string.setting_downloads_title),
+        trailing = {
+            EaseIconButton(
+                sizeType = EaseIconButtonSize.Medium,
+                buttonType = EaseIconButtonType.Default,
+                painter = painterResource(id = R.drawable.icon_adjust),
+                onClick = { showDirectoryDialog = true },
+            )
+        },
+    ) { contentModifier ->
+        LazyColumn(
+            contentPadding = PaddingValues(
+                start = paddingX,
+                end = paddingX,
+                top = EaseTheme.spacing.xs,
+                bottom = EaseTheme.spacing.xl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
+            modifier = contentModifier,
+        ) {
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            EaseTheme.surfaces.secondary,
-                            taskShape,
+                Text(
+                    text = stringResource(id = R.string.setting_downloads_dir, directoryState.summary),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = EaseTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            if (tasks.isEmpty()) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                EaseTheme.surfaces.secondary,
+                                taskShape,
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
+                                shape = taskShape,
+                            )
+                            .padding(horizontal = EaseTheme.spacing.sm, vertical = EaseTheme.spacing.sm)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.download_empty_title),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = EaseTheme.typography.body.copy(fontWeight = FontWeight.Medium),
                         )
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
-                            shape = taskShape,
-                        )
-                        .padding(horizontal = EaseTheme.spacing.sm, vertical = EaseTheme.spacing.sm)
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.download_empty_title),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = EaseTheme.typography.body.copy(fontWeight = FontWeight.Medium),
+                    }
+                }
+            } else {
+                items(tasks, key = { task -> task.id }) { task ->
+                    DownloadTaskCard(
+                        task = task,
+                        onPause = { downloadManagerVM.pause(task.id) },
+                        onStart = { downloadManagerVM.start(task.id) },
+                        onDelete = {
+                            pendingDeleteTask = task
+                            deleteFileWithTask = false
+                        },
                     )
                 }
-            }
-        } else {
-            items(tasks, key = { task -> task.id }) { task ->
-                DownloadTaskCard(
-                    task = task,
-                    onPause = { downloadManagerVM.pause(task.id) },
-                    onStart = { downloadManagerVM.start(task.id) },
-                    onDelete = {
-                        pendingDeleteTask = task
-                        deleteFileWithTask = false
-                    },
-                )
             }
         }
     }
