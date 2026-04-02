@@ -7,8 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -133,26 +133,20 @@ fun LogPage(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(EaseTheme.surfaces.screen),
-    ) {
-        Column {
+    SettingsSubpageScaffold(
+        title = stringResource(id = R.string.log_title),
+    ) { contentModifier ->
+        Column(modifier = contentModifier) {
             Text(
-                modifier = Modifier.padding(start = paddingX, end = paddingX, top = 24.dp, bottom = 4.dp),
-                text = stringResource(id = R.string.log_title),
-                style = EaseTheme.typography.screenTitle,
-            )
-            Text(
-                modifier = Modifier.padding(horizontal = paddingX),
+                modifier = Modifier.padding(horizontal = paddingX, vertical = EaseTheme.spacing.xs),
                 text = pluralStringResource(id = R.plurals.log_desc, count = logs.size, logs.size),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = EaseTheme.typography.body,
             )
-            Box(modifier = Modifier.height(24.dp))
+            Box(modifier = Modifier.height(EaseTheme.spacing.sm))
             LazyColumn(
-                modifier = Modifier.weight(1.0f)
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(bottom = EaseTheme.spacing.xl),
             ) {
                 items(logs) { log ->
                     Row(
@@ -169,7 +163,7 @@ fun LogPage(
                         ) {
                             Text(
                                 text = log.name,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
                             )
                             Text(
                                 text = log.path,
@@ -181,7 +175,6 @@ fun LogPage(
                     }
                 }
             }
-            Box(modifier = Modifier.height(24.dp))
         }
     }
 
