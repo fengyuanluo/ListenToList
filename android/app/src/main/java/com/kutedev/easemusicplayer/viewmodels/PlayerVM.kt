@@ -2,11 +2,15 @@ package com.kutedev.easemusicplayer.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import com.kutedev.easemusicplayer.singleton.LrcApiRepository
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
+import com.kutedev.easemusicplayer.core.probeMusicMetadataDirectly
 import com.kutedev.easemusicplayer.utils.formatDuration
+import com.kutedev.easemusicplayer.utils.normalizeMusicDisplayArtist
+import com.kutedev.easemusicplayer.utils.resolveMusicDisplayTitle
 import com.kutedev.easemusicplayer.utils.resolveTotalDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -14,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uniffi.ease_client_schema.MusicId
@@ -24,8 +29,14 @@ import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 import kotlin.time.toJavaDuration
 
+data class CurrentMusicDisplayInfo(
+    val title: String = "",
+    val artist: String = "",
+)
+
 @HiltViewModel
 class PlayerVM @Inject constructor(
+    private val bridge: Bridge,
     private val playerRepository: PlayerRepository,
     private val playerControllerRepository: PlayerControllerRepository,
     private val downloadRepository: DownloadRepository,
@@ -34,6 +45,7 @@ class PlayerVM @Inject constructor(
     private val _currentDuration = MutableStateFlow(Duration.ZERO)
     private val _bufferDuration = MutableStateFlow(Duration.ZERO)
     private val _totalDuration = MutableStateFlow(null as Duration?)
+    private val _currentMusicDisplayInfo = MutableStateFlow(CurrentMusicDisplayInfo())
     val music = playerRepository.music
     val playlist = playerRepository.playlist
     val playbackQueue = playerRepository.playbackQueue
@@ -47,6 +59,7 @@ class PlayerVM @Inject constructor(
     val totalDuration = _totalDuration.asStateFlow()
     val playMode = playerRepository.playMode
     val loading = playerRepository.loading
+    val currentMusicDisplayInfo = _currentMusicDisplayInfo.asStateFlow()
 
     val displayTotalDuration = combine(totalDuration, music) {
         runtimeDuration, currentMusic ->
@@ -63,6 +76,37 @@ class PlayerVM @Inject constructor(
         viewModelScope.launch {
             playerRepository.durationChanged.collect {
                 syncPosition()
+            }
+        }
+        viewModelScope.launch {
+            music.collectLatest { currentMusic ->
+                if (currentMusic == null) {
+                    _currentMusicDisplayInfo.value = CurrentMusicDisplayInfo()
+                    return@collectLatest
+                }
+
+                _currentMusicDisplayInfo.value = CurrentMusicDisplayInfo(
+                    title = resolveMusicDisplayTitle(
+                        metadataTitle = null,
+                        path = currentMusic.loc.path,
+                        storedTitle = currentMusic.meta.title,
+                    ),
+                    artist = "",
+                )
+
+                val metadata = probeMusicMetadataDirectly(bridge, currentMusic.meta.id)
+                if (music.value?.meta?.id != currentMusic.meta.id) {
+                    return@collectLatest
+                }
+
+                _currentMusicDisplayInfo.value = CurrentMusicDisplayInfo(
+                    title = resolveMusicDisplayTitle(
+                        metadataTitle = metadata?.title,
+                        path = currentMusic.loc.path,
+                        storedTitle = currentMusic.meta.title,
+                    ),
+                    artist = normalizeMusicDisplayArtist(metadata?.artist),
+                )
             }
         }
     }

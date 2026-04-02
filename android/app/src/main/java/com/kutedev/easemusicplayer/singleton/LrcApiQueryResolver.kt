@@ -1,6 +1,6 @@
 package com.kutedev.easemusicplayer.singleton
 
-private val LRCAPI_AUDIO_EXTS = setOf(".wav", ".mp3", ".aac", ".flac", ".ogg", ".m4a")
+import com.kutedev.easemusicplayer.utils.stripKnownAudioExtension
 
 data class LrcApiMetadataHint(
     val title: String? = null,
@@ -46,13 +46,4 @@ private fun fallbackSearchTitle(title: String?, path: String?): String {
         normalizeMetadataField(path?.substringAfterLast('/'))
     }
     return stripKnownAudioExtension(candidate)
-}
-
-private fun stripKnownAudioExtension(title: String): String {
-    if (title.isBlank()) {
-        return ""
-    }
-    val lowerTitle = title.lowercase()
-    val extension = LRCAPI_AUDIO_EXTS.firstOrNull { lowerTitle.endsWith(it) } ?: return title
-    return title.dropLast(extension.length).trim()
 }
