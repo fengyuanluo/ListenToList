@@ -1,6 +1,8 @@
 package com.kutedev.easemusicplayer.viewmodels
 
 import androidx.lifecycle.ViewModel
+import com.kutedev.easemusicplayer.singleton.PlaylistDisplayMode
+import com.kutedev.easemusicplayer.singleton.PlaylistLayoutRepository
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,10 +21,12 @@ enum class PlaylistsMode {
 
 @HiltViewModel
 class PlaylistsVM @Inject constructor(
-    private val playlistRepository: PlaylistRepository
+    private val playlistRepository: PlaylistRepository,
+    private val playlistLayoutRepository: PlaylistLayoutRepository,
 ) : ViewModel() {
     private val _mode = MutableStateFlow(PlaylistsMode.Normal)
     val playlists = playlistRepository.playlists
+    val displayMode = playlistLayoutRepository.mode
 
     val mode = _mode.asStateFlow()
 
@@ -43,5 +47,9 @@ class PlaylistsVM @Inject constructor(
 
     fun commitMove() {
         playlistRepository.commitPendingPlaylistMove()
+    }
+
+    fun setDisplayMode(mode: PlaylistDisplayMode) {
+        playlistLayoutRepository.setMode(mode)
     }
 }

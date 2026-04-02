@@ -3,51 +3,55 @@ package com.kutedev.easemusicplayer.widgets.playlists
 import EaseImage
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.kutedev.easemusicplayer.R
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
@@ -58,15 +62,17 @@ import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RoutePlaylist
 import com.kutedev.easemusicplayer.core.RouteStorageSearch
+import com.kutedev.easemusicplayer.singleton.PlaylistDisplayMode
+import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.PlaylistsMode
 import com.kutedev.easemusicplayer.viewmodels.PlaylistsVM
 import com.kutedev.easemusicplayer.viewmodels.durationStr
-import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ScrollMoveMode
 import sh.calvin.reorderable.rememberReorderableLazyGridState
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import uniffi.ease_client_backend.PlaylistAbstract
 
 private val playlistsPaddingX = EaseTheme.spacing.page
@@ -93,13 +99,48 @@ internal fun PlaylistHomeSearchEntry(
 }
 
 @Composable
+private fun playlistContentBottomPadding(mode: PlaylistsMode): Dp {
+    return if (mode == PlaylistsMode.Adjust) 104.dp else EaseTheme.spacing.xl
+}
+
+@Composable
+private fun PlaylistCover(
+    playlist: PlaylistAbstract,
+    modifier: Modifier = Modifier,
+    shape: RoundedCornerShape,
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(EaseTheme.surfaces.secondary)
+    ) {
+        val cover = playlist.meta.showCover
+        if (cover == null) {
+            Image(
+                modifier = Modifier.fillMaxSize(),
+                painter = painterResource(id = R.drawable.cover_default_image),
+                contentDescription = null,
+                contentScale = ContentScale.FillWidth,
+            )
+        } else {
+            EaseImage(
+                modifier = Modifier.fillMaxSize(),
+                dataSourceKey = cover,
+                contentScale = ContentScale.FillWidth,
+            )
+        }
+    }
+}
+
+@Composable
 fun PlaylistsSubpage(
     playlistsVM: PlaylistsVM = hiltViewModel(),
-    editPlaylistVM: CreatePlaylistVM = hiltViewModel()
+    editPlaylistVM: CreatePlaylistVM = hiltViewModel(),
 ) {
     val navController = LocalNavController.current
     val playlists by playlistsVM.playlists.collectAsState()
     val playlistsMode by playlistsVM.mode.collectAsState()
+    val displayMode by playlistsVM.displayMode.collectAsState()
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
     if (playlists.isEmpty()) {
@@ -108,13 +149,13 @@ fun PlaylistsSubpage(
                 .fillMaxSize()
                 .background(EaseTheme.surfaces.screen)
         ) {
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(EaseTheme.spacing.lg))
             PlaylistHomeSearchEntry(
                 query = searchQuery,
                 onQueryChange = { value -> searchQuery = value },
                 onSearch = { navController.navigate(RouteStorageSearch(searchQuery)) },
                 onClearQuery = { searchQuery = "" },
-                modifier = Modifier.padding(horizontal = playlistsPaddingX)
+                modifier = Modifier.padding(horizontal = playlistsPaddingX),
             )
             Box(
                 contentAlignment = Alignment.Center,
@@ -129,83 +170,93 @@ fun PlaylistsSubpage(
                         .background(EaseTheme.surfaces.secondary)
                         .padding(EaseTheme.spacing.dialogPadding),
                 ) {
-                    Image(painter = painterResource(id = R.drawable.empty_playlists), contentDescription = null)
-                    Box(modifier = Modifier.height(20.dp))
-                    Text(
-                        text = stringResource(id = R.string.playlist_empty),
+                    Image(
+                        painter = painterResource(id = R.drawable.empty_playlists),
+                        contentDescription = null,
                     )
-                    Box(modifier = Modifier.height(12.dp))
+                    Box(modifier = Modifier.height(EaseTheme.spacing.lg))
+                    Text(text = stringResource(id = R.string.playlist_empty))
+                    Box(modifier = Modifier.height(EaseTheme.spacing.sm))
                     EaseTextButton(
                         text = stringResource(id = R.string.playlist_empty_action),
                         type = EaseTextButtonType.Primary,
                         size = EaseTextButtonSize.Medium,
-                        onClick = {
-                            editPlaylistVM.openModal()
-                        }
+                        onClick = { editPlaylistVM.openModal() },
                     )
                 }
             }
         }
-    } else {
-        Box {
-            Column(
+        return
+    }
+
+    Box {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(EaseTheme.surfaces.screen)
+        ) {
+            Spacer(modifier = Modifier.height(EaseTheme.spacing.lg))
+            PlaylistHomeSearchEntry(
+                query = searchQuery,
+                onQueryChange = { value -> searchQuery = value },
+                onSearch = { navController.navigate(RouteStorageSearch(searchQuery)) },
+                onClearQuery = { searchQuery = "" },
+                modifier = Modifier.padding(horizontal = playlistsPaddingX),
+            )
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(EaseTheme.surfaces.screen)
+                    .padding(
+                        start = playlistsPaddingX,
+                        end = playlistsPaddingX,
+                        top = EaseTheme.spacing.xs + 2.dp,
+                        bottom = EaseTheme.spacing.xs,
+                    )
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
             ) {
-                Spacer(modifier = Modifier.height(20.dp))
-                PlaylistHomeSearchEntry(
-                    query = searchQuery,
-                    onQueryChange = { value -> searchQuery = value },
-                    onSearch = { navController.navigate(RouteStorageSearch(searchQuery)) },
-                    onClearQuery = { searchQuery = "" },
-                    modifier = Modifier.padding(horizontal = playlistsPaddingX)
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_adjust),
+                    disabled = playlistsMode == PlaylistsMode.Adjust,
+                    onClick = { playlistsVM.toggleMode() },
                 )
-                Row(
-                    modifier = Modifier
-                        .padding(start = playlistsPaddingX, end = playlistsPaddingX, top = 10.dp, bottom = 8.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Medium,
-                        buttonType = EaseIconButtonType.Default,
-                        painter = painterResource(id = R.drawable.icon_adjust),
-                        disabled = playlistsMode == PlaylistsMode.Adjust,
-                        onClick = {
-                            playlistsVM.toggleMode()
-                        }
-                    )
-                    EaseIconButton(
-                        sizeType = EaseIconButtonSize.Medium,
-                        buttonType = EaseIconButtonType.Default,
-                        painter = painterResource(id = R.drawable.icon_plus),
-                        disabled = playlistsMode == PlaylistsMode.Adjust,
-                        onClick = {
-                            editPlaylistVM.openModal()
-                        }
-                    )
-                }
-                GridPlaylists(
-                    modifier = Modifier.weight(1f)
+                EaseIconButton(
+                    sizeType = EaseIconButtonSize.Medium,
+                    buttonType = EaseIconButtonType.Default,
+                    painter = painterResource(id = R.drawable.icon_plus),
+                    disabled = playlistsMode == PlaylistsMode.Adjust,
+                    onClick = { editPlaylistVM.openModal() },
                 )
             }
-            if (playlistsMode == PlaylistsMode.Adjust) {
-                FloatingActionButton(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(32.dp),
-                    onClick = {
-                        playlistsVM.setMode(PlaylistsMode.Normal)
-                    }
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.icon_yes),
-                        tint = Color.White,
-                        contentDescription = null,
-                    )
-                }
+
+            when (displayMode) {
+                PlaylistDisplayMode.Grid -> GridPlaylists(
+                    modifier = Modifier.weight(1f),
+                    bottomPadding = playlistContentBottomPadding(playlistsMode),
+                )
+                PlaylistDisplayMode.List -> ListPlaylists(
+                    modifier = Modifier.weight(1f),
+                    bottomPadding = playlistContentBottomPadding(playlistsMode),
+                )
+            }
+        }
+
+        if (playlistsMode == PlaylistsMode.Adjust) {
+            FloatingActionButton(
+                containerColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(32.dp),
+                onClick = {
+                    playlistsVM.setMode(PlaylistsMode.Normal)
+                },
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.icon_yes),
+                    tint = Color.White,
+                    contentDescription = null,
+                )
             }
         }
     }
@@ -214,12 +265,15 @@ fun PlaylistsSubpage(
 @Composable
 private fun GridPlaylists(
     modifier: Modifier = Modifier,
-    playlistsVM: PlaylistsVM = hiltViewModel()
+    bottomPadding: Dp,
+    playlistsVM: PlaylistsVM = hiltViewModel(),
 ) {
     val playlists by playlistsVM.playlists.collectAsState()
-
     val lazyGridState = rememberLazyGridState()
-    val reorderableLazyListState = rememberReorderableLazyGridState(lazyGridState = lazyGridState, scrollMoveMode = ScrollMoveMode.INSERT) { from, to ->
+    val reorderableState = rememberReorderableLazyGridState(
+        lazyGridState = lazyGridState,
+        scrollMoveMode = ScrollMoveMode.INSERT,
+    ) { from, to ->
         playlistsVM.moveTo(from.index, to.index)
     }
 
@@ -227,13 +281,14 @@ private fun GridPlaylists(
         modifier = modifier.fillMaxWidth(),
         columns = GridCells.Adaptive(minSize = 160.dp),
         horizontalArrangement = Arrangement.Center,
-        state = lazyGridState
+        state = lazyGridState,
+        contentPadding = PaddingValues(bottom = bottomPadding),
     ) {
-        items(playlists, key = { it.meta.id.value }) {
-            ReorderableItem(reorderableLazyListState, key = it.meta.id.value) { isDragging ->
-                PlaylistItem(
-                    playlist = it,
-                    isDragging = isDragging
+        items(playlists, key = { it.meta.id.value }) { playlist ->
+            ReorderableItem(reorderableState, key = playlist.meta.id.value) { isDragging ->
+                PlaylistGridItem(
+                    playlist = playlist,
+                    isDragging = isDragging,
                 )
             }
         }
@@ -241,10 +296,44 @@ private fun GridPlaylists(
 }
 
 @Composable
-private fun ReorderableCollectionItemScope.PlaylistItem(
+private fun ListPlaylists(
+    modifier: Modifier = Modifier,
+    bottomPadding: Dp,
+    playlistsVM: PlaylistsVM = hiltViewModel(),
+) {
+    val playlists by playlistsVM.playlists.collectAsState()
+    val lazyListState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(lazyListState = lazyListState) { from, to ->
+        playlistsVM.moveTo(from.index, to.index)
+    }
+
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        state = lazyListState,
+        verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
+        contentPadding = PaddingValues(
+            start = playlistsPaddingX,
+            end = playlistsPaddingX,
+            top = EaseTheme.spacing.xs,
+            bottom = bottomPadding,
+        ),
+    ) {
+        items(playlists, key = { it.meta.id.value }) { playlist ->
+            ReorderableItem(reorderableState, key = playlist.meta.id.value) { isDragging ->
+                PlaylistListItem(
+                    playlist = playlist,
+                    isDragging = isDragging,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReorderableCollectionItemScope.PlaylistGridItem(
     playlist: PlaylistAbstract,
     isDragging: Boolean,
-    playlistsVM: PlaylistsVM = hiltViewModel()
+    playlistsVM: PlaylistsVM = hiltViewModel(),
 ) {
     val mode by playlistsVM.mode.collectAsState()
     val navController = LocalNavController.current
@@ -262,52 +351,31 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
         modifier = dragModifier.then(
             if (mode == PlaylistsMode.Adjust) {
                 Modifier.draggableHandle(
-                    onDragStopped = {
-                        playlistsVM.commitMove()
-                    }
+                    onDragStopped = { playlistsVM.commitMove() },
                 )
             } else {
-                Modifier.clickable(
-                    onClick = {
-                        navController.navigate(RoutePlaylist(playlist.meta.id.value.toString()))
-                    },
-                )
+                Modifier.clickable {
+                    navController.navigate(RoutePlaylist(playlist.meta.id.value.toString()))
+                }
             }
         )
     ) {
         Column(
-            modifier = Modifier.padding(12.dp, 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.Start
+            horizontalAlignment = Alignment.Start,
         ) {
-            Box(
-                modifier = Modifier.clip(shape)
-                    .background(EaseTheme.surfaces.secondary).size(136.dp)
-            ) {
-                val cover = playlist.meta.showCover
-                if (cover == null) {
-                    Image(
-                        modifier = Modifier.fillMaxSize(),
-                        painter = painterResource(id = R.drawable.cover_default_image),
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth
-                    )
-                } else {
-                    EaseImage(
-                        modifier = Modifier.fillMaxSize(),
-                        dataSourceKey = cover,
-                        contentScale = ContentScale.FillWidth
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.padding(top = 8.dp)
-            ) {
+            PlaylistCover(
+                playlist = playlist,
+                modifier = Modifier.size(136.dp),
+                shape = shape,
+            )
+            Row(modifier = Modifier.padding(top = 8.dp)) {
                 Text(
                     text = playlist.meta.title,
                     style = EaseTheme.typography.body,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Text(
@@ -320,6 +388,7 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                 maxLines = 1,
             )
         }
+
         if (mode == PlaylistsMode.Adjust) {
             Box(
                 modifier = Modifier
@@ -327,13 +396,100 @@ private fun ReorderableCollectionItemScope.PlaylistItem(
                     .size(24.dp)
                     .clip(RoundedCornerShape(EaseTheme.radius.xs))
                     .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     modifier = Modifier.size(12.dp),
                     painter = painterResource(id = R.drawable.icon_drag),
                     tint = Color.White,
                     contentDescription = null,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReorderableCollectionItemScope.PlaylistListItem(
+    playlist: PlaylistAbstract,
+    isDragging: Boolean,
+    playlistsVM: PlaylistsVM = hiltViewModel(),
+) {
+    val mode by playlistsVM.mode.collectAsState()
+    val navController = LocalNavController.current
+    val shape = RoundedCornerShape(EaseTheme.radius.card)
+    val dragModifier = if (isDragging) {
+        Modifier
+            .shadow(10.dp, shape)
+            .scale(1.01f)
+            .alpha(0.97f)
+    } else {
+        Modifier
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(dragModifier)
+            .clip(shape)
+            .background(EaseTheme.surfaces.secondary)
+            .then(
+                if (mode == PlaylistsMode.Adjust) {
+                    Modifier
+                } else {
+                    Modifier.clickable {
+                        navController.navigate(RoutePlaylist(playlist.meta.id.value.toString()))
+                    }
+                }
+            )
+            .padding(EaseTheme.spacing.sm)
+    ) {
+        PlaylistCover(
+            playlist = playlist,
+            modifier = Modifier.size(72.dp),
+            shape = RoundedCornerShape(EaseTheme.radius.compact),
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xxs),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = playlist.meta.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = buildAnnotatedString {
+                    append("${playlist.musicCount} ${stringResource(id = R.string.music_count_unit)}")
+                    append("  ·  ")
+                    append(playlist.durationStr())
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = EaseTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (mode == PlaylistsMode.Adjust) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(EaseTheme.radius.control))
+                    .background(EaseTheme.surfaces.card)
+                    .draggableHandle(
+                        onDragStopped = { playlistsVM.commitMove() },
+                    )
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.icon_drag),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
                 )
             }
         }
