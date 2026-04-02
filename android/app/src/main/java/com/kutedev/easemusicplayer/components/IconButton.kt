@@ -20,6 +20,7 @@ import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 enum class EaseIconButtonSize {
     Small,
     Medium,
+    MediumLarge,
     Large,
 }
 
@@ -27,6 +28,7 @@ fun easeIconButtonSizeToDp(sizeType: EaseIconButtonSize): Dp {
     return when (sizeType) {
         EaseIconButtonSize.Small -> 24.dp
         EaseIconButtonSize.Medium -> 36.dp
+        EaseIconButtonSize.MediumLarge -> 48.dp
         EaseIconButtonSize.Large -> 64.dp
     }
 }
@@ -61,6 +63,7 @@ fun EaseIconButton(
         when (sizeType) {
             EaseIconButtonSize.Small -> 10.dp
             EaseIconButtonSize.Medium -> 16.dp
+            EaseIconButtonSize.MediumLarge -> 20.dp
             EaseIconButtonSize.Large -> 24.dp
         }
     }

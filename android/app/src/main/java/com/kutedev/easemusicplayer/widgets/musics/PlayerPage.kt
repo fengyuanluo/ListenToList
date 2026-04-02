@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -52,7 +54,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -68,12 +72,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
-import com.kutedev.easemusicplayer.components.EaseContextMenu
-import com.kutedev.easemusicplayer.components.EaseContextMenuItem
 import com.kutedev.easemusicplayer.components.EaseIconButton
-import com.kutedev.easemusicplayer.components.EaseIconButtonColors
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseIconButtonColors
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
@@ -153,85 +155,50 @@ private fun lyricTextColor(distance: Int): Color {
 
 @Composable
 private fun MusicPlayerHeader(
-    hasRemovableLyric: Boolean,
-    lrcApiReady: Boolean,
-    onRetryLrcApiLyric: () -> Unit,
-    onOpenLrcApiSettings: () -> Unit,
-    playerVM: PlayerVM = hiltViewModel(),
+    title: String,
+    artist: String,
 ) {
     val navController = LocalNavController.current
-
-    var moreMenuExpanded by remember {
-        mutableStateOf(false)
-    }
-
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier
-                .padding(EaseTheme.spacing.sm)
-                .fillMaxWidth()
-        ) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = EaseTheme.spacing.sm,
+                vertical = EaseTheme.spacing.xs,
+            )
+    ) {
         EaseIconButton(
             sizeType = EaseIconButtonSize.Medium,
             buttonType = EaseIconButtonType.Default,
             painter = painterResource(id = R.drawable.icon_back),
             onClick = {
                 navController.popBackStack()
-            }
+            },
+            modifier = Modifier.align(Alignment.TopStart),
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = EaseTheme.spacing.hero + EaseTheme.spacing.md),
         ) {
-            Box {
-                EaseIconButton(
-                    sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
-                    painter = painterResource(id = R.drawable.icon_vertialcal_more),
-                    onClick = { moreMenuExpanded = true; }
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = EaseTheme.typography.sectionTitle.copy(fontWeight = FontWeight.SemiBold),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (artist.isNotBlank()) {
+                Text(
+                    text = artist,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = EaseTheme.typography.body,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Box(
-                    contentAlignment = Alignment.TopEnd,
-                    modifier = Modifier
-                        .offset(20.dp, (20).dp)
-                ) {
-                    EaseContextMenu(
-                        expanded = moreMenuExpanded,
-                        onDismissRequest = { moreMenuExpanded = false; },
-                        items = listOf(
-                            if (hasRemovableLyric) {
-                                EaseContextMenuItem(
-                                    stringId = R.string.music_lyric_remove,
-                                    onClick = {
-                                        playerVM.removeLyric()
-                                    }
-                                )
-                            } else {
-                                EaseContextMenuItem(
-                                    stringId = if (lrcApiReady) {
-                                        R.string.music_lyric_fetch_from_lrcapi
-                                    } else {
-                                        R.string.music_lyric_open_lrcapi_settings
-                                    },
-                                    onClick = {
-                                        if (lrcApiReady) {
-                                            onRetryLrcApiLyric()
-                                        } else {
-                                            onOpenLrcApiSettings()
-                                        }
-                                    }
-                                )
-                            },
-                            EaseContextMenuItem(
-                                stringId = R.string.music_player_context_menu_remove_from_queue,
-                                isError = true,
-                                onClick = {
-                                    playerVM.remove()
-                                }
-                            ),
-                        )
-                    )
-                }
             }
         }
     }
@@ -619,10 +586,36 @@ private fun MusicLyric(
             }
 
             if (manualSeeking && highlightedLyricIndex in lyrics.indices) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.align(Alignment.Center)
+                val seekIndicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.Center)
+                        .padding(
+                            start = EaseTheme.spacing.hero,
+                            end = EaseTheme.spacing.xl,
+                        )
                 ) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    Canvas(
+                        modifier = Modifier
+                            .width(88.dp)
+                            .height(2.dp)
+                    ) {
+                        val strokeWidth = size.height
+                        drawLine(
+                            color = seekIndicatorColor,
+                            start = Offset(0f, size.height / 2f),
+                            end = Offset(size.width, size.height / 2f),
+                            strokeWidth = strokeWidth,
+                            pathEffect = PathEffect.dashPathEffect(
+                                floatArrayOf(12.dp.toPx(), 8.dp.toPx()),
+                                0f,
+                            ),
+                        )
+                    }
+                    Box(modifier = Modifier.width(EaseTheme.spacing.sm))
                     Text(
                         text = formatDuration(lyrics[highlightedLyricIndex].duration),
                         color = MaterialTheme.colorScheme.primary,
@@ -630,21 +623,6 @@ private fun MusicLyric(
                             fontFamily = LyricFontFamily,
                             fontWeight = FontWeight.SemiBold,
                         ),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(EaseTheme.radius.control))
-                            .background(EaseTheme.surfaces.card)
-                            .padding(
-                                horizontal = EaseTheme.spacing.sm,
-                                vertical = EaseTheme.spacing.xxs,
-                            )
-                    )
-                    Box(
-                        modifier = Modifier
-                            .padding(top = EaseTheme.spacing.xs)
-                            .width(56.dp)
-                            .height(2.dp)
-                            .clip(RoundedCornerShape(EaseTheme.radius.control))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.32f))
                     )
                 }
             }
@@ -727,7 +705,10 @@ private fun MusicPlayerBody(
 
     Box(
         modifier = Modifier
-            .padding(top = 4.dp, bottom = 28.dp)
+            .padding(
+                top = EaseTheme.spacing.xs,
+                bottom = EaseTheme.spacing.lg,
+            )
             .onSizeChanged { size ->
                 if (widgetWidth != size.width) {
                     widgetWidth = size.width;
@@ -890,7 +871,7 @@ private fun MusicPanel(
         modifier = Modifier.fillMaxWidth()
     ) {
         EaseIconButton(
-            sizeType = EaseIconButtonSize.Medium,
+            sizeType = EaseIconButtonSize.MediumLarge,
             buttonType = if (isTimeToPauseOpen) {
                 EaseIconButtonType.Primary
             } else {
@@ -910,7 +891,7 @@ private fun MusicPanel(
             }
         )
         EaseIconButton(
-            sizeType = EaseIconButtonSize.Medium,
+            sizeType = EaseIconButtonSize.MediumLarge,
             buttonType = if (showLyric && hasLyric) {
                 EaseIconButtonType.Primary
             } else {
@@ -928,7 +909,7 @@ private fun MusicPanel(
             onClick = onToggleLyric,
         )
         EaseIconButton(
-            sizeType = EaseIconButtonSize.Medium,
+            sizeType = EaseIconButtonSize.MediumLarge,
             buttonType = EaseIconButtonType.Default,
             painter = painterResource(id = R.drawable.icon_download),
             onClick = {
@@ -936,14 +917,14 @@ private fun MusicPanel(
             }
         )
         EaseIconButton(
-            sizeType = EaseIconButtonSize.Medium,
+            sizeType = EaseIconButtonSize.MediumLarge,
             buttonType = EaseIconButtonType.Default,
             painter = painterResource(id = R.drawable.icon_mode_list),
             disabled = !hasQueue,
             onClick = onOpenQueue,
         )
         EaseIconButton(
-            sizeType = EaseIconButtonSize.Medium,
+            sizeType = EaseIconButtonSize.MediumLarge,
             buttonType = EaseIconButtonType.Default,
             painter = painterResource(id = modeDrawable),
             onClick = {
@@ -1158,6 +1139,7 @@ fun MusicPlayerPage(
 ) {
     val navController = LocalNavController.current
     val currentMusic by playerVM.music.collectAsState()
+    val currentMusicDisplayInfo by playerVM.currentMusicDisplayInfo.collectAsState()
     val sourcePlaylist by playerVM.playlist.collectAsState()
     val playbackQueue by playerVM.playbackQueue.collectAsState()
     val currentQueueEntryId by playerVM.currentQueueEntryId.collectAsState()
@@ -1193,8 +1175,6 @@ fun MusicPlayerPage(
 
     val hasLyric = lyricLoadedState == LyricLoadState.LOADED
     val hasQueue = playbackQueue?.entries?.isNotEmpty() == true
-    val hasRemovableLyric = currentMusic?.lyric?.loadedState != null &&
-        currentMusic?.lyric?.loadedState != LyricLoadState.MISSING
     val lrcApiReady = lrcApiSettings.isReadyForFetch()
     val lyricActionLabel = stringResource(
         id = if (lrcApiReady) {
@@ -1234,12 +1214,8 @@ fun MusicPlayerPage(
     ) {
         Column {
             MusicPlayerHeader(
-                hasRemovableLyric = hasRemovableLyric,
-                lrcApiReady = lrcApiReady,
-                onRetryLrcApiLyric = onLyricAction,
-                onOpenLrcApiSettings = {
-                    navController.navigate(RouteLrcApiSettings())
-                },
+                title = currentMusicDisplayInfo.title,
+                artist = currentMusicDisplayInfo.artist,
             )
             Column(
                 modifier = Modifier
@@ -1278,17 +1254,10 @@ fun MusicPlayerPage(
                 modifier = Modifier.padding(
                     start = EaseTheme.spacing.hero,
                     end = EaseTheme.spacing.hero,
-                    top = EaseTheme.spacing.xxs / 2,
-                    bottom = EaseTheme.spacing.xl,
+                    top = EaseTheme.spacing.sm,
+                    bottom = EaseTheme.spacing.hero,
                 )
             ) {
-                Text(
-                    text = currentMusic?.meta?.title ?: "",
-                    maxLines = 2,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = EaseTheme.typography.sectionTitle,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
                 MusicSlider(
                     currentDuration = formatDuration(currentDuration),
                     _currentDurationMS = toMusicDurationMs(currentDuration),
@@ -1299,11 +1268,11 @@ fun MusicPlayerPage(
                         playerVM.seek(nextMS)
                     }
                 )
-                Box(modifier = Modifier.height(22.dp))
+                Box(modifier = Modifier.height(EaseTheme.spacing.xl))
                 TransportControls(
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
-                Box(modifier = Modifier.height(18.dp))
+                Box(modifier = Modifier.height(EaseTheme.spacing.lg))
                 MusicPanel(
                     hasLyric = hasLyric,
                     showLyric = showLyric,
