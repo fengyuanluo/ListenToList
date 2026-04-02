@@ -6,6 +6,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -213,6 +214,76 @@ class DirectoryBrowserControllerTest {
 
             assertEquals(BrowserScrollSnapshot(index = 3, offset = 12), controller.currentScrollSnapshot.value)
         }
+    }
+
+    @Test
+    fun navigationStopsAtDefaultDirectoryWhenCurrentPathStaysWithinSubtree() = runTest {
+        val clock = FakeClock()
+        val service = FakeDirectoryService()
+        service.enqueue("/Music/Albums") { ok(dirEntry("/Music/Albums/Synthwave")) }
+        service.enqueue("/Music/Albums/Synthwave") { ok(musicEntry("/Music/Albums/Synthwave/song.mp3")) }
+
+        createController(this, clock, service).use { harness ->
+            val controller = harness.controller
+            backgroundScope.launch { controller.canNavigateUp.collect {} }
+            controller.restorePath("/Music/Albums")
+            controller.setStorage(
+                REMOTE_STORAGE.copy(navigationRootCandidate = "/Music/Albums")
+            )
+            controller.refresh(forceRemote = false)
+            advanceUntilIdle()
+
+            assertFalse(controller.canNavigateUp.value)
+
+            controller.navigateTo("/Music/Albums/Synthwave")
+            advanceUntilIdle()
+            assertTrue(controller.canNavigateUp.value)
+
+            controller.navigateUp()
+            advanceUntilIdle()
+
+            assertEquals("/Music/Albums", controller.currentPath.value)
+            assertFalse(controller.canNavigateUp.value)
+        }
+    }
+
+    @Test
+    fun navigationFallsBackToRootWhenCurrentPathIsOutsideDefaultDirectorySubtree() = runTest {
+        val clock = FakeClock()
+        val service = FakeDirectoryService()
+        service.enqueue("/Podcasts/Episodes") { ok(musicEntry("/Podcasts/Episodes/episode.mp3")) }
+        service.enqueue("/Podcasts") { ok(dirEntry("/Podcasts/Episodes")) }
+        service.enqueue("/") { ok(dirEntry("/Podcasts")) }
+
+        createController(this, clock, service).use { harness ->
+            val controller = harness.controller
+            backgroundScope.launch { controller.canNavigateUp.collect {} }
+            controller.restorePath("/Podcasts/Episodes")
+            controller.setStorage(
+                REMOTE_STORAGE.copy(navigationRootCandidate = "/Music/Albums")
+            )
+            controller.refresh(forceRemote = false)
+            advanceUntilIdle()
+
+            assertTrue(controller.canNavigateUp.value)
+
+            controller.navigateUp()
+            advanceUntilIdle()
+            assertEquals("/Podcasts", controller.currentPath.value)
+            assertTrue(controller.canNavigateUp.value)
+
+            controller.navigateUp()
+            advanceUntilIdle()
+            assertEquals("/", controller.currentPath.value)
+            assertFalse(controller.canNavigateUp.value)
+        }
+    }
+
+    @Test
+    fun resolveBrowserNavigationFloorUsesDefaultDirectoryOnlyInsideItsSubtree() {
+        assertEquals("/Music/Albums", resolveBrowserNavigationFloor("/Music/Albums", "/Music/Albums"))
+        assertEquals("/Music/Albums", resolveBrowserNavigationFloor("/Music/Albums/Synthwave", "/Music/Albums"))
+        assertEquals("/", resolveBrowserNavigationFloor("/Podcasts/Episodes", "/Music/Albums"))
     }
 
     private fun createController(

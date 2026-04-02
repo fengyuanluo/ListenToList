@@ -3,6 +3,7 @@ package com.kutedev.easemusicplayer.viewmodels
 import java.net.URLDecoder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,7 @@ data class DirectoryCacheEntry(
 data class BrowserStorageContext(
     val storageId: StorageId,
     val isLocal: Boolean,
+    val navigationRootCandidate: String? = null,
 )
 
 data class DirectoryFetchSuccess(
@@ -83,6 +85,25 @@ fun parentBrowserPath(path: String): String {
     val trimmed = normalized.trimEnd('/')
     val idx = trimmed.lastIndexOf('/')
     return if (idx <= 0) "/" else trimmed.substring(0, idx)
+}
+
+fun isBrowserPathWithinRoot(path: String, root: String): Boolean {
+    val normalizedPath = normalizeBrowserPath(path)
+    val normalizedRoot = normalizeBrowserPath(root)
+    if (normalizedRoot == "/") {
+        return true
+    }
+    return normalizedPath == normalizedRoot || normalizedPath.startsWith("$normalizedRoot/")
+}
+
+fun resolveBrowserNavigationFloor(path: String, rootCandidate: String?): String {
+    val normalizedPath = normalizeBrowserPath(path)
+    val normalizedRoot = rootCandidate?.let(::normalizeBrowserPath) ?: "/"
+    return if (isBrowserPathWithinRoot(normalizedPath, normalizedRoot)) {
+        normalizedRoot
+    } else {
+        "/"
+    }
 }
 
 fun buildBrowserPathItems(path: String): List<BrowserPathItem> {
@@ -147,8 +168,13 @@ class DirectoryBrowserController(
     val isRefreshing = _isRefreshing.asStateFlow()
     val splitPaths: StateFlow<List<BrowserPathItem>> = _currentPath.map(::buildBrowserPathItems)
         .stateIn(scope, SharingStarted.Lazily, buildBrowserPathItems(initialPath))
-    val canNavigateUp: StateFlow<Boolean> = _currentPath.map { it != "/" }
-        .stateIn(scope, SharingStarted.Lazily, normalizeBrowserPath(initialPath) != "/")
+    val canNavigateUp: StateFlow<Boolean> = combine(_currentPath, _storageContext) { path, context ->
+        path != resolveBrowserNavigationFloor(path, context?.navigationRootCandidate)
+    }.stateIn(
+        scope,
+        SharingStarted.Lazily,
+        normalizeBrowserPath(initialPath) != resolveBrowserNavigationFloor(initialPath, null),
+    )
 
     fun setStorage(context: BrowserStorageContext?) {
         _storageContext.value = context
@@ -170,7 +196,11 @@ class DirectoryBrowserController(
     }
 
     fun navigateUp() {
-        if (_currentPath.value == "/") {
+        val floor = resolveBrowserNavigationFloor(
+            _currentPath.value,
+            _storageContext.value?.navigationRootCandidate,
+        )
+        if (_currentPath.value == floor) {
             return
         }
         navigateTo(parentBrowserPath(_currentPath.value))
