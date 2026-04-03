@@ -2,11 +2,14 @@ package com.kutedev.easemusicplayer.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.annotation.StringRes
+import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import com.kutedev.easemusicplayer.singleton.LrcApiRepository
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
+import com.kutedev.easemusicplayer.singleton.ToastRepository
 import com.kutedev.easemusicplayer.core.probeMusicMetadataDirectly
 import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.normalizeMusicDisplayArtist
@@ -22,12 +25,23 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uniffi.ease_client_schema.MusicId
+import uniffi.ease_client_schema.PlayMode
 import uniffi.ease_client_schema.PlaylistId
 import java.time.Duration
 import javax.inject.Inject
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 import kotlin.time.toJavaDuration
+
+@StringRes
+internal fun playModeToastLabelResId(playMode: PlayMode): Int {
+    return when (playMode) {
+        PlayMode.SINGLE -> R.string.music_play_mode_single
+        PlayMode.SINGLE_LOOP -> R.string.music_play_mode_single_loop
+        PlayMode.LIST -> R.string.music_play_mode_list
+        PlayMode.LIST_LOOP -> R.string.music_play_mode_list_loop
+    }
+}
 
 data class CurrentMusicDisplayInfo(
     val title: String = "",
@@ -41,6 +55,7 @@ class PlayerVM @Inject constructor(
     private val playerControllerRepository: PlayerControllerRepository,
     private val downloadRepository: DownloadRepository,
     private val lrcApiRepository: LrcApiRepository,
+    private val toastRepository: ToastRepository,
 ) : ViewModel() {
     private val _currentDuration = MutableStateFlow(Duration.ZERO)
     private val _bufferDuration = MutableStateFlow(Duration.ZERO)
@@ -156,7 +171,8 @@ class PlayerVM @Inject constructor(
     }
 
     fun changePlayModeToNext() {
-        playerRepository.changePlayModeToNext()
+        val nextPlayMode = playerRepository.changePlayModeToNext()
+        toastRepository.emitToastRes(playModeToastLabelResId(nextPlayMode))
     }
 
     fun removeLyric() {

@@ -33,7 +33,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,6 +77,7 @@ import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.components.EaseIconButtonColors
+import com.kutedev.easemusicplayer.components.EaseFlatSwitch
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
@@ -133,24 +133,24 @@ private fun resolveLyricSeekIndicatorAnchorPoint(
     return coordinates.localToRoot(Offset(localTextRightPx, localTextCenterYPx))
 }
 
-internal fun resolveLyricSeekIndicatorLabelStartX(
+internal fun resolveLyricSeekPreviewStartX(
     indicatorAnchorX: Float,
-    labelRightBoundaryX: Float,
-    labelWidthPx: Int,
+    contentRightBoundaryX: Float,
+    contentWidthPx: Int,
     seekLineGapPx: Float,
     seekTextGapPx: Float,
     rightBiasPx: Float = 0f,
 ): Float {
     if (
         !indicatorAnchorX.isFinite() ||
-        !labelRightBoundaryX.isFinite() ||
-        labelWidthPx <= 0
+        !contentRightBoundaryX.isFinite() ||
+        contentWidthPx <= 0
     ) {
         return Float.NaN
     }
-    val idealStart = (indicatorAnchorX + labelRightBoundaryX - labelWidthPx) / 2f
+    val idealStart = (indicatorAnchorX + contentRightBoundaryX - contentWidthPx) / 2f
     val minStart = indicatorAnchorX + seekLineGapPx + seekTextGapPx
-    val maxStart = labelRightBoundaryX - labelWidthPx
+    val maxStart = contentRightBoundaryX - contentWidthPx
     if (!idealStart.isFinite() || !minStart.isFinite() || !maxStart.isFinite()) {
         return Float.NaN
     }
@@ -446,13 +446,14 @@ private fun MusicLyric(
     val coroutineScope = rememberCoroutineScope()
     val interactionSource = remember { MutableInteractionSource() }
     var manualSeeking by remember(lyrics) { mutableStateOf(false) }
-    var pendingSeekLyricIndex by remember(lyrics) { mutableStateOf<Int?>(null) }
+    var previewSeekLyricIndex by remember(lyrics) { mutableStateOf<Int?>(null) }
+    var requestedSeekLyricIndex by remember(lyrics) { mutableStateOf<Int?>(null) }
     var lyricContainerRootOffset by remember(lyrics) { mutableStateOf(Offset.Zero) }
     var lyricContainerWidthPx by remember(lyrics) { mutableIntStateOf(0) }
     var highlightedTextCoordinates by remember(lyrics) { mutableStateOf<LayoutCoordinates?>(null) }
     var seekIndicatorAnchor by remember(lyrics) { mutableStateOf<LyricSeekIndicatorAnchor?>(null) }
-    var seekIndicatorLabelWidthPx by remember(lyrics) { mutableIntStateOf(0) }
-    var seekIndicatorLabelHeightPx by remember(lyrics) { mutableIntStateOf(0) }
+    var seekPreviewWidthPx by remember(lyrics) { mutableIntStateOf(0) }
+    var seekPreviewHeightPx by remember(lyrics) { mutableIntStateOf(0) }
     val highlightedTextStartPaddingPx = with(density) { EaseTheme.spacing.xs.toPx() }
     val seekLineGap = EaseTheme.spacing.xs
     val seekTextGap = EaseTheme.spacing.sm
@@ -461,11 +462,17 @@ private fun MusicLyric(
     val seekLineGapPx = with(density) { seekLineGap.toPx() }
     val seekTextGapPx = with(density) { seekTextGap.toPx() }
     val seekIndicatorEndPaddingPx = with(density) { seekIndicatorEndPadding.toPx() }
-    val highlightedLyricIndex by remember(lyricIndex, manualSeeking, listState, lyrics) {
+    val showSeekPreview = manualSeeking || previewSeekLyricIndex != null
+    val highlightedLyricIndex by remember(
+        lyricIndex,
+        manualSeeking,
+        listState,
+        lyrics,
+        previewSeekLyricIndex,
+        requestedSeekLyricIndex,
+    ) {
         derivedStateOf {
-            if (!manualSeeking) {
-                pendingSeekLyricIndex ?: lyricIndex
-            } else {
+            if (manualSeeking) {
                 resolveCenteredLyricIndex(
                     viewportStartOffset = listState.layoutInfo.viewportStartOffset,
                     viewportEndOffset = listState.layoutInfo.viewportEndOffset,
@@ -477,7 +484,9 @@ private fun MusicLyric(
                         )
                     },
                     lyricCount = lyrics.size,
-                ) ?: lyricIndex
+                ) ?: previewSeekLyricIndex ?: requestedSeekLyricIndex ?: lyricIndex
+            } else {
+                previewSeekLyricIndex ?: requestedSeekLyricIndex ?: lyricIndex
             }
         }
     }
@@ -485,27 +494,35 @@ private fun MusicLyric(
     val currentLyricIndex by rememberUpdatedState(lyricIndex)
     val currentLyrics by rememberUpdatedState(lyrics)
 
-    LaunchedEffect(lyricIndex, pendingSeekLyricIndex) {
-        val targetIndex = pendingSeekLyricIndex ?: return@LaunchedEffect
+    LaunchedEffect(lyricIndex, requestedSeekLyricIndex) {
+        val targetIndex = requestedSeekLyricIndex ?: return@LaunchedEffect
         if (lyricIndex >= 0 && (lyricIndex - targetIndex).absoluteValue <= 1) {
-            pendingSeekLyricIndex = null
+            requestedSeekLyricIndex = null
         }
     }
 
-    LaunchedEffect(highlightedLyricIndex, manualSeeking) {
-        if (!manualSeeking) {
+    LaunchedEffect(highlightedLyricIndex, showSeekPreview) {
+        if (!showSeekPreview) {
             highlightedTextCoordinates = null
             seekIndicatorAnchor = null
         }
     }
 
-    LaunchedEffect(lyricIndex, widgetHeight, lyricLoadedState, manualSeeking, lyrics) {
+    LaunchedEffect(
+        lyricIndex,
+        widgetHeight,
+        lyricLoadedState,
+        manualSeeking,
+        lyrics,
+        previewSeekLyricIndex,
+        requestedSeekLyricIndex,
+    ) {
         if (
             !manualSeeking &&
             lyricLoadedState == LyricLoadState.LOADED &&
             lyrics.isNotEmpty()
         ) {
-            val targetLyricIndex = (pendingSeekLyricIndex ?: lyricIndex)
+            val targetLyricIndex = (previewSeekLyricIndex ?: requestedSeekLyricIndex ?: lyricIndex)
                 .coerceAtLeast(0)
                 .coerceAtMost(lyrics.lastIndex)
             listState.animateScrollToItem(targetLyricIndex + 1, -(widgetHeight / 2))
@@ -539,7 +556,8 @@ private fun MusicLyric(
                 Box(modifier = Modifier.height(4.dp))
                 if (lyricLoadedState == LyricLoadState.MISSING) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
                     ) {
                         Text(
                             text = stringResource(R.string.music_lyric_no_desc),
@@ -556,7 +574,8 @@ private fun MusicLyric(
                     }
                 } else {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
                     ) {
                         Text(
                             text = stringResource(R.string.music_lyric_fail),
@@ -584,7 +603,13 @@ private fun MusicLyric(
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
-                    onClick = onTapLyric,
+                    onClick = {
+                        if (previewSeekLyricIndex != null) {
+                            previewSeekLyricIndex = null
+                        } else {
+                            onTapLyric()
+                        }
+                    },
                 )
                 .draggable(
                     state = rememberDraggableState { delta ->
@@ -599,12 +624,12 @@ private fun MusicLyric(
                         val targetLyricIndex = currentHighlightedLyricIndex.takeIf { it in currentLyrics.indices }
                             ?: currentLyricIndex.takeIf { it in currentLyrics.indices }
                         if (targetLyricIndex != null) {
-                            val targetLyric = currentLyrics[targetLyricIndex]
-                            pendingSeekLyricIndex = targetLyricIndex
+                            previewSeekLyricIndex = targetLyricIndex
                             coroutineScope.launch {
                                 listState.animateScrollToItem(targetLyricIndex + 1, -(widgetHeight / 2))
                             }
-                            onSeekToLyric(targetLyric.duration.toMillis().toULong())
+                        } else {
+                            previewSeekLyricIndex = null
                         }
                         manualSeeking = false
                     },
@@ -706,7 +731,7 @@ private fun MusicLyric(
                 }
             }
 
-            if (manualSeeking && highlightedLyricIndex in lyrics.indices) {
+            if (showSeekPreview && highlightedLyricIndex in lyrics.indices) {
                 val currentAnchor = seekIndicatorAnchor
                     ?.takeIf { it.lyricIndex == highlightedLyricIndex }
                 val seekIndicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
@@ -716,12 +741,12 @@ private fun MusicLyric(
                 val indicatorAnchorY = currentAnchor?.let { anchor ->
                     anchor.anchorPointInRoot.y - lyricContainerRootOffset.y
                 } ?: Float.NaN
-                val labelRightBoundaryX = lyricContainerWidthPx - seekIndicatorEndPaddingPx
-                val labelStartX = if (currentAnchor?.isReady == true) {
-                    resolveLyricSeekIndicatorLabelStartX(
+                val previewRightBoundaryX = lyricContainerWidthPx - seekIndicatorEndPaddingPx
+                val previewStartX = if (currentAnchor?.isReady == true) {
+                    resolveLyricSeekPreviewStartX(
                         indicatorAnchorX = indicatorAnchorX,
-                        labelRightBoundaryX = labelRightBoundaryX,
-                        labelWidthPx = seekIndicatorLabelWidthPx,
+                        contentRightBoundaryX = previewRightBoundaryX,
+                        contentWidthPx = seekPreviewWidthPx,
                         seekLineGapPx = seekLineGapPx,
                         seekTextGapPx = seekTextGapPx,
                         rightBiasPx = seekLabelRightBiasPx,
@@ -730,7 +755,7 @@ private fun MusicLyric(
                     Float.NaN
                 }
                 val lineStartX = indicatorAnchorX + seekLineGapPx
-                val lineEndX = labelStartX - seekTextGapPx
+                val lineEndX = previewStartX - seekTextGapPx
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -757,25 +782,74 @@ private fun MusicLyric(
                         }
                     }
                     if (currentAnchor?.isReady == true) {
-                        Text(
-                            text = formatDuration(lyrics[highlightedLyricIndex].duration),
-                            color = MaterialTheme.colorScheme.primary,
-                            style = EaseTheme.typography.body.copy(
-                                fontFamily = LyricFontFamily,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xxs),
                             modifier = Modifier
+                                .clip(RoundedCornerShape(EaseTheme.radius.control))
+                                .background(EaseTheme.surfaces.secondary.copy(alpha = 0.94f))
                                 .offset {
                                     IntOffset(
-                                        x = labelStartX.toInt().coerceAtLeast(0),
-                                        y = (indicatorAnchorY - seekIndicatorLabelHeightPx / 2f).toInt(),
+                                        x = previewStartX.toInt().coerceAtLeast(0),
+                                        y = (indicatorAnchorY - seekPreviewHeightPx / 2f).toInt(),
                                     )
                                 }
+                                .padding(
+                                    start = EaseTheme.spacing.sm,
+                                    end = EaseTheme.spacing.xxs,
+                                    top = EaseTheme.spacing.xxs,
+                                    bottom = EaseTheme.spacing.xxs,
+                                )
                                 .onSizeChanged { size ->
-                                    seekIndicatorLabelWidthPx = size.width
-                                    seekIndicatorLabelHeightPx = size.height
+                                    seekPreviewWidthPx = size.width
+                                    seekPreviewHeightPx = size.height
                                 },
-                        )
+                        ) {
+                            Text(
+                                text = formatDuration(lyrics[highlightedLyricIndex].duration),
+                                color = MaterialTheme.colorScheme.primary,
+                                style = EaseTheme.typography.body.copy(
+                                    fontFamily = LyricFontFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(EaseTheme.radius.control))
+                                    .background(
+                                        if (previewSeekLyricIndex != null && !manualSeeking) {
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                                        } else {
+                                            Color.Transparent
+                                        }
+                                    )
+                                    .clickable(
+                                        enabled = previewSeekLyricIndex != null && !manualSeeking,
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                    ) {
+                                        val targetLyricIndex = previewSeekLyricIndex
+                                            ?.takeIf { it in lyrics.indices }
+                                            ?: return@clickable
+                                        requestedSeekLyricIndex = targetLyricIndex
+                                        previewSeekLyricIndex = null
+                                        onSeekToLyric(lyrics[targetLyricIndex].duration.toMillis().toULong())
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.icon_play),
+                                    contentDescription = stringResource(R.string.music_lyric_seek_confirm),
+                                    tint = if (previewSeekLyricIndex != null && !manualSeeking) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.54f)
+                                    },
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1528,16 +1602,16 @@ private fun MusicPlayerBodyPreview() {
         Row {
             Column {
                 Text(text = "canPrev")
-                Switch(
+                EaseFlatSwitch(
                     checked = canPrev,
-                    onCheckedChange = { value -> canPrev = value }
+                    onCheckedChange = { value -> canPrev = value },
                 )
             }
             Column {
                 Text(text = "canNext")
-                Switch(
+                EaseFlatSwitch(
                     checked = canNext,
-                    onCheckedChange = { value -> canNext = value }
+                    onCheckedChange = { value -> canNext = value },
                 )
             }
         }

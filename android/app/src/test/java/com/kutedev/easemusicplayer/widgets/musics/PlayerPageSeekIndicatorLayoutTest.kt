@@ -7,11 +7,11 @@ import org.junit.Test
 class PlayerPageSeekIndicatorLayoutTest {
 
     @Test
-    fun resolveLyricSeekIndicatorLabelStartXCentersWithinAvailableGapWhenSpaceAllows() {
-        val startX = resolveLyricSeekIndicatorLabelStartX(
+    fun resolveLyricSeekPreviewStartXCentersWithinAvailableGapWhenSpaceAllows() {
+        val startX = resolveLyricSeekPreviewStartX(
             indicatorAnchorX = 420f,
-            labelRightBoundaryX = 920f,
-            labelWidthPx = 120,
+            contentRightBoundaryX = 920f,
+            contentWidthPx = 120,
             seekLineGapPx = 8f,
             seekTextGapPx = 16f,
         )
@@ -20,11 +20,11 @@ class PlayerPageSeekIndicatorLayoutTest {
     }
 
     @Test
-    fun resolveLyricSeekIndicatorLabelStartXFallsBackRightwardWithoutCrashingWhenSpaceIsTight() {
-        val startX = resolveLyricSeekIndicatorLabelStartX(
+    fun resolveLyricSeekPreviewStartXFallsBackRightwardWithoutCrashingWhenSpaceIsTight() {
+        val startX = resolveLyricSeekPreviewStartX(
             indicatorAnchorX = 760f,
-            labelRightBoundaryX = 900f,
-            labelWidthPx = 120,
+            contentRightBoundaryX = 900f,
+            contentWidthPx = 120,
             seekLineGapPx = 8f,
             seekTextGapPx = 16f,
         )
@@ -33,11 +33,11 @@ class PlayerPageSeekIndicatorLayoutTest {
     }
 
     @Test
-    fun resolveLyricSeekIndicatorLabelStartXReturnsNanForInvalidInputs() {
-        val startX = resolveLyricSeekIndicatorLabelStartX(
+    fun resolveLyricSeekPreviewStartXReturnsNanForInvalidInputs() {
+        val startX = resolveLyricSeekPreviewStartX(
             indicatorAnchorX = Float.NaN,
-            labelRightBoundaryX = 900f,
-            labelWidthPx = 120,
+            contentRightBoundaryX = 900f,
+            contentWidthPx = 120,
             seekLineGapPx = 8f,
             seekTextGapPx = 16f,
         )
@@ -46,11 +46,11 @@ class PlayerPageSeekIndicatorLayoutTest {
     }
 
     @Test
-    fun resolveLyricSeekIndicatorLabelStartXCanBiasSlightlyRightWithinBounds() {
-        val startX = resolveLyricSeekIndicatorLabelStartX(
+    fun resolveLyricSeekPreviewStartXCanBiasSlightlyRightWithinBounds() {
+        val startX = resolveLyricSeekPreviewStartX(
             indicatorAnchorX = 420f,
-            labelRightBoundaryX = 920f,
-            labelWidthPx = 120,
+            contentRightBoundaryX = 920f,
+            contentWidthPx = 120,
             seekLineGapPx = 8f,
             seekTextGapPx = 16f,
             rightBiasPx = 12f,

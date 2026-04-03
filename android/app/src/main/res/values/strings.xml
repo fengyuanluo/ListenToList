@@ -108,6 +108,11 @@
     <string name="music_lyric_configure_lrcapi">Configure LrcApi</string>
     <string name="music_lyric_fetch_from_lrcapi">Fetch from LrcApi</string>
     <string name="music_lyric_open_lrcapi_settings">Open LrcApi Settings</string>
+    <string name="music_lyric_seek_confirm">Jump to selected lyric time</string>
+    <string name="music_play_mode_single">Single play</string>
+    <string name="music_play_mode_single_loop">Repeat one</string>
+    <string name="music_play_mode_list">List play</string>
+    <string name="music_play_mode_list_loop">Repeat list</string>
     <string name="music_queue_sheet_title">Current Queue</string>
     <string name="music_queue_sheet_temporary">Temporary queue</string>
     <string name="storage_edit_oauth">OAuth</string>
