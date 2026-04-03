@@ -186,7 +186,7 @@ class PlayerRepository @Inject constructor(
         )
     }
 
-    fun changePlayModeToNext() {
+    fun changePlayModeToNext(): PlayMode {
         val nextPlayMode = when (playMode.value) {
             PlayMode.SINGLE -> PlayMode.SINGLE_LOOP
             PlayMode.SINGLE_LOOP -> PlayMode.LIST
@@ -194,6 +194,7 @@ class PlayerRepository @Inject constructor(
             PlayMode.LIST_LOOP -> PlayMode.SINGLE
         }
         savePlayMode(nextPlayMode)
+        return nextPlayMode
     }
 
     fun removeLyric() {
