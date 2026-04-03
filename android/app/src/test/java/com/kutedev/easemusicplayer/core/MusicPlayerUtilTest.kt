@@ -31,6 +31,54 @@ import uniffi.ease_client_schema.PlaylistId
 @Config(manifest = Config.NONE)
 class MusicPlayerUtilTest {
     @Test
+    fun buildPlaybackNotificationMediaMetadata_prefersProbedFieldsAndArtworkData() {
+        val baseMetadata = androidx.media3.common.MediaMetadata.Builder()
+            .setTitle("stored-title")
+            .setArtworkUri(DEFAULT_TEST_ARTWORK_URI)
+            .build()
+
+        val updated = buildPlaybackNotificationMediaMetadata(
+            baseMetadata = baseMetadata,
+            probedMetadata = ProbedMusicMetadata(
+                duration = Duration.ofSeconds(123),
+                cover = null,
+                title = "probed-title",
+                artist = "probed-artist",
+                album = "probed-album",
+            ),
+            artworkData = byteArrayOf(1, 2, 3),
+        )
+
+        assertEquals("probed-title", updated.title)
+        assertEquals("probed-artist", updated.artist)
+        assertEquals("probed-album", updated.albumTitle)
+        assertTrue(updated.artworkData.contentEquals(byteArrayOf(1, 2, 3)))
+        assertEquals(DEFAULT_TEST_ARTWORK_URI, updated.artworkUri)
+    }
+
+    @Test
+    fun playbackNotificationMetadataEquals_detectsRelevantChanges() {
+        val left = androidx.media3.common.MediaMetadata.Builder()
+            .setTitle("title")
+            .setArtist("artist")
+            .setArtworkData(byteArrayOf(7, 8), null)
+            .build()
+        val same = androidx.media3.common.MediaMetadata.Builder()
+            .setTitle("title")
+            .setArtist("artist")
+            .setArtworkData(byteArrayOf(7, 8), null)
+            .build()
+        val different = androidx.media3.common.MediaMetadata.Builder()
+            .setTitle("title")
+            .setArtist("artist-2")
+            .setArtworkData(byteArrayOf(7, 8), null)
+            .build()
+
+        assertTrue(playbackNotificationMetadataEquals(left, same))
+        assertFalse(playbackNotificationMetadataEquals(left, different))
+    }
+
+    @Test
     fun buildPlaybackQueuePlan_singleModeOnlyQueuesCurrentTrack() {
         val playlist = testPlaylist(listOf(11L, 12L, 13L))
 
@@ -213,6 +261,12 @@ class MusicPlayerUtilTest {
                 duration = null,
             ),
             musics = musics,
+        )
+    }
+
+    companion object {
+        private val DEFAULT_TEST_ARTWORK_URI = android.net.Uri.parse(
+            "android.resource://com.kutedev.easemusicplayer/drawable/cover_default_image",
         )
     }
 }

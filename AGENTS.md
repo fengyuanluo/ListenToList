@@ -57,13 +57,12 @@
 
 ### Android 关键入口
 - `MainActivity.kt`：不仅是 UI 容器，还负责：
-  - 启动 `KeepBackendService`
   - 初始化 `Bridge`
   - 建立 `MediaController`
   - 做 repository 初始 reload
   - 处理 OAuth 回调 `easem://oauth2redirect`
 - `Root.kt`：Compose 根节点与导航入口。
-- `core/MusicPlayer.kt`：定义 `PlaybackService : MediaSessionService`，承接真正的播放服务。
+- `core/MusicPlayer.kt`：定义 `PlaybackService : MediaSessionService`，承接真正的播放服务与系统媒体通知；当前不再额外维护一个常驻 backend foreground service 通知。
 - `singleton/Bridge.kt`：Android ↔ Rust backend 的关键边界。
 
 ### Compose 主题 / Token 契约
