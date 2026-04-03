@@ -133,32 +133,44 @@ private fun resolveLyricSeekIndicatorAnchorPoint(
     return coordinates.localToRoot(Offset(localTextRightPx, localTextCenterYPx))
 }
 
-internal fun resolveLyricSeekPreviewStartX(
-    indicatorAnchorX: Float,
-    contentRightBoundaryX: Float,
+internal fun resolveFixedLyricSeekPreviewX(
+    containerWidthPx: Int,
     contentWidthPx: Int,
-    seekLineGapPx: Float,
-    seekTextGapPx: Float,
-    rightBiasPx: Float = 0f,
+    endPaddingPx: Float,
 ): Float {
     if (
-        !indicatorAnchorX.isFinite() ||
-        !contentRightBoundaryX.isFinite() ||
+        containerWidthPx <= 0 ||
         contentWidthPx <= 0
     ) {
         return Float.NaN
     }
-    val idealStart = (indicatorAnchorX + contentRightBoundaryX - contentWidthPx) / 2f
-    val minStart = indicatorAnchorX + seekLineGapPx + seekTextGapPx
-    val maxStart = contentRightBoundaryX - contentWidthPx
-    if (!idealStart.isFinite() || !minStart.isFinite() || !maxStart.isFinite()) {
+    val maxStart = containerWidthPx - contentWidthPx - endPaddingPx
+    if (!maxStart.isFinite()) {
         return Float.NaN
     }
-    return if (maxStart <= minStart) {
-        maxStart.coerceAtLeast(0f)
-    } else {
-        (idealStart + rightBiasPx).coerceIn(minStart, maxStart)
+    return maxStart.coerceAtLeast(0f)
+}
+
+internal fun resolveLyricSeekPreviewCenterY(
+    anchorY: Float,
+    containerHeightPx: Int,
+    contentHeightPx: Int,
+): Float {
+    if (
+        !anchorY.isFinite() ||
+        containerHeightPx <= 0 ||
+        contentHeightPx <= 0
+    ) {
+        return Float.NaN
     }
+    val halfHeight = contentHeightPx / 2f
+    if (!halfHeight.isFinite()) {
+        return Float.NaN
+    }
+    return anchorY.coerceIn(
+        minimumValue = halfHeight,
+        maximumValue = (containerHeightPx - halfHeight).coerceAtLeast(halfHeight),
+    )
 }
 
 private data class LyricSeekIndicatorAnchor(
@@ -450,15 +462,17 @@ private fun MusicLyric(
     var requestedSeekLyricIndex by remember(lyrics) { mutableStateOf<Int?>(null) }
     var lyricContainerRootOffset by remember(lyrics) { mutableStateOf(Offset.Zero) }
     var lyricContainerWidthPx by remember(lyrics) { mutableIntStateOf(0) }
+    var lyricContainerHeightPx by remember(lyrics) { mutableIntStateOf(0) }
     var highlightedTextCoordinates by remember(lyrics) { mutableStateOf<LayoutCoordinates?>(null) }
     var seekIndicatorAnchor by remember(lyrics) { mutableStateOf<LyricSeekIndicatorAnchor?>(null) }
-    var seekPreviewWidthPx by remember(lyrics) { mutableIntStateOf(0) }
-    var seekPreviewHeightPx by remember(lyrics) { mutableIntStateOf(0) }
+    val defaultSeekPreviewWidthPx = with(density) { 112.dp.roundToPx() }
+    val defaultSeekPreviewHeightPx = with(density) { 40.dp.roundToPx() }
+    var seekPreviewWidthPx by remember(lyrics) { mutableIntStateOf(defaultSeekPreviewWidthPx) }
+    var seekPreviewHeightPx by remember(lyrics) { mutableIntStateOf(defaultSeekPreviewHeightPx) }
     val highlightedTextStartPaddingPx = with(density) { EaseTheme.spacing.xs.toPx() }
     val seekLineGap = EaseTheme.spacing.xs
     val seekTextGap = EaseTheme.spacing.sm
     val seekIndicatorEndPadding = EaseTheme.spacing.xs
-    val seekLabelRightBiasPx = with(density) { EaseTheme.spacing.xs.toPx() }
     val seekLineGapPx = with(density) { seekLineGap.toPx() }
     val seekTextGapPx = with(density) { seekTextGap.toPx() }
     val seekIndicatorEndPaddingPx = with(density) { seekIndicatorEndPadding.toPx() }
@@ -540,6 +554,7 @@ private fun MusicLyric(
             .onGloballyPositioned { coordinates ->
                 lyricContainerRootOffset = coordinates.localToRoot(Offset.Zero)
                 lyricContainerWidthPx = coordinates.size.width
+                lyricContainerHeightPx = coordinates.size.height
             },
         contentAlignment = Alignment.Center
     ) {
@@ -741,15 +756,20 @@ private fun MusicLyric(
                 val indicatorAnchorY = currentAnchor?.let { anchor ->
                     anchor.anchorPointInRoot.y - lyricContainerRootOffset.y
                 } ?: Float.NaN
-                val previewRightBoundaryX = lyricContainerWidthPx - seekIndicatorEndPaddingPx
                 val previewStartX = if (currentAnchor?.isReady == true) {
-                    resolveLyricSeekPreviewStartX(
-                        indicatorAnchorX = indicatorAnchorX,
-                        contentRightBoundaryX = previewRightBoundaryX,
+                    resolveFixedLyricSeekPreviewX(
+                        containerWidthPx = lyricContainerWidthPx,
                         contentWidthPx = seekPreviewWidthPx,
-                        seekLineGapPx = seekLineGapPx,
-                        seekTextGapPx = seekTextGapPx,
-                        rightBiasPx = seekLabelRightBiasPx,
+                        endPaddingPx = seekIndicatorEndPaddingPx,
+                    )
+                } else {
+                    Float.NaN
+                }
+                val previewCenterY = if (currentAnchor?.isReady == true) {
+                    resolveLyricSeekPreviewCenterY(
+                        anchorY = indicatorAnchorY,
+                        containerHeightPx = lyricContainerHeightPx,
+                        contentHeightPx = seekPreviewHeightPx,
                     )
                 } else {
                     Float.NaN
@@ -767,12 +787,13 @@ private fun MusicLyric(
                     ) {
                         if (
                             currentAnchor?.isReady == true &&
+                            previewCenterY.isFinite() &&
                             lineEndX > lineStartX
                         ) {
                             drawLine(
                                 color = seekIndicatorColor,
                                 start = Offset(lineStartX, indicatorAnchorY),
-                                end = Offset(lineEndX, indicatorAnchorY),
+                                end = Offset(lineEndX, previewCenterY),
                                 strokeWidth = 2.5.dp.toPx(),
                                 pathEffect = PathEffect.dashPathEffect(
                                     floatArrayOf(10.dp.toPx(), 6.dp.toPx()),
@@ -781,17 +802,23 @@ private fun MusicLyric(
                             )
                         }
                     }
-                    if (currentAnchor?.isReady == true) {
+                    if (
+                        currentAnchor?.isReady == true &&
+                        previewStartX.isFinite() &&
+                        previewCenterY.isFinite() &&
+                        lyricContainerWidthPx > 0 &&
+                        lyricContainerHeightPx > 0
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xxs),
+                            horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(EaseTheme.radius.control))
-                                .background(EaseTheme.surfaces.secondary.copy(alpha = 0.94f))
+                                .background(EaseTheme.surfaces.secondary.copy(alpha = 0.98f))
                                 .offset {
                                     IntOffset(
                                         x = previewStartX.toInt().coerceAtLeast(0),
-                                        y = (indicatorAnchorY - seekPreviewHeightPx / 2f).toInt(),
+                                        y = (previewCenterY - seekPreviewHeightPx / 2f).toInt(),
                                     )
                                 }
                                 .padding(
@@ -815,15 +842,9 @@ private fun MusicLyric(
                             )
                             Box(
                                 modifier = Modifier
-                                    .size(24.dp)
+                                    .size(28.dp)
                                     .clip(RoundedCornerShape(EaseTheme.radius.control))
-                                    .background(
-                                        if (previewSeekLyricIndex != null && !manualSeeking) {
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                                        } else {
-                                            Color.Transparent
-                                        }
-                                    )
+                                    .background(MaterialTheme.colorScheme.primary)
                                     .clickable(
                                         enabled = previewSeekLyricIndex != null && !manualSeeking,
                                         interactionSource = remember { MutableInteractionSource() },
@@ -841,12 +862,8 @@ private fun MusicLyric(
                                 Icon(
                                     painter = painterResource(id = R.drawable.icon_play),
                                     contentDescription = stringResource(R.string.music_lyric_seek_confirm),
-                                    tint = if (previewSeekLyricIndex != null && !manualSeeking) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.54f)
-                                    },
-                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(14.dp),
                                 )
                             }
                         }

@@ -7,55 +7,68 @@ import org.junit.Test
 class PlayerPageSeekIndicatorLayoutTest {
 
     @Test
-    fun resolveLyricSeekPreviewStartXCentersWithinAvailableGapWhenSpaceAllows() {
-        val startX = resolveLyricSeekPreviewStartX(
-            indicatorAnchorX = 420f,
-            contentRightBoundaryX = 920f,
+    fun resolveFixedLyricSeekPreviewXAnchorsThePreviewToTheRightSide() {
+        val startX = resolveFixedLyricSeekPreviewX(
+            containerWidthPx = 920,
             contentWidthPx = 120,
-            seekLineGapPx = 8f,
-            seekTextGapPx = 16f,
+            endPaddingPx = 8f,
         )
 
-        assertTrue(abs(startX - 610f) < 0.001f)
+        assertTrue(abs(startX - 792f) < 0.001f)
     }
 
     @Test
-    fun resolveLyricSeekPreviewStartXFallsBackRightwardWithoutCrashingWhenSpaceIsTight() {
-        val startX = resolveLyricSeekPreviewStartX(
-            indicatorAnchorX = 760f,
-            contentRightBoundaryX = 900f,
+    fun resolveFixedLyricSeekPreviewXReturnsNanForInvalidInputs() {
+        val startX = resolveFixedLyricSeekPreviewX(
+            containerWidthPx = 0,
             contentWidthPx = 120,
-            seekLineGapPx = 8f,
-            seekTextGapPx = 16f,
-        )
-
-        assertTrue(abs(startX - 780f) < 0.001f)
-    }
-
-    @Test
-    fun resolveLyricSeekPreviewStartXReturnsNanForInvalidInputs() {
-        val startX = resolveLyricSeekPreviewStartX(
-            indicatorAnchorX = Float.NaN,
-            contentRightBoundaryX = 900f,
-            contentWidthPx = 120,
-            seekLineGapPx = 8f,
-            seekTextGapPx = 16f,
+            endPaddingPx = 8f,
         )
 
         assertTrue(startX.isNaN())
     }
 
     @Test
-    fun resolveLyricSeekPreviewStartXCanBiasSlightlyRightWithinBounds() {
-        val startX = resolveLyricSeekPreviewStartX(
-            indicatorAnchorX = 420f,
-            contentRightBoundaryX = 920f,
-            contentWidthPx = 120,
-            seekLineGapPx = 8f,
-            seekTextGapPx = 16f,
-            rightBiasPx = 12f,
+    fun resolveLyricSeekPreviewCenterYStaysOnAnchorWhenThereIsEnoughSpace() {
+        val centerY = resolveLyricSeekPreviewCenterY(
+            anchorY = 240f,
+            containerHeightPx = 600,
+            contentHeightPx = 48,
         )
 
-        assertTrue(abs(startX - 622f) < 0.001f)
+        assertTrue(abs(centerY - 240f) < 0.001f)
+    }
+
+    @Test
+    fun resolveLyricSeekPreviewCenterYClampsNearTheTopBoundary() {
+        val centerY = resolveLyricSeekPreviewCenterY(
+            anchorY = 10f,
+            containerHeightPx = 600,
+            contentHeightPx = 48,
+        )
+
+        assertTrue(abs(centerY - 24f) < 0.001f)
+    }
+
+    @Test
+    fun resolveLyricSeekPreviewCenterYClampsNearTheBottomBoundary() {
+        val centerY = resolveLyricSeekPreviewCenterY(
+            anchorY = 590f,
+            containerHeightPx = 600,
+            contentHeightPx = 48,
+        )
+
+        assertTrue(abs(centerY - 576f) < 0.001f)
+    }
+
+    @Test
+    fun resolveLyricSeekPreviewCenterYReturnsNanForInvalidInputs() {
+        val centerY = resolveLyricSeekPreviewCenterY(
+            anchorY = Float.NaN,
+            containerHeightPx = 600,
+            contentHeightPx = 48,
+        )
+
+        assertTrue(centerY.isNaN())
     }
 }
