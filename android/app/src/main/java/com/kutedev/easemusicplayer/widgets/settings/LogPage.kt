@@ -229,7 +229,7 @@ fun LogPage(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row {
+                    Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
                         EaseTextButton(
                             text = stringResource(id = R.string.log_action_copy),
                             type = EaseTextButtonType.Default,
@@ -251,7 +251,7 @@ fun LogPage(
                     }
                     EaseTextButton(
                         text = stringResource(id = R.string.log_action_close),
-                        type = EaseTextButtonType.Primary,
+                        type = EaseTextButtonType.Default,
                         size = EaseTextButtonSize.Medium,
                         onClick = { previewLog = null }
                     )

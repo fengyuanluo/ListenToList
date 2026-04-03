@@ -268,10 +268,10 @@ private fun TimeToPauseModalCore(
                         }
                     )
                 }
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
                     EaseTextButton(
                         text = stringResource(id = R.string.playlists_dialog_button_cancel),
-                        type = EaseTextButtonType.Primary,
+                        type = EaseTextButtonType.Default,
                         size = EaseTextButtonSize.Medium,
                         onClick = {
                             onCancel()

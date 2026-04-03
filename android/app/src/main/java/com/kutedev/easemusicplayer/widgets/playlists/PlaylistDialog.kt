@@ -159,8 +159,8 @@ private fun FullImportBlock(
                 }
             )
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
+                horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
             ) {
                 for (name in recommendPlaylistNames) {
                     EaseTextButton(
@@ -258,7 +258,7 @@ fun CreatePlaylistsDialog(
                     if (fullImported && mode == CreatePlaylistMode.FULL) {
                         EaseTextButton(
                             text = stringResource(id = R.string.playlists_dialog_button_reset),
-                            type = EaseTextButtonType.Primary,
+                            type = EaseTextButtonType.Default,
                             size = EaseTextButtonSize.Medium,
                             onClick = {
                                 createPlaylistVM.reset()
@@ -266,10 +266,10 @@ fun CreatePlaylistsDialog(
                         )
                     }
                 }
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
                     EaseTextButton(
                         text = stringResource(id = R.string.playlists_dialog_button_cancel),
-                        type = EaseTextButtonType.Primary,
+                        type = EaseTextButtonType.Default,
                         size = EaseTextButtonSize.Medium,
                         onClick = onDismissRequest
                     )
@@ -345,13 +345,13 @@ fun EditPlaylistsDialog(
                 }
             )
             Row(
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs, Alignment.End),
                 modifier = Modifier
                     .fillMaxWidth()
             ) {
                 EaseTextButton(
                     text = stringResource(id = R.string.playlists_dialog_button_cancel),
-                    type = EaseTextButtonType.Primary,
+                    type = EaseTextButtonType.Default,
                     size = EaseTextButtonSize.Medium,
                     onClick = onDismissRequest
                 )

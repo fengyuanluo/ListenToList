@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
@@ -45,13 +46,13 @@ fun ConfirmDialog(
             Box(modifier = Modifier.height(EaseTheme.spacing.xxs))
             content()
             Row(
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs, Alignment.End),
                 modifier = Modifier
                     .fillMaxWidth()
             ) {
                 EaseTextButton(
                     text = stringResource(id = R.string.confirm_dialog_btn_cancel),
-                    type = EaseTextButtonType.Primary,
+                    type = EaseTextButtonType.Default,
                     size = EaseTextButtonSize.Medium,
                     onClick = onCancel
                 )
