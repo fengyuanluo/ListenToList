@@ -272,7 +272,7 @@ private fun DownloadDirectoryDialog(
             ) {
                 EaseTextButton(
                     text = stringResource(id = R.string.confirm_dialog_btn_cancel),
-                    type = EaseTextButtonType.Primary,
+                    type = EaseTextButtonType.Default,
                     size = EaseTextButtonSize.Small,
                     onClick = onDismiss,
                 )
