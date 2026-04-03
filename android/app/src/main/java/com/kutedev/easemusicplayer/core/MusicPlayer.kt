@@ -13,18 +13,17 @@ import androidx.media3.common.Timeline
 import androidx.media3.common.Player.COMMAND_PLAY_PAUSE
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
-import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
 import com.kutedev.easemusicplayer.MainActivity
 import com.kutedev.easemusicplayer.singleton.PlaybackContext
 import com.kutedev.easemusicplayer.singleton.PlaybackContextType
 import com.kutedev.easemusicplayer.singleton.PlaybackCommand
 import com.kutedev.easemusicplayer.singleton.PlaybackCommandBus
+import com.kutedev.easemusicplayer.singleton.AssetRepository
 import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueEntry
 import com.kutedev.easemusicplayer.singleton.PlaybackQueueSnapshot
@@ -41,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uniffi.ease_client_backend.AddedMusic
 import uniffi.ease_client_backend.ArgEnsureMusics
 import uniffi.ease_client_backend.Playlist
@@ -79,6 +79,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var playlistRepository: PlaylistRepository
     @Inject lateinit var toastRepository: ToastRepository
     @Inject lateinit var downloadRepository: DownloadRepository
+    @Inject lateinit var assetRepository: AssetRepository
     @Inject lateinit var bridge: Bridge
     @Inject lateinit var playbackRuntimeKernel: PlaybackRuntimeKernel
     @Inject lateinit var playbackCommandBus: PlaybackCommandBus
@@ -90,6 +91,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         easeLog("Playback service creating...")
+        bridge.initialize()
         val context = this
 
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -138,45 +140,20 @@ class PlaybackService : MediaSessionService() {
                     controller: MediaSession.ControllerInfo
                 ): MediaSession.ConnectionResult {
                     if (session.isMediaNotificationController(controller)) {
-                        val customPrevCommand = SessionCommand(PLAYER_TO_PREV_COMMAND, Bundle.EMPTY)
-                        val customNextCommand = SessionCommand(PLAYER_TO_NEXT_COMMAND, Bundle.EMPTY)
-
-                        val sessionCommands =
-                            MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                                .add(customPrevCommand)
-                                .add(customNextCommand)
-                                .build()
-                        val playerCommands =
-                            MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
-                                .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
-                                .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-                                .remove(Player.COMMAND_SEEK_TO_NEXT)
-                                .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-                                .remove(Player.COMMAND_SEEK_BACK)
-                                .remove(Player.COMMAND_SEEK_FORWARD)
-                                .remove(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
-                                .build()
-                        // Custom layout and available commands to configure the legacy/framework session.
+                        // Let Media3 build transport actions from the default player commands.
+                        // Injecting custom prev/next buttons here duplicates notification actions
+                        // on real devices because the notification keeps the system buttons too.
                         return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                            .setCustomLayout(
-                                ImmutableList.of(
-                                    CommandButton.Builder()
-                                        .setSessionCommand(customPrevCommand)
-                                        .setIconResId(CommandButton.getIconResIdForIconConstant(CommandButton.ICON_PREVIOUS))
-                                        .setDisplayName("Previous")
-                                        .build(),
-                                    CommandButton.Builder()
-                                        .setSessionCommand(customNextCommand)
-                                        .setIconResId(CommandButton.getIconResIdForIconConstant(CommandButton.ICON_NEXT))
-                                        .setDisplayName("Next")
-                                        .build(),
-                                )
-                            )
-                            .setAvailablePlayerCommands(playerCommands)
-                            .setAvailableSessionCommands(sessionCommands)
                             .build()
                     }
-                    return MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
+                    val sessionCommands =
+                        MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                            .add(SessionCommand(PLAYER_TO_PREV_COMMAND, Bundle.EMPTY))
+                            .add(SessionCommand(PLAYER_TO_NEXT_COMMAND, Bundle.EMPTY))
+                            .build()
+                    return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                        .setAvailableSessionCommands(sessionCommands)
+                        .build()
                 }
 
                 override fun onCustomCommand(
@@ -207,6 +184,9 @@ class PlaybackService : MediaSessionService() {
                 }
                 }
             )
+            if (player is ExoPlayer) {
+                refreshCurrentNotificationMetadata(player)
+            }
         }
 
         serviceScope.launch(Dispatchers.Main.immediate) {
@@ -305,6 +285,63 @@ class PlaybackService : MediaSessionService() {
                 } else {
                     easeError("media player pause failed, command COMMAND_PLAY_PAUSE is unavailable")
                 }
+            }
+        }
+    }
+
+    private fun refreshCurrentNotificationMetadata(player: ExoPlayer) {
+        val currentMediaItem = player.currentMediaItem ?: return
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex < 0) {
+            return
+        }
+        val expectedMediaId = currentMediaItem.mediaId
+        val musicId = resolveMusicIdFromMediaItem(currentMediaItem) ?: return
+
+        serviceScope.launch {
+            val storedCoverKey = playerRepository.music.value
+                ?.takeIf { it.meta.id == musicId }
+                ?.cover
+                ?: bridge.run { backend -> ctGetMusic(backend, musicId) }?.cover
+            val storedCoverData = storedCoverKey?.let { key ->
+                assetRepository.get(key) ?: assetRepository.load(key)
+            }
+            val probedMetadata = probeMusicMetadataDirectly(bridge, musicId)
+            val playbackCoverData = withContext(Dispatchers.Main.immediate) {
+                if (
+                    player.currentMediaItem?.mediaId != expectedMediaId ||
+                    player.currentMediaItemIndex != currentIndex
+                ) {
+                    return@withContext null
+                }
+                extractCurrentTracksCover(player)
+            }
+            val artworkData = storedCoverData ?: probedMetadata?.cover ?: playbackCoverData
+
+            withContext(Dispatchers.Main.immediate) {
+                val activeMediaItem = player.currentMediaItem ?: return@withContext
+                if (
+                    activeMediaItem.mediaId != expectedMediaId ||
+                    player.currentMediaItemIndex != currentIndex
+                ) {
+                    return@withContext
+                }
+
+                val updatedMetadata = buildPlaybackNotificationMediaMetadata(
+                    baseMetadata = activeMediaItem.mediaMetadata,
+                    probedMetadata = probedMetadata,
+                    artworkData = artworkData,
+                )
+                if (playbackNotificationMetadataEquals(activeMediaItem.mediaMetadata, updatedMetadata)) {
+                    return@withContext
+                }
+
+                player.replaceMediaItem(
+                    currentIndex,
+                    activeMediaItem.buildUpon()
+                        .setMediaMetadata(updatedMetadata)
+                        .build(),
+                )
             }
         }
     }

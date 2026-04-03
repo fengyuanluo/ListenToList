@@ -31,6 +31,7 @@ import uniffi.ease_client_backend.ctsUpdateMusicDuration
 import uniffi.ease_client_schema.MusicId
 import uniffi.ease_client_schema.PlayMode
 import java.time.Duration
+import java.util.Arrays
 
 private const val APPLICATION_PACKAGE = "com.kutedev.easemusicplayer"
 
@@ -41,7 +42,7 @@ private val DEFAULT_COVER_ARTWORK_URI: Uri = Uri.Builder()
     .appendPath("cover_default_image")
     .build()
 
-private fun extractCurrentTracksCover(player: Player): ByteArray? {
+internal fun extractCurrentTracksCover(player: Player): ByteArray? {
     player.currentTracks.groups.forEach { trackGroup ->
         (0 until trackGroup.length).forEach { i ->
             val format = trackGroup.getTrackFormat(i)
@@ -93,6 +94,32 @@ data class ProbedMusicMetadata(
     val album: String?,
 )
 
+internal fun buildPlaybackNotificationMediaMetadata(
+    baseMetadata: MediaMetadata,
+    probedMetadata: ProbedMusicMetadata?,
+    artworkData: ByteArray?,
+): MediaMetadata {
+    return baseMetadata.buildUpon()
+        .apply {
+            probedMetadata?.title?.takeIf { it.isNotBlank() }?.let(::setTitle)
+            probedMetadata?.artist?.takeIf { it.isNotBlank() }?.let(::setArtist)
+            probedMetadata?.album?.takeIf { it.isNotBlank() }?.let(::setAlbumTitle)
+            artworkData?.takeIf { it.isNotEmpty() }?.let { setArtworkData(it, null) }
+        }
+        .build()
+}
+
+internal fun playbackNotificationMetadataEquals(
+    left: MediaMetadata,
+    right: MediaMetadata,
+): Boolean {
+    return left.title == right.title &&
+        left.artist == right.artist &&
+        left.albumTitle == right.albumTitle &&
+        left.artworkUri == right.artworkUri &&
+        Arrays.equals(left.artworkData, right.artworkData)
+}
+
 internal fun repeatModeFor(playMode: PlayMode): Int {
     return when (playMode) {
         PlayMode.SINGLE, PlayMode.LIST -> Player.REPEAT_MODE_OFF
@@ -116,15 +143,15 @@ private fun buildMediaItemInternal(
 
     val coverURI = if (cover != null) null else DEFAULT_COVER_ARTWORK_URI
 
+    val mediaMetadata = MediaMetadata.Builder()
+        .setTitle(meta.title)
+        .setArtworkUri(coverURI)
+        .build()
+
     return MediaItem.Builder()
         .setMediaId(mediaIdOverride ?: meta.id.value.toString())
         .setUri(buildPlaybackMusicUri(meta.id))
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(meta.title)
-                .setArtworkUri(coverURI)
-                .build()
-        )
+        .setMediaMetadata(mediaMetadata)
         .build()
 }
 
