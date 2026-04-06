@@ -3,6 +3,7 @@ package com.kutedev.easemusicplayer.core
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
+import com.kutedev.easemusicplayer.R
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.C.WAKE_MODE_NETWORK
@@ -61,6 +62,7 @@ import uniffi.ease_client_schema.PlaylistId
 import uniffi.ease_client_schema.PlayMode
 import uniffi.ease_client_schema.StorageId
 import com.kutedev.easemusicplayer.viewmodels.entryTyp
+import com.kutedev.easemusicplayer.viewmodels.playModeToastLabelResId
 
 
 const val PLAYER_TO_PREV_COMMAND = "PLAYER_TO_PREV_COMMAND";
@@ -92,6 +94,7 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         easeLog("Playback service creating...")
         bridge.initialize()
+        setMediaNotificationProvider(EasePlaybackNotificationProvider(this))
         val context = this
 
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -139,18 +142,25 @@ class PlaybackService : MediaSessionService() {
                     session: MediaSession,
                     controller: MediaSession.ControllerInfo
                 ): MediaSession.ConnectionResult {
-                    if (session.isMediaNotificationController(controller)) {
-                        // Let Media3 build transport actions from the default player commands.
-                        // Injecting custom prev/next buttons here duplicates notification actions
-                        // on real devices because the notification keeps the system buttons too.
-                        return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                            .build()
-                    }
                     val sessionCommands =
                         MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                            .add(SessionCommand(PLAYER_TO_PREV_COMMAND, Bundle.EMPTY))
-                            .add(SessionCommand(PLAYER_TO_NEXT_COMMAND, Bundle.EMPTY))
+                            .add(SessionCommand(PLAYER_CYCLE_PLAY_MODE_COMMAND, Bundle.EMPTY))
+                            .add(SessionCommand(PLAYER_STOP_PLAYBACK_COMMAND, Bundle.EMPTY))
+                            .apply {
+                                if (!session.isMediaNotificationController(controller)) {
+                                    add(SessionCommand(PLAYER_TO_PREV_COMMAND, Bundle.EMPTY))
+                                    add(SessionCommand(PLAYER_TO_NEXT_COMMAND, Bundle.EMPTY))
+                                }
+                            }
                             .build()
+                    if (session.isMediaNotificationController(controller)) {
+                        // Let Media3 keep the default previous/play/next transport buttons for the
+                        // notification controller, and only append overflow actions via
+                        // media button preferences so we do not reintroduce duplicate actions.
+                        return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                            .setAvailableSessionCommands(sessionCommands)
+                            .build()
+                    }
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(sessionCommands)
                         .build()
@@ -166,11 +176,19 @@ class PlaybackService : MediaSessionService() {
                         playPrevious()
                     } else if (customCommand.customAction == PLAYER_TO_NEXT_COMMAND) {
                         playNext()
+                    } else if (customCommand.customAction == PLAYER_CYCLE_PLAY_MODE_COMMAND) {
+                        val nextPlayMode = playerRepository.changePlayModeToNext()
+                        toastRepository.emitToastRes(playModeToastLabelResId(nextPlayMode))
+                        syncNotificationButtonPreferences(session)
+                    } else if (customCommand.customAction == PLAYER_STOP_PLAYBACK_COMMAND) {
+                        stopPlayback(session.player)
+                        stopSelf()
                     }
                     return super.onCustomCommand(session, controller, customCommand, args)
                 }
             })
             .build()
+        syncNotificationButtonPreferences()
 
         fun syncCurrentMetadata(player: Player) {
             syncMetadataUtil(
@@ -197,6 +215,7 @@ class PlaybackService : MediaSessionService() {
                     playMode = playMode,
                     preservePosition = true,
                 )
+                syncNotificationButtonPreferences()
             }
         }
 
@@ -365,6 +384,18 @@ class PlaybackService : MediaSessionService() {
         _prefetcher = null
         recoveryState = null
         serviceScope.cancel()
+    }
+
+    private fun syncNotificationButtonPreferences(session: MediaSession? = _mediaSession) {
+        val activeSession = session ?: return
+        val playMode = playerRepository.playMode.value
+        activeSession.setMediaButtonPreferences(
+            buildPlaybackNotificationButtons(
+                playMode = playMode,
+                playModeLabel = getString(playModeToastLabelResId(playMode)),
+                stopLabel = getString(R.string.music_notification_stop),
+            )
+        )
     }
 
     private suspend fun handlePlaybackCommand(
