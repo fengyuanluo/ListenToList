@@ -15,13 +15,21 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +48,87 @@ import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.toMusicDurationMs
 import uniffi.ease_client_schema.DataSourceKey
+import kotlin.math.roundToLong
+
+@Composable
+private fun MiniPlayerSeekBar(
+    currentDurationMS: ULong,
+    totalDurationMS: ULong,
+    onSeek: (ULong) -> Unit,
+) {
+    val maxValue = totalDurationMS.toFloat().takeIf { it > 0f } ?: 1f
+    var sliderValue by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentDurationMS, totalDurationMS, dragging) {
+        if (!dragging) {
+            sliderValue = currentDurationMS
+                .coerceAtMost(totalDurationMS)
+                .toFloat()
+                .coerceIn(0f, maxValue)
+        }
+    }
+
+    val progress = if (totalDurationMS == 0uL) {
+        0f
+    } else {
+        (sliderValue / maxValue).coerceIn(0f, 1f)
+    }
+
+    Box(
+        contentAlignment = Alignment.CenterStart,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(20.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(EaseTheme.radius.control))
+                .fillMaxWidth()
+        ) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth(),
+                progress = { progress },
+                color = MaterialTheme.colorScheme.onSurface,
+                trackColor = EaseTheme.surfaces.secondary,
+            )
+        }
+        Slider(
+            value = sliderValue.coerceIn(0f, maxValue),
+            onValueChange = { nextValue ->
+                if (totalDurationMS == 0uL) {
+                    return@Slider
+                }
+                dragging = true
+                sliderValue = nextValue.coerceIn(0f, maxValue)
+            },
+            onValueChangeFinished = {
+                if (totalDurationMS == 0uL) {
+                    dragging = false
+                    return@Slider
+                }
+                val resolvedPositionMs = sliderValue
+                    .coerceIn(0f, maxValue)
+                    .roundToLong()
+                    .coerceAtLeast(0L)
+                    .toULong()
+                onSeek(resolvedPositionMs)
+                dragging = false
+            },
+            valueRange = 0f..maxValue,
+            enabled = totalDurationMS > 0uL,
+            colors = SliderDefaults.colors(
+                thumbColor = Color.Transparent,
+                activeTrackColor = Color.Transparent,
+                inactiveTrackColor = Color.Transparent,
+                disabledThumbColor = Color.Transparent,
+                disabledActiveTrackColor = Color.Transparent,
+                disabledInactiveTrackColor = Color.Transparent,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
 
 @Composable
 private fun MiniPlayerCore(
@@ -56,6 +145,7 @@ private fun MiniPlayerCore(
     onPause: () -> Unit,
     onStop: () -> Unit,
     onNext: () -> Unit,
+    onSeek: (ULong) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -89,24 +179,11 @@ private fun MiniPlayerCore(
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1
                 )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(EaseTheme.radius.control))
-                        .fillMaxWidth()
-                ) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        progress = {
-                            if (totalDurationMS == 0uL) {
-                                0f
-                            } else {
-                                currentDurationMS.toFloat() / totalDurationMS.toFloat()
-                            }
-                        },
-                        color = MaterialTheme.colorScheme.onSurface,
-                        trackColor = EaseTheme.surfaces.secondary,
-                    )
-                }
+                MiniPlayerSeekBar(
+                    currentDurationMS = currentDurationMS,
+                    totalDurationMS = totalDurationMS,
+                    onSeek = onSeek,
+                )
                 Text(
                     text = totalDuration,
                     style = EaseTheme.typography.micro,
@@ -175,6 +252,7 @@ fun MiniPlayer(
         onPause = { playerVM.pause() },
         onStop = { playerVM.stop() },
         onNext = { playerVM.playNext() },
+        onSeek = { playerVM.seek(it) },
     )
 }
 
@@ -194,6 +272,7 @@ private fun MiniPlayerPreview() {
         onPlay = {},
         onPause = {},
         onStop = {},
-        onNext = {}
+        onNext = {},
+        onSeek = {},
     )
 }
