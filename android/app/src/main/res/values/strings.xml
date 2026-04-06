@@ -113,6 +113,7 @@
     <string name="music_play_mode_single_loop">Repeat one</string>
     <string name="music_play_mode_list">List play</string>
     <string name="music_play_mode_list_loop">Repeat list</string>
+    <string name="music_notification_stop">Stop playback</string>
     <string name="music_queue_sheet_title">Current Queue</string>
     <string name="music_queue_sheet_temporary">Temporary queue</string>
     <string name="storage_edit_oauth">OAuth</string>
