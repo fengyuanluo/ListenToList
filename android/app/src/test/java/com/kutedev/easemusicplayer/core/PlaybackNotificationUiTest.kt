@@ -48,12 +48,12 @@ class PlaybackNotificationUiTest {
     }
 
     @Test
-    fun resolvePlaybackNotificationDisplayMetadata_prefersCurrentItemTitleOverStalePlayerTitle() {
+    fun resolvePlaybackNotificationDisplayMetadata_prefersPlayerMetadataOverStaleItemMetadata() {
         val itemMetadata = MediaMetadata.Builder()
-            .setTitle("test-long.wav")
+            .setTitle("stale-item-title.wav")
             .build()
         val playerMetadata = MediaMetadata.Builder()
-            .setTitle("test-openlist-next.wav")
+            .setTitle("test-long.wav")
             .setArtist("Artist")
             .build()
 
@@ -66,5 +66,23 @@ class PlaybackNotificationUiTest {
 
         assertEquals("test-long.wav", displayMetadata.title)
         assertEquals("Artist", displayMetadata.text)
+    }
+
+    @Test
+    fun resolvePlaybackNotificationDisplayMetadata_fallsBackToItemMetadataWhenPlayerMetadataIsEmpty() {
+        val itemMetadata = MediaMetadata.Builder()
+            .setTitle("fallback-item.wav")
+            .setAlbumTitle("Album")
+            .build()
+
+        val displayMetadata = resolvePlaybackNotificationDisplayMetadata(
+            itemMetadata = itemMetadata,
+            playerMetadata = MediaMetadata.Builder().build(),
+            fallbackTitle = "Ease Music Player",
+            fallbackText = "Ease Music Player",
+        )
+
+        assertEquals("fallback-item.wav", displayMetadata.title)
+        assertEquals("Album", displayMetadata.text)
     }
 }

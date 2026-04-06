@@ -94,7 +94,14 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         easeLog("Playback service creating...")
         bridge.initialize()
-        setMediaNotificationProvider(EasePlaybackNotificationProvider(this))
+        setMediaNotificationProvider(
+            EasePlaybackNotificationProvider(
+                appContext = this,
+                resolvePlayMode = { playerRepository.playMode.value },
+                resolvePlayModeLabel = { playMode -> getString(playModeToastLabelResId(playMode)) },
+                resolveStopLabel = { getString(R.string.music_notification_stop) },
+            )
+        )
         val context = this
 
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -180,6 +187,7 @@ class PlaybackService : MediaSessionService() {
                         val nextPlayMode = playerRepository.changePlayModeToNext()
                         toastRepository.emitToastRes(playModeToastLabelResId(nextPlayMode))
                         syncNotificationButtonPreferences(session)
+                        refreshSystemMediaNotification()
                     } else if (customCommand.customAction == PLAYER_STOP_PLAYBACK_COMMAND) {
                         stopPlayback(session.player)
                         stopSelf()
@@ -216,6 +224,7 @@ class PlaybackService : MediaSessionService() {
                     preservePosition = true,
                 )
                 syncNotificationButtonPreferences()
+                refreshSystemMediaNotification()
             }
         }
 
@@ -256,6 +265,7 @@ class PlaybackService : MediaSessionService() {
                 serviceScope.launch {
                     syncRepositoryCurrentFromPlayer(player)
                     playbackRuntimeKernel.persistCurrentSession(player)
+                    refreshSystemMediaNotification()
                 }
             }
 
@@ -361,6 +371,7 @@ class PlaybackService : MediaSessionService() {
                         .setMediaMetadata(updatedMetadata)
                         .build(),
                 )
+                refreshSystemMediaNotification()
             }
         }
     }
@@ -386,16 +397,23 @@ class PlaybackService : MediaSessionService() {
         serviceScope.cancel()
     }
 
+    private fun refreshSystemMediaNotification() {
+        val session = _mediaSession ?: return
+        onUpdateNotification(session, false)
+    }
+
     private fun syncNotificationButtonPreferences(session: MediaSession? = _mediaSession) {
         val activeSession = session ?: return
         val playMode = playerRepository.playMode.value
-        activeSession.setMediaButtonPreferences(
-            buildPlaybackNotificationButtons(
-                playMode = playMode,
-                playModeLabel = getString(playModeToastLabelResId(playMode)),
-                stopLabel = getString(R.string.music_notification_stop),
-            )
+        val buttons = buildPlaybackNotificationButtons(
+            playMode = playMode,
+            playModeLabel = getString(playModeToastLabelResId(playMode)),
+            stopLabel = getString(R.string.music_notification_stop),
         )
+        activeSession.getMediaNotificationControllerInfo()?.let { notificationController ->
+            activeSession.setMediaButtonPreferences(notificationController, buttons)
+        }
+        activeSession.setMediaButtonPreferences(buttons)
     }
 
     private suspend fun handlePlaybackCommand(

@@ -23,5 +23,13 @@
                 <action android:name="com.kutedev.easemusicplayer.debug.DOWNLOAD_PROBE" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name=".debug.DebugSessionCommandReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.kutedev.easemusicplayer.debug.SESSION_COMMAND" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
