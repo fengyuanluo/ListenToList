@@ -66,14 +66,15 @@ internal fun resolvePlaybackNotificationDisplayMetadata(
     fallbackTitle: CharSequence,
     fallbackText: CharSequence,
 ): PlaybackNotificationDisplayMetadata {
-    val resolvedTitle = itemMetadata?.title
+    val resolvedTitle = playerMetadata.title
         ?.takeIf { it.isNotBlank() }
-        ?: playerMetadata.title?.takeIf { it.isNotBlank() }
+        ?: itemMetadata?.title?.takeIf { it.isNotBlank() }
         ?: fallbackTitle
-    val resolvedText = itemMetadata?.artist
+    val resolvedText = playerMetadata.artist
         ?.takeIf { it.isNotBlank() }
-        ?: itemMetadata?.albumTitle?.takeIf { it.isNotBlank() }
-        ?: resolvePlaybackNotificationContentText(playerMetadata, fallbackText)
+        ?: playerMetadata.albumTitle?.takeIf { it.isNotBlank() }
+        ?: itemMetadata?.let { resolvePlaybackNotificationContentText(it, fallbackText) }
+        ?: fallbackText
     return PlaybackNotificationDisplayMetadata(
         title = resolvedTitle,
         text = resolvedText,
@@ -82,6 +83,9 @@ internal fun resolvePlaybackNotificationDisplayMetadata(
 
 internal class EasePlaybackNotificationProvider(
     private val appContext: Context,
+    private val resolvePlayMode: () -> PlayMode,
+    private val resolvePlayModeLabel: (PlayMode) -> CharSequence,
+    private val resolveStopLabel: () -> CharSequence,
 ) : MediaNotification.Provider {
 
     private val delegate = DefaultMediaNotificationProvider(appContext).apply {
@@ -94,7 +98,17 @@ internal class EasePlaybackNotificationProvider(
         actionFactory: MediaNotification.ActionFactory,
         callback: MediaNotification.Provider.Callback,
     ): MediaNotification {
-        val baseNotification = delegate.createNotification(session, customLayout, actionFactory, callback)
+        val playMode = resolvePlayMode()
+        val baseNotification = delegate.createNotification(
+            session,
+            buildPlaybackNotificationButtons(
+                playMode = playMode,
+                playModeLabel = resolvePlayModeLabel(playMode),
+                stopLabel = resolveStopLabel(),
+            ),
+            actionFactory,
+            callback,
+        )
         val fallbackText = appContext.getString(R.string.app_name)
         val displayMetadata = resolvePlaybackNotificationDisplayMetadata(
             itemMetadata = session.player.currentMediaItem?.mediaMetadata,

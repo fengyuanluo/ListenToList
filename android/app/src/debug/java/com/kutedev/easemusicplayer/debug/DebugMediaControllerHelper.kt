@@ -19,7 +19,7 @@ suspend fun connectDebugMediaController(context: Context): MediaController {
     return future.await()
 }
 
-private suspend fun <T> ListenableFuture<T>.await(): T {
+internal suspend fun <T> ListenableFuture<T>.await(): T {
     return suspendCancellableCoroutine { continuation ->
         addListener(
             {
