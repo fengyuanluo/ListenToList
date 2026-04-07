@@ -33,6 +33,9 @@ import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 import kotlin.time.toJavaDuration
 
+private const val ACTIVE_POSITION_SYNC_INTERVAL_MS = 250L
+private const val IDLE_POSITION_SYNC_INTERVAL_MS = 1000L
+
 @StringRes
 internal fun playModeToastLabelResId(playMode: PlayMode): Int {
     return when (playMode) {
@@ -85,7 +88,13 @@ class PlayerVM @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 syncPosition()
-                delay(1000)
+                delay(
+                    if (playing.value || loading.value) {
+                        ACTIVE_POSITION_SYNC_INTERVAL_MS
+                    } else {
+                        IDLE_POSITION_SYNC_INTERVAL_MS
+                    }
+                )
             }
         }
         viewModelScope.launch {
@@ -152,6 +161,7 @@ class PlayerVM @Inject constructor(
 
     fun seek(ms: ULong) {
         playerControllerRepository.seek(ms)
+        syncPosition()
     }
 
     fun play(id: MusicId, playlistId: PlaylistId) {
