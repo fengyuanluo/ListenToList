@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,35 +46,57 @@ import com.kutedev.easemusicplayer.viewmodels.PlayerVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteMusicPlayer
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
-import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.toMusicDurationMs
 import uniffi.ease_client_schema.DataSourceKey
-import kotlin.math.roundToLong
+import kotlinx.coroutines.delay
 
 @Composable
-private fun MiniPlayerSeekBar(
+internal fun MiniPlayerSeekBar(
     currentDurationMS: ULong,
-    totalDurationMS: ULong,
+    totalDurationMS: ULong?,
     onSeek: (ULong) -> Unit,
 ) {
-    val maxValue = totalDurationMS.toFloat().takeIf { it > 0f } ?: 1f
+    val maxValue = totalDurationMS?.toFloat()?.takeIf { it > 0f } ?: 1f
     var sliderValue by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
+    var optimisticPositionMs by remember(totalDurationMS) { mutableStateOf(null as ULong?) }
 
-    LaunchedEffect(currentDurationMS, totalDurationMS, dragging) {
-        if (!dragging) {
-            sliderValue = currentDurationMS
-                .coerceAtMost(totalDurationMS)
+    LaunchedEffect(currentDurationMS, totalDurationMS, dragging, optimisticPositionMs) {
+        if (dragging) {
+            return@LaunchedEffect
+        }
+        if (currentDurationMS == 0uL) {
+            optimisticPositionMs = null
+        }
+        val optimistic = optimisticPositionMs
+        if (optimistic != null && !shouldClearOptimisticSeek(currentDurationMS, optimistic)) {
+            sliderValue = optimistic
                 .toFloat()
                 .coerceIn(0f, maxValue)
+            return@LaunchedEffect
+        }
+        optimisticPositionMs = null
+        sliderValue = currentDurationMS
+            .coerceAtMost(totalDurationMS ?: 0uL)
+            .toFloat()
+            .coerceIn(0f, maxValue)
+    }
+
+    LaunchedEffect(optimisticPositionMs, dragging) {
+        if (dragging) {
+            return@LaunchedEffect
+        }
+        val optimistic = optimisticPositionMs ?: return@LaunchedEffect
+        delay(OPTIMISTIC_SEEK_TIMEOUT_MS)
+        if (!dragging && optimisticPositionMs == optimistic) {
+            optimisticPositionMs = null
         }
     }
 
-    val progress = if (totalDurationMS == 0uL) {
-        0f
-    } else {
-        (sliderValue / maxValue).coerceIn(0f, 1f)
-    }
+    val progress = resolveSeekRatio(
+        positionMs = optimisticPositionMs ?: currentDurationMS,
+        totalDurationMs = totalDurationMS,
+    )
 
     Box(
         contentAlignment = Alignment.CenterStart,
@@ -96,27 +119,35 @@ private fun MiniPlayerSeekBar(
         Slider(
             value = sliderValue.coerceIn(0f, maxValue),
             onValueChange = { nextValue ->
-                if (totalDurationMS == 0uL) {
+                if (totalDurationMS?.takeIf { it > 0uL } == null) {
                     return@Slider
                 }
                 dragging = true
-                sliderValue = nextValue.coerceIn(0f, maxValue)
+                val resolvedPositionMs = resolveSeekPositionFromSliderValue(
+                    value = nextValue,
+                    totalDurationMs = totalDurationMS,
+                )
+                optimisticPositionMs = resolvedPositionMs
+                sliderValue = resolvedPositionMs
+                    .toFloat()
+                    .coerceIn(0f, maxValue)
             },
             onValueChangeFinished = {
-                if (totalDurationMS == 0uL) {
+                if (totalDurationMS?.takeIf { it > 0uL } == null) {
                     dragging = false
+                    optimisticPositionMs = null
                     return@Slider
                 }
-                val resolvedPositionMs = sliderValue
-                    .coerceIn(0f, maxValue)
-                    .roundToLong()
-                    .coerceAtLeast(0L)
-                    .toULong()
+                val resolvedPositionMs = optimisticPositionMs
+                    ?: resolveSeekPositionFromSliderValue(
+                        value = sliderValue,
+                        totalDurationMs = totalDurationMS,
+                    )
                 onSeek(resolvedPositionMs)
                 dragging = false
             },
             valueRange = 0f..maxValue,
-            enabled = totalDurationMS > 0uL,
+            enabled = totalDurationMS?.takeIf { it > 0uL } != null,
             colors = SliderDefaults.colors(
                 thumbColor = Color.Transparent,
                 activeTrackColor = Color.Transparent,
@@ -125,7 +156,9 @@ private fun MiniPlayerSeekBar(
                 disabledActiveTrackColor = Color.Transparent,
                 disabledInactiveTrackColor = Color.Transparent,
             ),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(MINI_PLAYER_SEEK_BAR_TEST_TAG),
         )
     }
 }
@@ -137,7 +170,7 @@ private fun MiniPlayerCore(
     cover: DataSourceKey?,
     currentDurationMS: ULong,
     totalDuration: String,
-    totalDurationMS: ULong,
+    totalDurationMS: ULong?,
     loading: Boolean,
     canNext: Boolean,
     onClick: () -> Unit,
@@ -243,8 +276,8 @@ fun MiniPlayer(
         title = music?.meta?.title ?: "",
         cover = music?.cover,
         currentDurationMS = toMusicDurationMs(currentDuration),
-        totalDuration = formatDuration(music),
-        totalDurationMS = toMusicDurationMs(music),
+        totalDuration = formatProgressDuration(music?.meta?.duration?.toMillis()?.toULong()),
+        totalDurationMS = music?.meta?.duration?.toMillis()?.toULong(),
         canNext = nextMusic != null,
         loading = loading,
         onClick = { navController.navigate(RouteMusicPlayer()) },

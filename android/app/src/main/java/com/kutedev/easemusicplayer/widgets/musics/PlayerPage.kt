@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.Font
@@ -100,7 +101,6 @@ import com.kutedev.easemusicplayer.utils.formatDuration
 import com.kutedev.easemusicplayer.utils.resolveCenteredLyricIndex
 import com.kutedev.easemusicplayer.utils.resolveLyricIndex
 import com.kutedev.easemusicplayer.utils.LyricViewportItem
-import com.kutedev.easemusicplayer.utils.toMusicDurationMs
 import uniffi.ease_client_schema.DataSourceKey
 import uniffi.ease_client_backend.LyricLine
 import uniffi.ease_client_backend.LyricLoadState
@@ -110,6 +110,7 @@ import java.time.Duration
 import kotlin.collections.emptyList
 import kotlin.math.absoluteValue
 import kotlin.math.sign
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
@@ -276,49 +277,63 @@ private fun MusicPlayerHeader(
 
 @Composable
 internal fun MusicSlider(
-    currentDuration: String,
-    _currentDurationMS: ULong,
+    currentDurationMS: ULong,
     bufferDurationMS: ULong,
-    totalDuration: String,
-    totalDurationMS: ULong,
+    totalDurationMS: ULong?,
     onChangeMusicPosition: (ms: ULong) -> Unit,
 ) {
     val handleSize = 12.dp
     val sliderHeight = 4.dp
-    val sliderContainerHeight = 16.dp
+    val sliderContainerHeight = 32.dp
+    val updatedOnChangeMusicPosition by rememberUpdatedState(onChangeMusicPosition)
 
     var isDragging by remember { mutableStateOf(false) }
-    var draggingCurrentDurationMS by remember { mutableStateOf(_currentDurationMS) }
-    val currentDurationMS = if (isDragging) {
-        draggingCurrentDurationMS
-    } else {
-        _currentDurationMS
-    }
-
-    val durationRate = if (totalDurationMS == 0UL) {
-        0f
-    } else {
-        (currentDurationMS.toDouble() / totalDurationMS.toDouble()).toFloat()
-    };
-    val bufferRate = if (totalDurationMS == 0UL) {
-        0f
-    } else {
-        (bufferDurationMS.toDouble() / totalDurationMS.toDouble()).toFloat()
-    };
+    var optimisticCurrentDurationMS by remember(totalDurationMS) { mutableStateOf(null as ULong?) }
+    val displayedCurrentDurationMS = optimisticCurrentDurationMS ?: currentDurationMS
+    val durationRate = resolveSeekRatio(displayedCurrentDurationMS, totalDurationMS)
+    val bufferRate = resolveSeekRatio(bufferDurationMS, totalDurationMS)
     var sliderWidth by remember { mutableIntStateOf(0) }
     val sliderWidthDp = with(LocalDensity.current) {
         sliderWidth.toDp()
     }
 
+    LaunchedEffect(currentDurationMS, optimisticCurrentDurationMS, isDragging) {
+        if (isDragging) {
+            return@LaunchedEffect
+        }
+        if (currentDurationMS == 0uL) {
+            optimisticCurrentDurationMS = null
+            return@LaunchedEffect
+        }
+        val optimistic = optimisticCurrentDurationMS ?: return@LaunchedEffect
+        if (shouldClearOptimisticSeek(currentDurationMS, optimistic)) {
+            optimisticCurrentDurationMS = null
+        }
+    }
+
+    LaunchedEffect(optimisticCurrentDurationMS, isDragging) {
+        if (isDragging) {
+            return@LaunchedEffect
+        }
+        val optimistic = optimisticCurrentDurationMS ?: return@LaunchedEffect
+        delay(OPTIMISTIC_SEEK_TIMEOUT_MS)
+        if (!isDragging && optimisticCurrentDurationMS == optimistic) {
+            optimisticCurrentDurationMS = null
+        }
+    }
+
     val draggableState = rememberDraggableState { deltaPx ->
-        if (sliderWidth <= 0 || totalDurationMS == 0UL) {
+        val total = totalDurationMS?.takeIf { it > 0uL } ?: return@rememberDraggableState
+        if (sliderWidth <= 0) {
             return@rememberDraggableState
         }
-        val delta = (deltaPx.toDouble() / sliderWidth.toDouble() * totalDurationMS.toDouble()).toLong()
-        var nextMS = draggingCurrentDurationMS.toLong() + delta
-        nextMS = nextMS.coerceIn(0L, totalDurationMS.toLong())
+        val basePosition = optimisticCurrentDurationMS ?: currentDurationMS
+        val delta = (deltaPx.toDouble() / sliderWidth.toDouble() * total.toDouble()).toLong()
+        val nextMS = (basePosition.toLong() + delta)
+            .coerceIn(0L, total.toLong())
+            .toULong()
 
-        draggingCurrentDurationMS = nextMS.toULong()
+        optimisticCurrentDurationMS = nextMS
     }
 
     Column(
@@ -329,6 +344,7 @@ internal fun MusicSlider(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(sliderContainerHeight)
+                .testTag(PLAYER_PROGRESS_SLIDER_TEST_TAG)
                 .onSizeChanged { size ->
                     if (sliderWidth != size.width) {
                         sliderWidth = size.width;
@@ -336,25 +352,42 @@ internal fun MusicSlider(
                 }
                 .pointerInput(totalDurationMS, sliderWidth) {
                     detectTapGestures { offset ->
-                        if (sliderWidth <= 0 || totalDurationMS == 0UL) {
+                        if (sliderWidth <= 0 || totalDurationMS?.takeIf { it > 0uL } == null) {
                             return@detectTapGestures
                         }
-                        var nextMS =
-                            (offset.x.toDouble() / sliderWidth.toDouble() * totalDurationMS.toDouble()).toLong()
-                        nextMS = nextMS.coerceIn(0L, totalDurationMS.toLong())
-                        onChangeMusicPosition(nextMS.toULong())
+                        val nextMS = resolveSeekPositionFromOffset(
+                            offsetPx = offset.x,
+                            widthPx = sliderWidth,
+                            totalDurationMs = totalDurationMS,
+                        )
+                        optimisticCurrentDurationMS = nextMS
+                        updatedOnChangeMusicPosition(nextMS)
                     }
                 }
                 .draggable(
                     state = draggableState,
                     orientation = Orientation.Horizontal,
-                    onDragStarted = {
+                    onDragStarted = { startedPosition ->
+                        if (totalDurationMS?.takeIf { it > 0uL } == null) {
+                            return@draggable
+                        }
                         isDragging = true
-                        draggingCurrentDurationMS = _currentDurationMS
+                        optimisticCurrentDurationMS = resolveSeekPositionFromOffset(
+                            offsetPx = startedPosition.x,
+                            widthPx = sliderWidth,
+                            totalDurationMs = totalDurationMS,
+                        )
                     },
                     onDragStopped = {
+                        val total = totalDurationMS?.takeIf { it > 0uL }
+                        if (total == null) {
+                            isDragging = false
+                            optimisticCurrentDurationMS = null
+                            return@draggable
+                        }
+                        val target = optimisticCurrentDurationMS ?: currentDurationMS
+                        updatedOnChangeMusicPosition(target)
                         isDragging = false
-                        onChangeMusicPosition(draggingCurrentDurationMS)
                     }
                 )
         ) {
@@ -396,12 +429,14 @@ internal fun MusicSlider(
                 .fillMaxWidth()
         ) {
             Text(
-                text = currentDuration,
-                style = EaseTheme.typography.micro
+                text = formatProgressDuration(displayedCurrentDurationMS),
+                style = EaseTheme.typography.micro,
+                modifier = Modifier.testTag(PLAYER_PROGRESS_CURRENT_DURATION_TEST_TAG),
             )
             Text(
-                text = totalDuration,
-                style = EaseTheme.typography.micro
+                text = formatProgressDuration(totalDurationMS),
+                style = EaseTheme.typography.micro,
+                modifier = Modifier.testTag(PLAYER_PROGRESS_TOTAL_DURATION_TEST_TAG),
             )
         }
     }
@@ -1503,11 +1538,9 @@ fun MusicPlayerPage(
                 )
             ) {
                 MusicSlider(
-                    currentDuration = formatDuration(currentDuration),
-                    _currentDurationMS = toMusicDurationMs(currentDuration),
+                    currentDurationMS = currentDuration.toMillis().toULong(),
                     bufferDurationMS = bufferDuration.toMillis().toULong(),
-                    totalDuration = formatDuration(displayTotalDuration),
-                    totalDurationMS = toMusicDurationMs(displayTotalDuration),
+                    totalDurationMS = displayTotalDuration?.toMillis()?.toULong(),
                     onChangeMusicPosition = { nextMS ->
                         playerVM.seek(nextMS)
                     }
@@ -1564,17 +1597,6 @@ fun MusicPlayerPage(
 )
 @Composable
 private fun MusicSliderPreview() {
-    fun formatMS(ms: ULong): String {
-        var seconds = ms / 1000u
-        val minutes = seconds / 60u
-        seconds %= 60u
-
-        val m = minutes.toString().padStart(2, '0')
-        val s = seconds.toString().padStart(2, '0')
-
-        return "${m}:${s}"
-    }
-
     val totalMS = 120uL * 1000uL
     var currentMS by remember {
         mutableStateOf(60uL * 1000uL)
@@ -1590,10 +1612,8 @@ private fun MusicSliderPreview() {
             .padding(20.dp)
     ) {
         MusicSlider(
-            currentDuration = formatMS(currentMS),
-            _currentDurationMS = currentMS,
+            currentDurationMS = currentMS,
             bufferDurationMS = bufferMS,
-            totalDuration = formatMS(totalMS),
             totalDurationMS = totalMS,
             onChangeMusicPosition = { nextMS ->
                 currentMS = nextMS
