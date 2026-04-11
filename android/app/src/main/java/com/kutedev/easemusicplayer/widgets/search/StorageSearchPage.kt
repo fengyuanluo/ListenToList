@@ -339,7 +339,10 @@ private fun InstanceSearchResultsPage(
             }
 
             else -> {
-                items(pageState.entries, key = { entry -> entry.path }) { entry ->
+                items(
+                    items = pageState.entries,
+                    key = { entry -> "${entry.storageId.value}:${entry.path}:${entry.isDir}" },
+                ) { entry ->
                     StorageSearchResultRow(
                         entry = entry,
                         subtitle = entry.parentPath,

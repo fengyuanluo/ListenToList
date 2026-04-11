@@ -287,7 +287,7 @@ class StorageSearchVM @Inject constructor(
         val resultPage = response.pageOrNull()
         if (resultPage != null) {
             val entries = if (previous == null || page <= 1) {
-                resultPage.entries
+                dedupeSearchEntries(resultPage.entries)
             } else {
                 mergeSearchPages(previous.entries, resultPage.entries)
             }

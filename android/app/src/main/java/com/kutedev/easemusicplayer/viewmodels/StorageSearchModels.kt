@@ -133,9 +133,6 @@ fun mergeSearchPages(
     current: List<StorageSearchEntry>,
     next: List<StorageSearchEntry>,
 ): List<StorageSearchEntry> {
-    if (current.isEmpty()) {
-        return next
-    }
     val merged = LinkedHashMap<String, StorageSearchEntry>()
     current.forEach { entry ->
         merged[entry.path] = entry
@@ -144,4 +141,15 @@ fun mergeSearchPages(
         merged[entry.path] = entry
     }
     return merged.values.toList()
+}
+
+fun dedupeSearchEntries(entries: List<StorageSearchEntry>): List<StorageSearchEntry> {
+    if (entries.size < 2) {
+        return entries
+    }
+    val deduped = LinkedHashMap<String, StorageSearchEntry>()
+    entries.forEach { entry ->
+        deduped[entry.path] = entry
+    }
+    return deduped.values.toList()
 }
