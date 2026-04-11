@@ -30,6 +30,20 @@ class StorageSearchModelsTest {
     }
 
     @Test
+    fun dedupeSearchEntriesRemovesDuplicatePathsInsideSinglePage() {
+        val storageId = StorageId(1)
+        val page = listOf(
+            StorageSearchEntry(storageId, "dup-a.mp3", "/music/dup-a.mp3", "/music", 12uL, false),
+            StorageSearchEntry(storageId, "dup-a.mp3", "/music/dup-a.mp3", "/music", 12uL, false),
+            StorageSearchEntry(storageId, "song-b.mp3", "/music/song-b.mp3", "/music", 18uL, false),
+        )
+
+        val deduped = dedupeSearchEntries(page)
+
+        assertEquals(listOf("/music/dup-a.mp3", "/music/song-b.mp3"), deduped.map { it.path })
+    }
+
+    @Test
     fun responseMappingExposesPageAndErrors() {
         val storageId = StorageId(1)
         val ok = SearchStorageEntriesResp.Ok(
