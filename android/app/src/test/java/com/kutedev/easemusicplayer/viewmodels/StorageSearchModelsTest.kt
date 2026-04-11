@@ -44,6 +44,32 @@ class StorageSearchModelsTest {
     }
 
     @Test
+    fun resolveSearchTotalShrinksFirstPageTotalAfterDeduplication() {
+        val total = resolveSearchTotal(
+            rawTotal = 57,
+            previousCount = 0,
+            mergedCount = 40,
+            incomingCount = 57,
+            previousTotal = null,
+        )
+
+        assertEquals(40, total)
+    }
+
+    @Test
+    fun resolveSearchTotalStopsPaginationWhenAppendAddsNoUniqueEntries() {
+        val total = resolveSearchTotal(
+            rawTotal = 57,
+            previousCount = 40,
+            mergedCount = 40,
+            incomingCount = 10,
+            previousTotal = 40,
+        )
+
+        assertEquals(40, total)
+    }
+
+    @Test
     fun responseMappingExposesPageAndErrors() {
         val storageId = StorageId(1)
         val ok = SearchStorageEntriesResp.Ok(

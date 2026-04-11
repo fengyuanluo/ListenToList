@@ -153,3 +153,18 @@ fun dedupeSearchEntries(entries: List<StorageSearchEntry>): List<StorageSearchEn
     }
     return deduped.values.toList()
 }
+
+fun resolveSearchTotal(
+    rawTotal: Int,
+    previousCount: Int,
+    mergedCount: Int,
+    incomingCount: Int,
+    previousTotal: Int? = null,
+): Int {
+    if (previousTotal != null && mergedCount == previousCount) {
+        return mergedCount
+    }
+    val baseTotal = previousTotal ?: rawTotal
+    val duplicateCount = (previousCount + incomingCount - mergedCount).coerceAtLeast(0)
+    return maxOf(mergedCount, baseTotal - duplicateCount)
+}

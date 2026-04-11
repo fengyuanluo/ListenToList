@@ -286,15 +286,23 @@ class StorageSearchVM @Inject constructor(
     ): StorageSearchSectionUiState {
         val resultPage = response.pageOrNull()
         if (resultPage != null) {
+            val rawEntries = resultPage.entries
             val entries = if (previous == null || page <= 1) {
                 dedupeSearchEntries(resultPage.entries)
             } else {
                 mergeSearchPages(previous.entries, resultPage.entries)
             }
+            val total = resolveSearchTotal(
+                rawTotal = resultPage.total.toInt(),
+                previousCount = previous?.entries?.size ?: 0,
+                mergedCount = entries.size,
+                incomingCount = rawEntries.size,
+                previousTotal = previous?.total,
+            )
             return StorageSearchSectionUiState(
                 storage = storage,
                 entries = entries,
-                total = resultPage.total.toInt(),
+                total = total,
                 loading = false,
                 loadingMore = false,
                 error = null,
