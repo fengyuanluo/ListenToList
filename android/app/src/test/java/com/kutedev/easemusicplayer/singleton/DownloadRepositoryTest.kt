@@ -2,10 +2,12 @@ package com.kutedev.easemusicplayer.singleton
 
 import androidx.work.Data
 import androidx.work.WorkInfo
+import com.kutedev.easemusicplayer.core.ResolvedMusicPlaybackSource
 import com.kutedev.easemusicplayer.core.shouldRejectResumeState
 import java.util.UUID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class DownloadRepositoryTest {
@@ -125,5 +127,59 @@ class DownloadRepositoryTest {
         assertEquals(true, shouldRejectResumeState(existingBytes = 101L, sizeHint = 100L, remainingBytesAfterOffset = null))
         assertEquals(true, shouldRejectResumeState(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 0L))
         assertFalse(shouldRejectResumeState(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 80L))
+    }
+
+    @Test
+    fun resolveCompletedPlaybackSourceFromRecord_returnsNullAndFailsRecordWhenOfflineFileMissing() {
+        val record = PersistedDownloadRecord(
+            id = UUID.randomUUID().toString(),
+            title = "missing-song",
+            sourcePath = "/music/missing-song.mp3",
+            fileName = "missing-song.mp3",
+            storageId = 1L,
+            createdAtMs = 40L,
+            status = DownloadTaskStatus.COMPLETED.name,
+            bytesDownloaded = 1024L,
+            totalBytes = 1024L,
+            destinationPath = "/downloads/missing-song.mp3",
+        )
+
+        val resolution = resolveCompletedPlaybackSourceFromRecord(
+            record = record,
+            canReadContentUri = { false },
+            canReadFile = { false },
+        )
+
+        assertNull(resolution.source)
+        assertEquals(DownloadTaskStatus.FAILED.name, resolution.recordUpdate?.status)
+        assertEquals("离线文件不可用或已被删除", resolution.recordUpdate?.errorMessage)
+    }
+
+    @Test
+    fun resolveCompletedPlaybackSourceFromRecord_keepsReadableDownloadedFileAsPlaybackSource() {
+        val record = PersistedDownloadRecord(
+            id = UUID.randomUUID().toString(),
+            title = "downloaded-song",
+            sourcePath = "/music/downloaded-song.mp3",
+            fileName = "downloaded-song.mp3",
+            storageId = 1L,
+            createdAtMs = 50L,
+            status = DownloadTaskStatus.COMPLETED.name,
+            bytesDownloaded = 2048L,
+            totalBytes = 2048L,
+            destinationPath = "/downloads/downloaded-song.mp3",
+        )
+
+        val resolution = resolveCompletedPlaybackSourceFromRecord(
+            record = record,
+            canReadContentUri = { false },
+            canReadFile = { true },
+        )
+
+        assertEquals(
+            ResolvedMusicPlaybackSource.DownloadedFile("/downloads/downloaded-song.mp3"),
+            resolution.source,
+        )
+        assertNull(resolution.recordUpdate)
     }
 }
