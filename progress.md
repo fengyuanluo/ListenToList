@@ -13,6 +13,14 @@
 - Targeted P0-2 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
 - Broad Android validation passed for P0-2: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed: `git diff --check`.
+- Committed P0-2 as `c9fedca fix: recover from transient playback io failures`.
+- Started P1-1 from `docs/BUGs/playback-chain-deep-review.md`.
+- Reviewed storage mutation paths: `StorageRepository.updateRefreshToken()`, `StorageRepository.upsertStorage()`, `StorageRepository.remove()`, `EditStorageVM.finish()`, `EditStorageVM.remove()`, and `MainActivity` OAuth redirect handling.
+- Patched `StorageRepository` to call `PlaybackSourceResolverCache.invalidateAll()` after successful OAuth token refresh, storage upsert, and storage removal.
+- Added resolver-cache `invalidateAll()` regression coverage to `MusicPlaybackDataSourceTest`.
+- Targeted P1-1 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
+- Broad Android validation passed for P1-1: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P1-1: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.
