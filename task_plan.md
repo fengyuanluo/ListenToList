@@ -43,7 +43,7 @@ Phase 8: continue the next domain pass, starting with real-device playback smoke
 - Phase 6 complete: broad Android validation passed.
 - Phase 7 complete: committed `ec4eb4b fix: handle cold oauth redirects`.
 - Phase 8 complete: fixed SG1 smoke runner hang and passed real-device playback/download smoke on `172.20.65.10:45749`.
-- Next phase pending: continue another functional-domain review or perform a completion audit for the current partial batch.
+- Phase 9 in progress: theme/UI layout review documented UI1 and code fix is pending validation.
 
 ## Completion Audit
 - Not yet complete. The previous batch is archived, but the new deep review, task center, fixes, tests, commits, and final audit are still pending.

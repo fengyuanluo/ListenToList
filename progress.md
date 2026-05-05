@@ -36,3 +36,8 @@
 - Real-device smoke passed after SG1 fix: `bun run smoke:android --device=172.20.65.10:45749 --port=18095 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
 - Smoke artifacts: `artifacts/smoke/2026-05-05T05-52-04.802Z/`.
 - Verified smoke scenarios: Local `LOCAL_FILE`, OpenList `DIRECT_HTTP`, WebDAV `DIRECT_HTTP`, download prepare, and offline downloaded playback `DOWNLOADED_FILE`.
+- Started theme/UI layout review.
+- Documented UI1: bottom spacer reserved 124dp for mini-player chrome while rendered mini-player height is 104dp.
+- Patched bottom chrome space calculation to use shared local constants and added `BottomBarSpaceTest`.
+- Targeted UI1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.widgets.appbar.BottomBarSpaceTest' --warning-mode all`.
+- Broad Android gate passed after UI1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
