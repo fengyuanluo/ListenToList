@@ -180,3 +180,10 @@
 - Broad validation attempt initially failed because I incorrectly ran targeted test and `assembleDebug` in parallel; concurrent Gradle/Kotlin/Hilt tasks raced on generated `build/tmp/kotlin-classes` and `build/generated/hilt` files. This is a validation-runner error, not accepted evidence against the source patch.
 - Stopped the Gradle daemon and reran broad validation sequentially.
 - Sequential broad validation passed: `cd android && ./gradlew :app:assembleDebug --warning-mode all`.
+- Continued P3-2 by implementing startup network-type gating for folder prefetch.
+- Added `ACCESS_NETWORK_STATE` to the main manifest so Android can read active network metering state.
+- Patched `StorageBrowserVM.playFromFolder()` to pass `ConnectivityManager.isActiveNetworkMetered` into `shouldPrefetchFolder()`, failing closed when connectivity is unavailable.
+- Extended `FolderPrefetchPolicyTest` with metered-network coverage.
+- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
+- Broad Android validation passed: `cd android && ./gradlew :app:assembleDebug --warning-mode all`.
+- Release manifest validation passed: `cd android && ./gradlew :app:processReleaseMainManifest --warning-mode all`.

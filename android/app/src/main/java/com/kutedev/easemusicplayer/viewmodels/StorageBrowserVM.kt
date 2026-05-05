@@ -1,7 +1,8 @@
 package com.kutedev.easemusicplayer.viewmodels
 
-import android.net.Uri
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -639,6 +640,7 @@ class StorageBrowserVM @Inject constructor(
                     shouldPrefetchFolder(
                         playMode = playerRepository.playMode.value,
                         isPlaybackLoading = playerRepository.loading.value,
+                        isNetworkMetered = appContext.isActiveNetworkMetered(),
                     )
                 ) {
                     prefetchFolderSongs(
@@ -831,4 +833,9 @@ class StorageBrowserVM @Inject constructor(
         set(value) {
             savedStateHandle[STATE_SELECT_MODE] = value
         }
+}
+
+private fun Context.isActiveNetworkMetered(): Boolean {
+    val connectivityManager = getSystemService(ConnectivityManager::class.java)
+    return connectivityManager?.isActiveNetworkMetered ?: true
 }

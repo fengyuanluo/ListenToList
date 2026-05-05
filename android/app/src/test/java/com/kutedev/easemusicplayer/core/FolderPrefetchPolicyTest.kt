@@ -16,10 +16,58 @@ class FolderPrefetchPolicyTest {
 
     @Test
     fun shouldPrefetchFolder_skipsWhenPlaybackIsLoading() {
-        assertTrue(shouldPrefetchFolder(playMode = PlayMode.LIST, isPlaybackLoading = false))
-        assertTrue(shouldPrefetchFolder(playMode = PlayMode.LIST_LOOP, isPlaybackLoading = false))
-        assertFalse(shouldPrefetchFolder(playMode = PlayMode.LIST, isPlaybackLoading = true))
-        assertFalse(shouldPrefetchFolder(playMode = PlayMode.LIST_LOOP, isPlaybackLoading = true))
-        assertFalse(shouldPrefetchFolder(playMode = PlayMode.SINGLE, isPlaybackLoading = false))
+        assertTrue(
+            shouldPrefetchFolder(
+                playMode = PlayMode.LIST,
+                isPlaybackLoading = false,
+                isNetworkMetered = false,
+            )
+        )
+        assertTrue(
+            shouldPrefetchFolder(
+                playMode = PlayMode.LIST_LOOP,
+                isPlaybackLoading = false,
+                isNetworkMetered = false,
+            )
+        )
+        assertFalse(
+            shouldPrefetchFolder(
+                playMode = PlayMode.LIST,
+                isPlaybackLoading = true,
+                isNetworkMetered = false,
+            )
+        )
+        assertFalse(
+            shouldPrefetchFolder(
+                playMode = PlayMode.LIST_LOOP,
+                isPlaybackLoading = true,
+                isNetworkMetered = false,
+            )
+        )
+        assertFalse(
+            shouldPrefetchFolder(
+                playMode = PlayMode.SINGLE,
+                isPlaybackLoading = false,
+                isNetworkMetered = false,
+            )
+        )
+    }
+
+    @Test
+    fun shouldPrefetchFolder_skipsOnMeteredNetwork() {
+        assertFalse(
+            shouldPrefetchFolder(
+                playMode = PlayMode.LIST,
+                isPlaybackLoading = false,
+                isNetworkMetered = true,
+            )
+        )
+        assertFalse(
+            shouldPrefetchFolder(
+                playMode = PlayMode.LIST_LOOP,
+                isPlaybackLoading = false,
+                isNetworkMetered = true,
+            )
+        )
     }
 }
