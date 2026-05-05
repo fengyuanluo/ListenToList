@@ -102,6 +102,38 @@ class PlaybackErrorRecoveryTest {
     }
 
     @Test
+    fun shouldRetryCurrentAfterRecoverableError_onlyAllowsOneRetryWithoutCandidate() {
+        assertTrue(
+            shouldRetryCurrentAfterRecoverableError(
+                hasRecoveryCandidate = false,
+                currentEntryInSnapshot = true,
+                currentRetryAttempted = false,
+            )
+        )
+        assertFalse(
+            shouldRetryCurrentAfterRecoverableError(
+                hasRecoveryCandidate = true,
+                currentEntryInSnapshot = true,
+                currentRetryAttempted = false,
+            )
+        )
+        assertFalse(
+            shouldRetryCurrentAfterRecoverableError(
+                hasRecoveryCandidate = false,
+                currentEntryInSnapshot = false,
+                currentRetryAttempted = false,
+            )
+        )
+        assertFalse(
+            shouldRetryCurrentAfterRecoverableError(
+                hasRecoveryCandidate = false,
+                currentEntryInSnapshot = true,
+                currentRetryAttempted = true,
+            )
+        )
+    }
+
+    @Test
     fun decodeError_isNotRecoverable() {
         val error = playbackError(
             code = PlaybackException.ERROR_CODE_DECODING_FAILED,

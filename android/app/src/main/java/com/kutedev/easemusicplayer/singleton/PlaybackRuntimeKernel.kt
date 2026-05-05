@@ -61,8 +61,11 @@ class PlaybackRuntimeKernel @Inject constructor(
         startPositionMs: Long = 0L,
         playWhenReady: Boolean = true,
         sourcePlaylist: Playlist? = null,
+        seedRecovery: Boolean = true,
     ) {
-        playerRepository.seedPlaybackRecovery(currentQueueEntryId, direction)
+        if (seedRecovery) {
+            playerRepository.seedPlaybackRecovery(currentQueueEntryId, direction)
+        }
         playerRepository.setPlaybackSession(
             music = currentMusic,
             queueSnapshot = snapshot,

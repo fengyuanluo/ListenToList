@@ -217,3 +217,10 @@
 - Added `DownloadRepositoryTest.decideDownloadResumeAction_restartsUnknownSizePartialDownloads`.
 - Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
 - Broad Android validation passed: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Committed P2-2 residual fix as `5dafee7 fix: restart unknown-size resumed downloads`.
+- Started fixing the P3-2 single-entry / single-mode weak-network recovery semantics gap.
+- Patched recoverable playback error handling so, when no adjacent recovery candidate exists and the current queue entry is still valid, playback retries the current item once after descriptor cache invalidation.
+- Added `PlaybackRuntimeKernel.playResolvedQueue(seedRecovery = false)` for same-item recovery retry so the existing recovery token is preserved and a second failure does not loop indefinitely.
+- Added `PlaybackErrorRecoveryTest.shouldRetryCurrentAfterRecoverableError_onlyAllowsOneRetryWithoutCandidate`.
+- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
+- Broad Android validation passed: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.

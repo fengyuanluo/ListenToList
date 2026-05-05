@@ -95,4 +95,4 @@
 
 ## Playback Chain Residual Review Findings
 - Static follow-up review found that the P2-2 download resume fix was only size-identity reliable when a persisted `totalBytes` / `sizeHint` existed. The follow-up repair now makes unknown-size partial downloads restart from zero instead of appending unverifiable `.part` prefixes.
-- Static follow-up review found that weak-network recovery is currently skip-oriented. When the runtime queue has no unattempted adjacent candidate, including a single-entry queue or `SINGLE` / `SINGLE_LOOP` mode, `findRecoveryCandidate()` returns null and `recoverFromPlaybackError()` stops playback instead of trying a descriptor refresh / same-track retry policy.
+- Static follow-up review found that weak-network recovery was skip-oriented. The follow-up repair now allows one descriptor-refresh same-track retry when the runtime queue has no adjacent recovery candidate and the current queue entry is still valid, covering single-entry and single-mode playback without introducing infinite retry.

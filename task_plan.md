@@ -101,6 +101,10 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P2-2 residual implementation complete: unknown-size partial downloads now restart from zero instead of appending unverifiable temp bytes.
 - P2-2 residual targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
 - P2-2 residual broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- P2-2 residual committed as `5dafee7 fix: restart unknown-size resumed downloads`.
+- P3-2 single-entry recovery implementation complete: when no adjacent recovery candidate exists, recoverable playback errors now retry the current queue entry once without reseeding recovery.
+- P3-2 single-entry recovery targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
+- P3-2 single-entry recovery broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.
