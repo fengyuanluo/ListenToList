@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             Root()
         }
+        handleOAuthRedirectIntent(intent)
     }
 
     override fun onStart() {
@@ -124,13 +125,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        intent?.data?.let { uri ->
-            val code = uri.getQueryParameter("code")
-            if (code != null) {
-                lifecycleScope.launch {
-                    storageRepository.updateRefreshToken(code)
-                }
-            }
+        setIntent(intent)
+        handleOAuthRedirectIntent(intent)
+    }
+
+    private fun handleOAuthRedirectIntent(intent: Intent?) {
+        val code = extractOAuthRedirectCode(intent) ?: return
+        lifecycleScope.launch {
+            storageRepository.updateRefreshToken(code)
         }
     }
 
@@ -151,3 +153,11 @@ class MainActivity : ComponentActivity() {
 
 @HiltAndroidApp
 class EaseMusicPlayerApplication : Application() {  }
+
+internal fun extractOAuthRedirectCode(intent: Intent?): String? {
+    val uri = intent?.data ?: return null
+    if (uri.scheme != "easem" || uri.host != "oauth2redirect") {
+        return null
+    }
+    return uri.getQueryParameter("code")?.takeIf { it.isNotBlank() }
+}
