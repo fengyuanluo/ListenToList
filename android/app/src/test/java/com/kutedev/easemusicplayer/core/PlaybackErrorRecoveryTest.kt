@@ -81,6 +81,27 @@ class PlaybackErrorRecoveryTest {
     }
 
     @Test
+    fun playbackLoadTimeout_failsFastToPlayerRecovery() {
+        val error = IOException("read failed", SocketTimeoutException("read timeout"))
+
+        assertTrue(shouldFailFastPlaybackLoad(error))
+    }
+
+    @Test
+    fun playbackLoadServerError_failsFastToPlayerRecovery() {
+        val error = httpStatusError(503)
+
+        assertTrue(shouldFailFastPlaybackLoad(error))
+    }
+
+    @Test
+    fun playbackLoadParserError_keepsDefaultRetryPolicy() {
+        val error = IOException("parser retry")
+
+        assertFalse(shouldFailFastPlaybackLoad(error))
+    }
+
+    @Test
     fun decodeError_isNotRecoverable() {
         val error = playbackError(
             code = PlaybackException.ERROR_CODE_DECODING_FAILED,

@@ -139,7 +139,10 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(WAKE_MODE_NETWORK)
             .setLoadControl(PlaybackLoadControl.build())
-            .setMediaSourceFactory(ProgressiveMediaSource.Factory(playerCacheFactory))
+            .setMediaSourceFactory(
+                ProgressiveMediaSource.Factory(playerCacheFactory)
+                    .setLoadErrorHandlingPolicy(PlaybackLoadErrorPolicy.build())
+            )
             .build()
         _mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(pendingIntent)
