@@ -182,4 +182,58 @@ class DownloadRepositoryTest {
         )
         assertNull(resolution.recordUpdate)
     }
+
+    @Test
+    fun resolveCompletedPlaybackSourceFromRecord_returnsNullAndFailsRecordWhenDownloadedFileShorterThanExpected() {
+        val record = PersistedDownloadRecord(
+            id = UUID.randomUUID().toString(),
+            title = "short-song",
+            sourcePath = "/music/short-song.mp3",
+            fileName = "short-song.mp3",
+            storageId = 1L,
+            createdAtMs = 60L,
+            status = DownloadTaskStatus.COMPLETED.name,
+            bytesDownloaded = 2048L,
+            totalBytes = 2048L,
+            destinationPath = "/downloads/short-song.mp3",
+        )
+
+        val resolution = resolveCompletedPlaybackSourceFromRecord(
+            record = record,
+            canReadContentUri = { false },
+            canReadFile = { true },
+            fileLength = { 1024L },
+        )
+
+        assertNull(resolution.source)
+        assertEquals(DownloadTaskStatus.FAILED.name, resolution.recordUpdate?.status)
+        assertEquals("离线文件大小不匹配，已回退在线源", resolution.recordUpdate?.errorMessage)
+    }
+
+    @Test
+    fun resolveCompletedPlaybackSourceFromRecord_returnsNullAndFailsRecordWhenContentUriShorterThanExpected() {
+        val record = PersistedDownloadRecord(
+            id = UUID.randomUUID().toString(),
+            title = "short-content",
+            sourcePath = "/music/short-content.mp3",
+            fileName = "short-content.mp3",
+            storageId = 1L,
+            createdAtMs = 70L,
+            status = DownloadTaskStatus.COMPLETED.name,
+            bytesDownloaded = 4096L,
+            totalBytes = 4096L,
+            destinationUri = "content://downloads/short-content",
+        )
+
+        val resolution = resolveCompletedPlaybackSourceFromRecord(
+            record = record,
+            canReadContentUri = { true },
+            contentUriLength = { 1024L },
+            canReadFile = { false },
+        )
+
+        assertNull(resolution.source)
+        assertEquals(DownloadTaskStatus.FAILED.name, resolution.recordUpdate?.status)
+        assertEquals("离线文件大小不匹配，已回退在线源", resolution.recordUpdate?.errorMessage)
+    }
 }

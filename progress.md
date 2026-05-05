@@ -51,6 +51,13 @@
 - Targeted P1-5 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --warning-mode all`.
 - Broad Android validation passed for P1-5: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed for P1-5: `git diff --check`.
+- Committed P1-5 as `b0b8749 fix: reduce play mode queue rebuilds`.
+- Started P2-1 from `docs/BUGs/playback-chain-deep-review.md`.
+- Patched completed offline playback resolution to validate resolved file/content length against recorded `totalBytes` or `bytesDownloaded` before returning a local playback source.
+- Added `DownloadRepositoryTest` coverage for short file and short content URI fallback-to-online behavior.
+- Targeted P2-1 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
+- Broad Android validation passed for P2-1: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P2-1: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.

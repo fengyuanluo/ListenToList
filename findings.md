@@ -44,3 +44,7 @@
 ## Playback Chain P1-5 Findings
 - `syncQueueForPlayMode()` used to rebuild the player queue even when only the repeat mode changed or when the current item could be preserved in place. That needlessly stopped playback, cleared media items, and reopened sources in weak-network scenarios.
 - The safe optimization boundary is to keep the current item and only mutate the surrounding Media3 timeline when the desired plan still contains the current `mediaId` exactly once. If that cannot be guaranteed, the existing rebuild path remains the fallback.
+
+## Playback Chain P2-1 Findings
+- Completed offline playback sources were previously chosen on readability alone. A file or content URI that exists but is truncated could still win over the online fallback.
+- The safe completion gate is to compare the resolved file/content length against the recorded `totalBytes` or, when that is missing, the recorded `bytesDownloaded`. If the length mismatches, the record should be marked failed and playback should fall back online.
