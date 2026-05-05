@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-Phase 5: implement the first focused app-shell fix and validate it.
+Phase 8: continue the next domain pass, starting with real-device playback smoke baseline.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -41,7 +41,9 @@ Phase 5: implement the first focused app-shell fix and validate it.
 - Phase 4 in progress: AS1 documented in the new review and task center.
 - Phase 5 complete: AS1 code fix and targeted test passed.
 - Phase 6 complete: broad Android validation passed.
-- Phase 7 in progress: commit pending.
+- Phase 7 complete: committed `ec4eb4b fix: handle cold oauth redirects`.
+- Phase 8 complete: fixed SG1 smoke runner hang and passed real-device playback/download smoke on `172.20.65.10:45749`.
+- Next phase pending: continue another functional-domain review or perform a completion audit for the current partial batch.
 
 ## Completion Audit
 - Not yet complete. The previous batch is archived, but the new deep review, task center, fixes, tests, commits, and final audit are still pending.
@@ -50,3 +52,6 @@ Phase 5: implement the first focused app-shell fix and validate it.
 | Error | Attempt | Resolution |
 |-------|---------|------------|
 | `MainActivityIntentTest` failed with Android runtime stubs for `Intent`/`Uri` in plain JVM test | 1 | Switched the test to Robolectric, matching existing Android URI tests in the repo. |
+| `bun run smoke:android --device=172.20.65.10:45749` hung after "启动 mock playback server" and before the first scenario print | 1 | Terminated stale smoke/mock processes; device stayed online, but new artifacts were not produced. Will retry with explicit preflight and port. |
+| Retried smoke with `--port=18091`; it hung at the same point | 2 | Verified manual `adb reverse`, mkdir, push, start, and get-state all work; documented SG1 as a smoke runner timeout/progress-evidence issue. |
+| `bunx tsc --noEmit` failed on existing Bun globals/top-level await/module target issues | 1 | Treat as non-applicable script gate for this repo; validate smoke script by executing it with Bun. |

@@ -18,3 +18,21 @@
 - Targeted AS1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.MainActivityIntentTest' --warning-mode all`.
 - Whitespace check passed: `git diff --check`.
 - Broad Android gate passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Committed archive and AS1 fix as `ec4eb4b fix: handle cold oauth redirects`.
+- Post-commit status: clean `master`, ahead of `origin/master` by 1.
+- ADB found real device `172.20.65.10:45749` online.
+- First smoke attempt with `172.20.65.10:45749` hung after starting mock playback server and before writing this run's local WAV artifacts; terminated stale smoke/mock processes.
+- ADB preflight succeeded: `reverse --list`, `mkdir`, `push`, `am start`, and `pidof`.
+- Second smoke attempt with explicit `--port=18091` hung at the same point.
+- Manual `adb reverse tcp:18091 tcp:18091` succeeded while the smoke process was stuck, so the actionable issue is missing timeout/progress instrumentation in `scripts/smoke-android.ts`, not a proven playback route failure.
+- Documented SG1 in `docs/BUGs/2026-05-05-deep-review/02-validation-smoke-tooling.md` and task center.
+- Patched `scripts/smoke-android.ts` with command timeouts and `runner-events.log` step logging.
+- `git diff --check` passed after smoke script patch.
+- `bunx tsc --noEmit` failed on existing Bun/tsconfig incompatibilities, so it is not a valid gate for this script in the current repo configuration.
+- Third smoke attempt with new step logging showed the exact hang point: `launchMockPlaybackServer()` after `启动 mock playback server`; `runner-events.log` was written but no later step appeared.
+- Confirmed mock server was listening on port `18092`; patched health polling to use `AbortSignal.timeout(1000)` and to kill/throw on startup timeout without reading never-ending child stdout/stderr.
+- Reproduced the health-check failure outside the script: both `curl` and Bun `fetch` attempted `127.0.0.1` through `http_proxy`, causing local `/healthz` timeout.
+- Patched mock readiness detection to use a direct `node:net` TCP port probe, bypassing proxy-sensitive HTTP fetch behavior.
+- Real-device smoke passed after SG1 fix: `bun run smoke:android --device=172.20.65.10:45749 --port=18095 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
+- Smoke artifacts: `artifacts/smoke/2026-05-05T05-52-04.802Z/`.
+- Verified smoke scenarios: Local `LOCAL_FILE`, OpenList `DIRECT_HTTP`, WebDAV `DIRECT_HTTP`, download prepare, and offline downloaded playback `DOWNLOADED_FILE`.
