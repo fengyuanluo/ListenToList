@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { writeSmokeWaveArtifact } from "./mock-playback-server";
 
@@ -45,21 +46,50 @@ type ServerHandle = {
   stop(): void;
 };
 
+function waitForTcpPort(host: string, port: number, timeoutMs = 1_000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    const finish = (ok: boolean) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+  });
+}
+
 function arg(name: string, fallback?: string): string | undefined {
   const found = process.argv.find((item) => item.startsWith(`--${name}=`));
   return found ? found.slice(name.length + 3) : fallback;
 }
 
-function runOrThrow(cmd: string[], cwd = process.cwd(), allowFailure = false): string {
-  const result = Bun.spawnSync(cmd, {
+function runOrThrow(
+  cmd: string[],
+  cwd = process.cwd(),
+  allowFailure = false,
+  timeoutMs = 60_000,
+): string {
+  const started = Date.now();
+  const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const actualCmd = timeoutMs > 0 ? ["timeout", `${timeoutSeconds}s`, ...cmd] : cmd;
+  const result = Bun.spawnSync(actualCmd, {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
   const stdout = Buffer.from(result.stdout).toString("utf8");
   const stderr = Buffer.from(result.stderr).toString("utf8");
+  const elapsedMs = Date.now() - started;
   if (result.exitCode !== 0 && !allowFailure) {
-    throw new Error(`命令失败: ${cmd.join(" ")}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
+    const reason = result.exitCode === 124 ? "命令超时" : "命令失败";
+    throw new Error(
+      `${reason}: ${cmd.join(" ")}\n` +
+        `elapsedMs=${elapsedMs} timeoutMs=${timeoutMs} exitCode=${result.exitCode}\n` +
+        `stdout:\n${stdout}\nstderr:\n${stderr}`,
+    );
   }
   return stdout.trim();
 }
@@ -80,27 +110,20 @@ async function launchMockPlaybackServer(port: number): Promise<ServerHandle> {
   const baseUrl = `http://127.0.0.1:${port}`;
   const started = Date.now();
   while (Date.now() - started < 10_000) {
-    try {
-      const response = await fetch(`${baseUrl}/healthz`);
-      if (response.ok) {
-        return {
-          port,
-          baseUrl,
-          stop() {
-            proc.kill();
-          },
-        };
-      }
-    } catch {
-      // wait until ready
+    if (await waitForTcpPort("127.0.0.1", port)) {
+      return {
+        port,
+        baseUrl,
+        stop() {
+          proc.kill();
+        },
+      };
     }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
-  const stdout = proc.stdout ? await new Response(proc.stdout).text() : "";
-  const stderr = proc.stderr ? await new Response(proc.stderr).text() : "";
   proc.kill();
-  throw new Error(`mock playback server 启动失败\nstdout:\n${stdout}\nstderr:\n${stderr}`);
+  throw new Error(`mock playback server 启动超时: ${baseUrl}/healthz`);
 }
 
 function extractBroadcastResult(output: string): DebugSmokeResult | null {
@@ -273,28 +296,42 @@ async function main(): Promise<void> {
   );
   const artifactsDir = path.resolve("artifacts/smoke", new Date().toISOString().replaceAll(":", "-"));
   mkdirSync(artifactsDir, { recursive: true });
+  const runnerEventsPath = path.join(artifactsDir, "runner-events.log");
+  const logStep = (message: string): void => {
+    const line = `${new Date().toISOString()} ${message}`;
+    console.log(message);
+    appendFileSync(runnerEventsPath, `${line}\n`);
+  };
 
-  console.log(`连接设备 ${device}`);
-  runOrThrow(["adb", "connect", device], process.cwd(), true);
-  console.log(`安装 APK ${apkPath}`);
-  runOrThrow(["adb", "-s", device, "install", "-r", apkPath]);
-  runOrThrow(["adb", "-s", device, "shell", "pm", "clear", PACKAGE_NAME], process.cwd(), true);
+  logStep(`连接设备 ${device}`);
+  runOrThrow(["adb", "connect", device], process.cwd(), true, 20_000);
+  logStep(`安装 APK ${apkPath}`);
+  runOrThrow(["adb", "-s", device, "install", "-r", apkPath], process.cwd(), false, 120_000);
+  logStep("清理应用数据");
+  runOrThrow(["adb", "-s", device, "shell", "pm", "clear", PACKAGE_NAME], process.cwd(), true, 30_000);
+  logStep("授权播放相关权限");
   grantPlaybackPermissions(device);
-  runOrThrow(["adb", "-s", device, "shell", "am", "start", "-W", "-n", MAIN_ACTIVITY], process.cwd(), true);
+  logStep("启动 MainActivity");
+  runOrThrow(["adb", "-s", device, "shell", "am", "start", "-W", "-n", MAIN_ACTIVITY], process.cwd(), true, 30_000);
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
-  console.log("启动 mock playback server");
+  logStep("启动 mock playback server");
   const server = await launchMockPlaybackServer(port);
   try {
-    runOrThrow(["adb", "-s", device, "reverse", `tcp:${server.port}`, `tcp:${server.port}`]);
+    logStep(`配置 adb reverse tcp:${server.port}`);
+    runOrThrow(["adb", "-s", device, "reverse", `tcp:${server.port}`, `tcp:${server.port}`], process.cwd(), false, 20_000);
 
     const localWaveA = path.join(artifactsDir, "test-local-a.wav");
     const localWaveB = path.join(artifactsDir, "test-local-b.wav");
+    logStep("生成本地 smoke WAV");
     writeSmokeWaveArtifact(localWaveA, 550);
     writeSmokeWaveArtifact(localWaveB, 770);
-    runOrThrow(["adb", "-s", device, "shell", "mkdir", "-p", "/sdcard/Music/ListenToListSmoke"]);
-    runOrThrow(["adb", "-s", device, "push", localWaveA, "/sdcard/Music/ListenToListSmoke/test-local-a.wav"]);
-    runOrThrow(["adb", "-s", device, "push", localWaveB, "/sdcard/Music/ListenToListSmoke/test-local-b.wav"]);
+    logStep("创建设备本地 smoke 目录");
+    runOrThrow(["adb", "-s", device, "shell", "mkdir", "-p", "/sdcard/Music/ListenToListSmoke"], process.cwd(), false, 20_000);
+    logStep("推送 test-local-a.wav");
+    runOrThrow(["adb", "-s", device, "push", localWaveA, "/sdcard/Music/ListenToListSmoke/test-local-a.wav"], process.cwd(), false, 30_000);
+    logStep("推送 test-local-b.wav");
+    runOrThrow(["adb", "-s", device, "push", localWaveB, "/sdcard/Music/ListenToListSmoke/test-local-b.wav"], process.cwd(), false, 30_000);
 
     const scenarios: Scenario[] = [
       {
@@ -403,7 +440,7 @@ async function main(): Promise<void> {
 
     const smokeSummaryScenarios = [...scenarios];
     for (const scenario of scenarios) {
-      console.log(`运行 scenario: ${scenario.name}`);
+      logStep(`运行 scenario: ${scenario.name}`);
       await runScenario(device, scenario, artifactsDir);
     }
 
@@ -438,7 +475,7 @@ async function main(): Promise<void> {
       },
     };
     smokeSummaryScenarios.push(downloadPrepareScenario);
-    console.log(`运行 scenario: ${downloadPrepareScenario.name}`);
+    logStep(`运行 scenario: ${downloadPrepareScenario.name}`);
     const downloadPrepareResult = await runScenario(device, downloadPrepareScenario, artifactsDir);
     if (!downloadPrepareResult.playlistId || !downloadPrepareResult.musicId) {
       throw new Error(
@@ -446,7 +483,7 @@ async function main(): Promise<void> {
       );
     }
 
-    console.log("停止 mock playback server，验证下载后的离线回放");
+    logStep("停止 mock playback server，验证下载后的离线回放");
     runOrThrow(["adb", "-s", device, "reverse", "--remove", `tcp:${server.port}`], process.cwd(), true);
     server.stop();
 
@@ -487,7 +524,7 @@ async function main(): Promise<void> {
       },
     };
     smokeSummaryScenarios.push(downloadOfflinePlayScenario);
-    console.log(`运行 scenario: ${downloadOfflinePlayScenario.name}`);
+    logStep(`运行 scenario: ${downloadOfflinePlayScenario.name}`);
     await runScenario(device, downloadOfflinePlayScenario, artifactsDir);
 
     const summary = {
@@ -504,7 +541,7 @@ async function main(): Promise<void> {
       path.join(artifactsDir, "summary.json"),
       JSON.stringify(summary, null, 2),
     );
-    console.log(`Smoke 成功，产物目录: ${artifactsDir}`);
+    logStep(`Smoke 成功，产物目录: ${artifactsDir}`);
   } finally {
     server.stop();
   }
