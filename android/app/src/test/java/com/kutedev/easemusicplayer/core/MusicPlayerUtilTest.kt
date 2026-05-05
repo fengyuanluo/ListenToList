@@ -177,6 +177,7 @@ class MusicPlayerUtilTest {
             MusicId(42L),
             resolveMusicIdFromMediaItem(plan.mediaItems[1]),
         )
+        assertEquals("music:42", plan.mediaItems[1].localConfiguration?.customCacheKey)
     }
 
     @Test

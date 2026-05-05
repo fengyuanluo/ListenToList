@@ -18,6 +18,8 @@ class PlaybackDataUriTest {
         assertEquals("ease", uri.scheme)
         assertEquals("data", uri.authority)
         assertEquals(42L, parsePlaybackMusicIdValue(uri))
+        assertEquals("music:42", buildPlaybackMusicCacheKey(uri))
+        assertEquals("music:42", buildPlaybackMusicCacheKey(42L))
     }
 
     @Test
@@ -25,5 +27,6 @@ class PlaybackDataUriTest {
         assertNull(parsePlaybackMusicIdValue(Uri.parse("https://example.com/audio.mp3")))
         assertNull(parsePlaybackMusicIdValue(Uri.parse("ease://other?music=1")))
         assertNull(parsePlaybackMusicIdValue(Uri.parse("ease://data?music=abc")))
+        assertNull(buildPlaybackMusicCacheKey(Uri.parse("https://example.com/audio.mp3")))
     }
 }

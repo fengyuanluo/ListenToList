@@ -63,7 +63,7 @@ class MusicPlaybackDataSourceTest {
             Uri.parse("https://example.com/music/sample.wav"),
             http.openedSpec?.uri,
         )
-        assertEquals("music-cache-key", http.openedSpec?.key)
+        assertEquals("music:7", http.openedSpec?.key)
         assertEquals("1", http.openedSpec?.httpRequestHeaders?.get("X-Test"))
         assertEquals(
             "Bearer test-token",
@@ -93,7 +93,7 @@ class MusicPlaybackDataSourceTest {
 
         assertSame(file, dataSource.currentDelegateForTest())
         assertEquals(Uri.fromFile(File(path)), file.openedSpec?.uri)
-        assertEquals(path, file.openedSpec?.key)
+        assertEquals("music:8", file.openedSpec?.key)
         assertEquals(PLAYBACK_ROUTE_LOCAL_FILE, PlaybackDiagnostics.currentSnapshot().route)
     }
 
@@ -119,6 +119,7 @@ class MusicPlaybackDataSourceTest {
         val read = dataSource.read(buffer, 0, buffer.size)
         assertEquals(4, read)
         assertSame(fallback, dataSource.currentDelegateForTest())
+        assertEquals("music:9", fallback.openedSpec?.key)
         assertEquals("data", String(buffer, 0, read))
         assertEquals(PLAYBACK_ROUTE_STREAM_FALLBACK, PlaybackDiagnostics.currentSnapshot().route)
     }
@@ -245,7 +246,7 @@ class MusicPlaybackDataSourceTest {
 
         assertSame(file, dataSource.currentDelegateForTest())
         assertEquals(Uri.fromFile(File(path)), file.openedSpec?.uri)
-        assertEquals(path, file.openedSpec?.key)
+        assertEquals("music:44", file.openedSpec?.key)
         assertEquals(PLAYBACK_ROUTE_DOWNLOADED_FILE, PlaybackDiagnostics.currentSnapshot().route)
     }
 
@@ -270,8 +271,36 @@ class MusicPlaybackDataSourceTest {
 
         assertSame(content, dataSource.currentDelegateForTest())
         assertEquals(targetUri, content.openedSpec?.uri)
-        assertEquals(targetUri.toString(), content.openedSpec?.key)
+        assertEquals("music:45", content.openedSpec?.key)
         assertEquals(PLAYBACK_ROUTE_DOWNLOADED_CONTENT, PlaybackDiagnostics.currentSnapshot().route)
+    }
+
+    @Test
+    fun resolvedRoutes_useSamePlaybackCacheKeyForSameMusic() {
+        val routeKeys = listOf(
+            ResolvedMusicPlaybackSource.DirectHttp(
+                url = "https://example.com/music.wav",
+                headers = emptyList(),
+                cacheKey = "backend-key",
+            ),
+            ResolvedMusicPlaybackSource.LocalFile("/tmp/local.wav"),
+            ResolvedMusicPlaybackSource.DownloadedFile("/tmp/downloaded.wav"),
+            ResolvedMusicPlaybackSource.ContentUri("content://downloads/documents/music"),
+            ResolvedMusicPlaybackSource.StreamFallback,
+        ).map { resolved ->
+            val delegate = RecordingDataSource()
+            val dataSource = MusicPlaybackDataSource(
+                resolver = MusicPlaybackSourceResolver { resolved },
+                httpDataSourceFactory = DataSource.Factory { delegate },
+                fileDataSourceFactory = DataSource.Factory { delegate },
+                contentDataSourceFactory = DataSource.Factory { delegate },
+                streamFallbackFactory = DataSource.Factory { delegate },
+            )
+            dataSource.open(DataSpec.Builder().setUri(Uri.parse("ease://data?music=46")).build())
+            delegate.openedSpec?.key
+        }
+
+        assertEquals(List(5) { "music:46" }, routeKeys)
     }
 }
 

@@ -31,3 +31,8 @@
 - `StorageRepository` is the Android aggregation point for storage configuration and auth mutations: `updateRefreshToken()`, `upsertStorage()`, and `remove()`.
 - `PlaybackSourceResolverCache` already had `invalidateAll()`, but before P1-1 only download/delete and playback error branches used resolver invalidation. Storage account edits could therefore leave old direct URLs or auth headers alive until TTL expiry.
 - The safe invalidation boundary is after successful backend calls. Failed `ctGetRefreshToken`, `ctUpsertStorage`, or `ctRemoveStorage` calls should not clear cache and mask the real persistence/auth failure.
+
+## Playback Chain P1-2/P1-3 Findings
+- P1-2 and P1-3 share the same root cause: prefetch prechecks used the unresolved `ease://data?music=<id>` key while resolved playback routes used route-specific keys such as backend direct key, absolute file path, content URI, or fallback URI.
+- The stable Android-side cache identity for a track is now `music:<id>`. Backend direct `cacheKey` is no longer used as the ExoPlayer cache key; it can still remain part of resolver metadata without splitting playback cache space.
+- `MediaItem.customCacheKey`, `MusicPlaybackDataSource` delegate specs, next prefetch, and folder prefetch now all use the same `music:<id>` key, so prefetch precheck and actual writes observe the same cache metadata.

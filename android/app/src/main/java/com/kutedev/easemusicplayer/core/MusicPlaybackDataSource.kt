@@ -183,6 +183,7 @@ class MusicPlaybackDataSource(
     override fun open(dataSpec: DataSpec): Long {
         closeQuietly()
         val musicId = extractMusicId(dataSpec.uri)
+        val playbackCacheKey = dataSpec.key ?: buildPlaybackMusicCacheKey(musicId)
 
         var attempt = 0
         while (true) {
@@ -207,20 +208,20 @@ class MusicPlaybackDataSource(
                     val builder = dataSpec.buildUpon()
                         .setUri(Uri.parse(resolved.url))
                         .setHttpRequestHeaders(headers)
-                    resolved.cacheKey?.let { builder.setKey(dataSpec.key ?: it) }
+                        .setKey(playbackCacheKey)
                     httpDataSourceFactory.createDataSource() to builder.build()
                 }
                 is ResolvedMusicPlaybackSource.LocalFile -> {
                     val spec = dataSpec.buildUpon()
                         .setUri(Uri.fromFile(File(resolved.absolutePath)))
-                        .setKey(dataSpec.key ?: resolved.absolutePath)
+                        .setKey(playbackCacheKey)
                         .build()
                     fileDataSourceFactory.createDataSource() to spec
                 }
                 is ResolvedMusicPlaybackSource.DownloadedFile -> {
                     val spec = dataSpec.buildUpon()
                         .setUri(Uri.fromFile(File(resolved.absolutePath)))
-                        .setKey(dataSpec.key ?: resolved.absolutePath)
+                        .setKey(playbackCacheKey)
                         .build()
                     fileDataSourceFactory.createDataSource() to spec
                 }
@@ -228,12 +229,15 @@ class MusicPlaybackDataSource(
                     val resolvedUri = Uri.parse(resolved.uri)
                     val spec = dataSpec.buildUpon()
                         .setUri(resolvedUri)
-                        .setKey(dataSpec.key ?: resolved.uri)
+                        .setKey(playbackCacheKey)
                         .build()
                     contentDataSourceFactory.createDataSource() to spec
                 }
                 ResolvedMusicPlaybackSource.StreamFallback -> {
-                    streamFallbackFactory.createDataSource() to dataSpec
+                    val spec = dataSpec.buildUpon()
+                        .setKey(playbackCacheKey)
+                        .build()
+                    streamFallbackFactory.createDataSource() to spec
                 }
             }
 
