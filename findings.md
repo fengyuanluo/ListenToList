@@ -48,3 +48,9 @@
 ## Playback Chain P2-1 Findings
 - Completed offline playback sources were previously chosen on readability alone. A file or content URI that exists but is truncated could still win over the online fallback.
 - The safe completion gate is to compare the resolved file/content length against the recorded `totalBytes` or, when that is missing, the recorded `bytesDownloaded`. If the length mismatches, the record should be marked failed and playback should fall back online.
+
+## Playback Chain P2-2 Findings
+- `DownloadWorker` resumes from the current temp output length by calling `ctGetAssetStream(..., byteOffset = existingBytes)` and appending subsequent chunks.
+- Rust `AssetStream.size()` reflects remaining bytes after the requested offset, because `StreamFile.size()` returns `total - byte_offset` and the Rust providers pass through range-aware `byte_offset`.
+- The Android-side lowest reliable source-identity gate is therefore `existingBytes + stream.size() == recorded totalBytes`. If that check fails, the temp output must be discarded and the worker must reopen the stream at offset 0 rather than append mixed content.
+- This P2-2 fix intentionally does not claim etag/last-modified/provider-revision validation, because those identities are not currently exposed through the existing Rust/UniFFI download stream API.
