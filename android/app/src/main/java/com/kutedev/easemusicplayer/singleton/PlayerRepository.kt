@@ -72,7 +72,9 @@ class PlayerRepository @Inject constructor(
         val entries = queue?.entries.orEmpty()
         if (queueIndex == -1 || entries.isEmpty()) {
             null
-        } else if (queueIndex == 0 && (playMode == PlayMode.SINGLE || playMode == PlayMode.LIST)) {
+        } else if (playMode == PlayMode.SINGLE || playMode == PlayMode.SINGLE_LOOP) {
+            null
+        } else if (queueIndex == 0 && playMode == PlayMode.LIST) {
             null
         } else {
             val i = (queueIndex + entries.size - 1) % entries.size
@@ -84,7 +86,9 @@ class PlayerRepository @Inject constructor(
         val entries = queue?.entries.orEmpty()
         if (queueIndex == -1 || entries.isEmpty()) {
             null
-        } else if (queueIndex == entries.lastIndex && (playMode == PlayMode.SINGLE || playMode == PlayMode.LIST)) {
+        } else if (playMode == PlayMode.SINGLE || playMode == PlayMode.SINGLE_LOOP) {
+            null
+        } else if (queueIndex == entries.lastIndex && playMode == PlayMode.LIST) {
             null
         } else {
             val i = (queueIndex + 1) % entries.size
@@ -220,6 +224,10 @@ class PlayerRepository @Inject constructor(
 
     fun playbackQueueValue(): PlaybackQueueSnapshot? {
         return _queue.value
+    }
+
+    internal fun setPlayModeForTest(playMode: PlayMode) {
+        _playMode.value = playMode
     }
 
     fun currentQueueIndexValue(): Int {

@@ -36,3 +36,7 @@
 - P1-2 and P1-3 share the same root cause: prefetch prechecks used the unresolved `ease://data?music=<id>` key while resolved playback routes used route-specific keys such as backend direct key, absolute file path, content URI, or fallback URI.
 - The stable Android-side cache identity for a track is now `music:<id>`. Backend direct `cacheKey` is no longer used as the ExoPlayer cache key; it can still remain part of resolver metadata without splitting playback cache space.
 - `MediaItem.customCacheKey`, `MusicPlaybackDataSource` delegate specs, next prefetch, and folder prefetch now all use the same `music:<id>` key, so prefetch precheck and actual writes observe the same cache metadata.
+
+## Playback Chain P1-4 Findings
+- Current queue planning treats `SINGLE_LOOP` as a one-item Media3 timeline with `REPEAT_MODE_ONE`; `PlaybackService` and `PlaybackRuntimeKernel` do not expose adjacent seek/wrap semantics for that mode.
+- Therefore UI-facing `previousMusic` / `nextMusic` must match `SINGLE`, not `LIST_LOOP`. The only automatic next candidate in `SINGLE_LOOP` is `onCompleteMusic`, which should remain the current track for repeat completion.
