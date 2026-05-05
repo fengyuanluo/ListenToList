@@ -1081,6 +1081,17 @@ class PlaybackService : MediaSessionService() {
         }
         val currentPosition = if (preservePosition) player.currentPosition else 0L
         val shouldResume = player.playWhenReady
+        if (
+            preservePosition &&
+            applyPlayModeTimelineInPlace(
+                player = player,
+                currentIds = currentIds,
+                plan = plan,
+            )
+        ) {
+            playbackRuntimeKernel.persistCurrentSession(player)
+            return
+        }
         player.stop()
         player.clearMediaItems()
         player.setMediaItems(plan.mediaItems, plan.startIndex, currentPosition.coerceAtLeast(0L))
@@ -1091,6 +1102,36 @@ class PlaybackService : MediaSessionService() {
             player.pause()
         }
         playbackRuntimeKernel.persistCurrentSession(player)
+    }
+
+    private fun applyPlayModeTimelineInPlace(
+        player: Player,
+        currentIds: List<String>,
+        plan: PlaybackQueuePlan,
+    ): Boolean {
+        if (!player.isCommandAvailable(COMMAND_CHANGE_MEDIA_ITEMS)) {
+            return false
+        }
+        val update = buildPlaybackTimelineInPlaceUpdate(
+            currentIds = currentIds,
+            currentIndex = player.currentMediaItemIndex,
+            desiredItems = plan.mediaItems,
+            desiredStartIndex = plan.startIndex,
+        ) ?: return false
+
+        player.repeatMode = plan.repeatMode
+        update.removeIndicesDescending.forEach(player::removeMediaItem)
+        if (update.insertBeforeCurrent.isNotEmpty()) {
+            player.addMediaItems(0, update.insertBeforeCurrent)
+        }
+        if (update.insertAfterCurrent.isNotEmpty()) {
+            val currentIndex = player.currentMediaItemIndex
+            if (currentIndex < 0) {
+                return false
+            }
+            player.addMediaItems(currentIndex + 1, update.insertAfterCurrent)
+        }
+        return true
     }
 
     private fun findRecoveryCandidate(

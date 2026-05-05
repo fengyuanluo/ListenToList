@@ -86,6 +86,37 @@ internal data class PlaybackQueuePlan(
     val repeatMode: Int,
 )
 
+internal data class PlaybackTimelineInPlaceUpdate(
+    val removeIndicesDescending: List<Int>,
+    val insertBeforeCurrent: List<MediaItem>,
+    val insertAfterCurrent: List<MediaItem>,
+)
+
+internal fun buildPlaybackTimelineInPlaceUpdate(
+    currentIds: List<String>,
+    currentIndex: Int,
+    desiredItems: List<MediaItem>,
+    desiredStartIndex: Int,
+): PlaybackTimelineInPlaceUpdate? {
+    if (currentIndex !in currentIds.indices || desiredStartIndex !in desiredItems.indices) {
+        return null
+    }
+    val currentId = currentIds[currentIndex]
+    if (desiredItems[desiredStartIndex].mediaId != currentId) {
+        return null
+    }
+    if (currentIds.count { it == currentId } != 1) {
+        return null
+    }
+    return PlaybackTimelineInPlaceUpdate(
+        removeIndicesDescending = currentIds.indices
+            .filter { index -> currentIds[index] != currentId }
+            .sortedDescending(),
+        insertBeforeCurrent = desiredItems.take(desiredStartIndex),
+        insertAfterCurrent = desiredItems.drop(desiredStartIndex + 1),
+    )
+}
+
 data class ProbedMusicMetadata(
     val duration: Duration?,
     val cover: ByteArray?,

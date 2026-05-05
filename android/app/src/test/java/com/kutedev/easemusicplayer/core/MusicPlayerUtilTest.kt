@@ -1,6 +1,7 @@
 package com.kutedev.easemusicplayer.core
 
 import android.content.ContentResolver
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.kutedev.easemusicplayer.singleton.PlaybackContext
 import com.kutedev.easemusicplayer.singleton.PlaybackContextType
@@ -236,6 +237,52 @@ class MusicPlayerUtilTest {
         assertNull(plan!!.mediaItems.first().mediaMetadata.artworkUri)
     }
 
+    @Test
+    fun buildPlaybackTimelineInPlaceUpdate_listToSingleLoopRemovesNeighborsOnly() {
+        val update = buildPlaybackTimelineInPlaceUpdate(
+            currentIds = listOf("31", "32", "33"),
+            currentIndex = 1,
+            desiredItems = listOf(testMediaItem("32")),
+            desiredStartIndex = 0,
+        )
+
+        assertNotNull(update)
+        assertEquals(listOf(2, 0), update!!.removeIndicesDescending)
+        assertEquals(emptyList<MediaItem>(), update.insertBeforeCurrent)
+        assertEquals(emptyList<MediaItem>(), update.insertAfterCurrent)
+    }
+
+    @Test
+    fun buildPlaybackTimelineInPlaceUpdate_singleLoopToListInsertsAroundCurrent() {
+        val before = testMediaItem("31")
+        val current = testMediaItem("32")
+        val after = testMediaItem("33")
+
+        val update = buildPlaybackTimelineInPlaceUpdate(
+            currentIds = listOf("32"),
+            currentIndex = 0,
+            desiredItems = listOf(before, current, after),
+            desiredStartIndex = 1,
+        )
+
+        assertNotNull(update)
+        assertEquals(emptyList<Int>(), update!!.removeIndicesDescending)
+        assertEquals(listOf(before), update.insertBeforeCurrent)
+        assertEquals(listOf(after), update.insertAfterCurrent)
+    }
+
+    @Test
+    fun buildPlaybackTimelineInPlaceUpdate_rejectsMissingCurrentItem() {
+        val update = buildPlaybackTimelineInPlaceUpdate(
+            currentIds = listOf("31", "32"),
+            currentIndex = 1,
+            desiredItems = listOf(testMediaItem("31")),
+            desiredStartIndex = 0,
+        )
+
+        assertNull(update)
+    }
+
     private fun testPlaylist(ids: List<Long>): Playlist {
         val musics = ids.mapIndexed { index, id ->
             MusicAbstract(
@@ -263,6 +310,12 @@ class MusicPlayerUtilTest {
             ),
             musics = musics,
         )
+    }
+
+    private fun testMediaItem(id: String): MediaItem {
+        return MediaItem.Builder()
+            .setMediaId(id)
+            .build()
     }
 
     companion object {
