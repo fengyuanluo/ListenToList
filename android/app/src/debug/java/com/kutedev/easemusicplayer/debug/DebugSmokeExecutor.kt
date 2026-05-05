@@ -494,8 +494,10 @@ class DebugSmokeExecutor @Inject constructor(
                 resolverMode = snapshot.route.toResolverMode(),
                 routeRefreshCount = snapshot.routeRefreshCount,
                 recoverySkipCount = snapshot.recoverySkipCount,
+                cacheBypassCount = snapshot.cacheBypassCount,
                 lastPlaybackErrorCode = snapshot.lastPlaybackErrorCode,
                 lastPlaybackErrorName = snapshot.lastPlaybackErrorName,
+                lastCacheBypassReason = snapshot.lastCacheBypassReason,
             )
         }
     }

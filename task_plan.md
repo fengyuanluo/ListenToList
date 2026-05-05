@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P2-3 are implemented and validated, and the remaining P2-4/P2-5 items are under scope judgment.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P2-4 are implemented and validated, and the remaining P2-5 metadata scheduling item is still open.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -68,6 +68,11 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P2-3 implementation complete: direct HTTP playback now uses explicit connect/read timeouts and retries transient open failures once before surfacing them.
 - P2-3 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
 - P2-3 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- P2-3 committed as `944ca54 fix: harden direct http playback retries`.
+- P2-4 implementation complete: cache ignored events are now recorded in `PlaybackDiagnostics` and exposed through debug smoke route history.
+- P2-4 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
+- P2-4 debug compile validation passed: `./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
+- P2-4 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.

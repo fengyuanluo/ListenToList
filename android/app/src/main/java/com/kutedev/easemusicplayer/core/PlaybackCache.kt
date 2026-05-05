@@ -44,6 +44,7 @@ object PlaybackCache {
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstreamFactory)
             .setCacheWriteDataSinkFactory(dataSinkFactory)
+            .setEventListener(PlaybackCacheEventListener)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
 
@@ -56,6 +57,15 @@ object PlaybackCache {
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstreamFactory)
             .setCacheWriteDataSinkFactory(null)
+            .setEventListener(PlaybackCacheEventListener)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
+}
+
+private object PlaybackCacheEventListener : CacheDataSource.EventListener {
+    override fun onCachedBytesRead(cacheSizeBytes: Long, cachedBytesRead: Long) = Unit
+
+    override fun onCacheIgnored(reason: Int) {
+        PlaybackDiagnostics.recordCacheBypass(reason)
     }
 }

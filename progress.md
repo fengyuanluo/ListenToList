@@ -75,6 +75,15 @@
 - Targeted P2-3 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
 - Broad Android validation passed for P2-3: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed for P2-3: `git diff --check`.
+- Committed P2-3 as `944ca54 fix: harden direct http playback retries`.
+- Started P2-4 from `docs/BUGs/playback-chain-deep-review.md`.
+- Reviewed `PlaybackCache`, `PlaybackDiagnostics`, debug smoke route models, and Media3 `CacheDataSource.EventListener` API.
+- Patched read/write cache factories to record `onCacheIgnored()` events into `PlaybackDiagnostics`.
+- Added cache bypass count and last reason to diagnostics snapshots and debug smoke route history.
+- Targeted P2-4 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
+- Debug compile validation passed for P2-4: `cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
+- Broad Android validation passed for P2-4: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P2-4: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.

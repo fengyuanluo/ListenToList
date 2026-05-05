@@ -26,6 +26,7 @@ class PlaybackDiagnosticsTest {
         )
         PlaybackDiagnostics.recordRouteRefresh(error, musicId = 12L)
         PlaybackDiagnostics.recordRecoverySkip(error, musicId = 12L)
+        PlaybackDiagnostics.recordCacheBypass(reason = 1)
 
         PlaybackDiagnostics.record(
             musicId = 13L,
@@ -39,6 +40,8 @@ class PlaybackDiagnosticsTest {
         assertEquals(PLAYBACK_ROUTE_DIRECT_HTTP, snapshot.route)
         assertEquals(1, snapshot.routeRefreshCount)
         assertEquals(1, snapshot.recoverySkipCount)
+        assertEquals(1, snapshot.cacheBypassCount)
+        assertEquals(1, snapshot.lastCacheBypassReason)
         assertEquals(
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             snapshot.lastPlaybackErrorCode,
@@ -64,8 +67,21 @@ class PlaybackDiagnosticsTest {
         assertNull(snapshot.musicId)
         assertEquals(0, snapshot.routeRefreshCount)
         assertEquals(0, snapshot.recoverySkipCount)
+        assertEquals(0, snapshot.cacheBypassCount)
         assertNull(snapshot.lastPlaybackErrorCode)
         assertNull(snapshot.lastPlaybackErrorName)
+        assertNull(snapshot.lastCacheBypassReason)
         assertEquals(emptyList<PlaybackRouteSnapshot>(), PlaybackDiagnostics.historySnapshot())
+    }
+
+    @Test
+    fun cacheBypassRecordsReasonAndHistory() {
+        PlaybackDiagnostics.recordCacheBypass(reason = 1)
+        PlaybackDiagnostics.recordCacheBypass(reason = 2)
+
+        val snapshot = PlaybackDiagnostics.currentSnapshot()
+        assertEquals(2, snapshot.cacheBypassCount)
+        assertEquals(2, snapshot.lastCacheBypassReason)
+        assertEquals(2, PlaybackDiagnostics.historySnapshot().size)
     }
 }
