@@ -41,3 +41,9 @@
 - Patched bottom chrome space calculation to use shared local constants and added `BottomBarSpaceTest`.
 - Targeted UI1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.widgets.appbar.BottomBarSpaceTest' --warning-mode all`.
 - Broad Android gate passed after UI1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Committed UI1 as `7def8d0 fix: align bottom chrome spacing`.
+- Started import/metadata/lyrics/LrcApi review.
+- Documented ML1: LrcApi cached cover results kept `coverStatus=LOADED` while dropping cover bytes, preventing cache-hit cover persistence.
+- Patched `LrcApiCachedResult` to preserve cover bytes and added `LrcApiCacheModelsTest`.
+- Targeted ML1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.LrcApiCacheModelsTest' --warning-mode all`.
+- Broad Android gate passed after ML1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.

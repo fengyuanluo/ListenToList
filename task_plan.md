@@ -43,7 +43,8 @@ Phase 8: continue the next domain pass, starting with real-device playback smoke
 - Phase 6 complete: broad Android validation passed.
 - Phase 7 complete: committed `ec4eb4b fix: handle cold oauth redirects`.
 - Phase 8 complete: fixed SG1 smoke runner hang and passed real-device playback/download smoke on `172.20.65.10:45749`.
-- Phase 9 in progress: theme/UI layout review documented UI1 and code fix is pending validation.
+- Phase 9 complete: theme/UI layout review documented UI1, validated it, and committed `7def8d0 fix: align bottom chrome spacing`.
+- Phase 10 in progress: import/metadata/lyrics/LrcApi domain review documented ML1 and code fix is pending validation.
 
 ## Completion Audit
 - Not yet complete. The previous batch is archived, but the new deep review, task center, fixes, tests, commits, and final audit are still pending.
