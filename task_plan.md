@@ -46,7 +46,8 @@ Phase 8: continue the next domain pass, starting with real-device playback smoke
 - Phase 9 complete: theme/UI layout review documented UI1, validated it, and committed `7def8d0 fix: align bottom chrome spacing`.
 - Phase 10 complete: import/metadata/lyrics/LrcApi review documented ML1, validated it, and committed `1f02fae fix: preserve cached lrcapi covers`.
 - Phase 11 complete: code-conflict/dead-code/script truth-source review documented CD1, validated it, and committed `98725d2 fix: remove stale rust client path`.
-- Phase 12 complete: release/CI/signing review documented RC1, validated it, and is ready for commit.
+- Phase 12 complete: release/CI/signing review documented RC1, validated it, and committed `f08a93e fix: validate release signing inputs`.
+- Phase 13 complete: performance/memory review documented PM1, targeted and broad validation passed, and is ready for commit.
 
 ## Completion Audit
 - Not yet complete. The previous batch is archived, but the new deep review, task center, fixes, tests, commits, and final audit are still pending.

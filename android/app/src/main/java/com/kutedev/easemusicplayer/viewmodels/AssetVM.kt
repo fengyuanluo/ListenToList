@@ -16,13 +16,21 @@ class AssetVM @Inject constructor(
     suspend fun load(key: DataSourceKey): ByteArray? {
         return assetRepository.load(key)
     }
-    suspend fun loadBitmap(key: DataSourceKey): ImageBitmap? {
-        return assetRepository.loadBitmap(key)
+    suspend fun loadBitmap(
+        key: DataSourceKey,
+        maxWidthPx: Int? = null,
+        maxHeightPx: Int? = null,
+    ): ImageBitmap? {
+        return assetRepository.loadBitmap(key, maxWidthPx, maxHeightPx)
     }
     fun get(key: DataSourceKey): ByteArray? {
         return assetRepository.get(key)
     }
-    fun getBitmap(key: DataSourceKey): ImageBitmap? {
-        return assetRepository.getBitmap(key)
+    fun getBitmap(
+        key: DataSourceKey,
+        maxWidthPx: Int? = null,
+        maxHeightPx: Int? = null,
+    ): ImageBitmap? {
+        return assetRepository.getBitmap(key, maxWidthPx, maxHeightPx)
     }
 }
