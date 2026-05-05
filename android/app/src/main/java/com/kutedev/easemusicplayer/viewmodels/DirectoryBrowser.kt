@@ -157,6 +157,7 @@ class DirectoryBrowserController(
     private val _entries = MutableStateFlow(emptyList<StorageEntry>())
     private val _loadState = MutableStateFlow(CurrentStorageStateType.LOADING)
     private val _isRefreshing = MutableStateFlow(false)
+    private val _backgroundRefreshFailure = MutableStateFlow<CurrentStorageStateType?>(null)
 
     private var loadJob: Job? = null
     private var requestSeq: Long = 0
@@ -166,6 +167,7 @@ class DirectoryBrowserController(
     val entries = _entries.asStateFlow()
     val loadState = _loadState.asStateFlow()
     val isRefreshing = _isRefreshing.asStateFlow()
+    val backgroundRefreshFailure = _backgroundRefreshFailure.asStateFlow()
     val splitPaths: StateFlow<List<BrowserPathItem>> = _currentPath.map(::buildBrowserPathItems)
         .stateIn(scope, SharingStarted.Lazily, buildBrowserPathItems(initialPath))
     val canNavigateUp: StateFlow<Boolean> = combine(_currentPath, _storageContext) { path, context ->
@@ -299,6 +301,7 @@ class DirectoryBrowserController(
             applyCacheEntry(cached)
             _isRefreshing.value = false
             _loadState.value = CurrentStorageStateType.OK
+            _backgroundRefreshFailure.value = null
             return
         }
 
@@ -346,16 +349,19 @@ class DirectoryBrowserController(
                     _entries.value = result.value.entries
                     _loadState.value = CurrentStorageStateType.OK
                     _isRefreshing.value = false
+                    _backgroundRefreshFailure.value = null
                 }
 
                 is DirectoryFetchResult.Failure -> {
                     _isRefreshing.value = false
                     if (keepVisibleStateOnFailure) {
                         _loadState.value = CurrentStorageStateType.OK
+                        _backgroundRefreshFailure.value = result.value.state
                         onBackgroundRefreshFailed(result.value.state)
                     } else {
                         _entries.value = emptyList()
                         _loadState.value = result.value.state
+                        _backgroundRefreshFailure.value = null
                     }
                 }
             }
@@ -395,6 +401,8 @@ class DirectoryBrowserController(
                 )
             }
 
+            ListStorageEntryChildrenResp.Unavailable,
+            ListStorageEntryChildrenResp.BlockedBySite,
             ListStorageEntryChildrenResp.Unknown -> {
                 DirectoryFetchResult.Failure(
                     DirectoryFetchFailure(CurrentStorageStateType.UNKNOWN_ERROR)

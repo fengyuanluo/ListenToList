@@ -359,6 +359,12 @@ class DebugSmokeExecutor @Inject constructor(
             ListStorageEntryChildrenResp.Timeout -> {
                 error("列目录超时: ${storage.alias}")
             }
+            ListStorageEntryChildrenResp.Unavailable -> {
+                error("列目录能力不可用: ${storage.alias}")
+            }
+            ListStorageEntryChildrenResp.BlockedBySite -> {
+                error("列目录被站点拦截: ${storage.alias}")
+            }
             ListStorageEntryChildrenResp.Unknown -> {
                 error("列目录失败: ${storage.alias}")
             }

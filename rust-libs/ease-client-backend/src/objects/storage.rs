@@ -97,6 +97,8 @@ pub enum ListStorageEntryChildrenResp {
     Ok(Vec<StorageEntry>),
     AuthenticationFailed,
     Timeout,
+    Unavailable,
+    BlockedBySite,
     Unknown,
 }
 
@@ -106,6 +108,8 @@ impl ListStorageEntryChildrenResp {
             ListStorageEntryChildrenResp::Ok(_) => false,
             ListStorageEntryChildrenResp::AuthenticationFailed => false,
             ListStorageEntryChildrenResp::Timeout => false,
+            ListStorageEntryChildrenResp::Unavailable => false,
+            ListStorageEntryChildrenResp::BlockedBySite => false,
             ListStorageEntryChildrenResp::Unknown => false,
         }
     }

@@ -7,13 +7,14 @@ import org.junit.Test
 import uniffi.ease_client_backend.SearchStorageEntriesResp
 import uniffi.ease_client_backend.StorageSearchEntry
 import uniffi.ease_client_backend.StorageSearchPage
+import uniffi.ease_client_backend.StorageSearchScope
 import uniffi.ease_client_schema.StorageId
 import uniffi.ease_client_schema.StorageType
 import uniffi.ease_client_backend.Storage
 
 class StorageSearchModelsTest {
     @Test
-    fun mergeSearchPagesKeepsOrderAndDeduplicatesByPath() {
+    fun mergeSearchPagesKeepsOrderAndDeduplicatesByStoragePathAndKind() {
         val storageId = StorageId(1)
         val current = listOf(
             StorageSearchEntry(storageId, "song-a.mp3", "/music/song-a.mp3", "/music", 12uL, false),
@@ -22,11 +23,22 @@ class StorageSearchModelsTest {
         val next = listOf(
             StorageSearchEntry(storageId, "song-b.mp3", "/music/song-b.mp3", "/music", 18uL, false),
             StorageSearchEntry(storageId, "song-c.mp3", "/music/song-c.mp3", "/music", 20uL, false),
+            StorageSearchEntry(StorageId(2), "song-b.mp3", "/music/song-b.mp3", "/music", 18uL, false),
+            StorageSearchEntry(storageId, "song-b", "/music/song-b.mp3", "/music", null, true),
         )
 
         val merged = mergeSearchPages(current, next)
 
-        assertEquals(listOf("/music/song-a.mp3", "/music/song-b.mp3", "/music/song-c.mp3"), merged.map { it.path })
+        assertEquals(
+            listOf(
+                "1:/music/song-a.mp3:false",
+                "1:/music/song-b.mp3:false",
+                "1:/music/song-c.mp3:false",
+                "2:/music/song-b.mp3:false",
+                "1:/music/song-b.mp3:true",
+            ),
+            merged.map { "${it.storageId.value}:${it.path}:${it.isDir}" },
+        )
     }
 
     @Test
@@ -106,5 +118,78 @@ class StorageSearchModelsTest {
 
         assertTrue(openList.isStorageSearchSupported())
         assertFalse(webDav.isStorageSearchSupported())
+    }
+
+    @Test
+    fun isSearchRequestStillCurrentRejectsStaleRaceInputs() {
+        assertTrue(
+            isSearchRequestStillCurrent(
+                requestToken = 2,
+                currentToken = 2,
+                requestQuery = " song ",
+                currentQuery = "song",
+                requestScope = StorageSearchScope.ALL,
+                currentScope = StorageSearchScope.ALL,
+                requestParentPath = "/Music",
+                currentParentPath = "/Music",
+                liveParentPath = "/Music",
+            )
+        )
+        assertFalse(
+            isSearchRequestStillCurrent(
+                requestToken = 1,
+                currentToken = 2,
+                requestQuery = "song",
+                currentQuery = "song",
+                requestScope = StorageSearchScope.ALL,
+                currentScope = StorageSearchScope.ALL,
+            )
+        )
+        assertFalse(
+            isSearchRequestStillCurrent(
+                requestToken = 2,
+                currentToken = 2,
+                requestQuery = "song",
+                currentQuery = "album",
+                requestScope = StorageSearchScope.ALL,
+                currentScope = StorageSearchScope.ALL,
+            )
+        )
+        assertFalse(
+            isSearchRequestStillCurrent(
+                requestToken = 2,
+                currentToken = 2,
+                requestQuery = "song",
+                currentQuery = "song",
+                requestScope = StorageSearchScope.ALL,
+                currentScope = StorageSearchScope.FILE,
+            )
+        )
+        assertFalse(
+            isSearchRequestStillCurrent(
+                requestToken = 2,
+                currentToken = 2,
+                requestQuery = "song",
+                currentQuery = "song",
+                requestScope = StorageSearchScope.ALL,
+                currentScope = StorageSearchScope.ALL,
+                requestParentPath = "/Music",
+                currentParentPath = "/Podcasts",
+                liveParentPath = "/Music",
+            )
+        )
+        assertFalse(
+            isSearchRequestStillCurrent(
+                requestToken = 2,
+                currentToken = 2,
+                requestQuery = "song",
+                currentQuery = "song",
+                requestScope = StorageSearchScope.ALL,
+                currentScope = StorageSearchScope.ALL,
+                requestParentPath = "/Music",
+                currentParentPath = "/Music",
+                liveParentPath = "/Podcasts",
+            )
+        )
     }
 }

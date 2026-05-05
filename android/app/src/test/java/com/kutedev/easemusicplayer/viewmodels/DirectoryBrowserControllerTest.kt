@@ -138,7 +138,14 @@ class DirectoryBrowserControllerTest {
             assertEquals(listOf(rootEntry), controller.entries.value)
             assertEquals(CurrentStorageStateType.OK, controller.loadState.value)
             assertFalse(controller.isRefreshing.value)
+            assertEquals(CurrentStorageStateType.TIMEOUT, controller.backgroundRefreshFailure.value)
             assertEquals(listOf(CurrentStorageStateType.TIMEOUT), backgroundFailures)
+
+            service.enqueue("/Recovered") { ok(dirEntry("/Recovered/Albums")) }
+            controller.navigateTo("/Recovered")
+            advanceUntilIdle()
+
+            assertEquals(null, controller.backgroundRefreshFailure.value)
         }
     }
 

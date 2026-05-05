@@ -118,6 +118,10 @@ pub async fn ct_list_storage_entry_children_by_arg(
                 Ok(ListStorageEntryChildrenResp::AuthenticationFailed)
             } else if e.is_timeout() {
                 Ok(ListStorageEntryChildrenResp::Timeout)
+            } else if e.is_search_unavailable() {
+                Ok(ListStorageEntryChildrenResp::Unavailable)
+            } else if e.is_site_blocked() {
+                Ok(ListStorageEntryChildrenResp::BlockedBySite)
             } else {
                 Ok(ListStorageEntryChildrenResp::Unknown)
             }
@@ -160,6 +164,10 @@ pub async fn ct_list_storage_entry_children(
                 Ok(ListStorageEntryChildrenResp::AuthenticationFailed)
             } else if e.is_timeout() {
                 Ok(ListStorageEntryChildrenResp::Timeout)
+            } else if e.is_search_unavailable() {
+                Ok(ListStorageEntryChildrenResp::Unavailable)
+            } else if e.is_site_blocked() {
+                Ok(ListStorageEntryChildrenResp::BlockedBySite)
             } else {
                 Ok(ListStorageEntryChildrenResp::Unknown)
             }
@@ -305,5 +313,48 @@ mod tests {
         let normalized = normalize_arg_upsert_storage(arg);
 
         assert_eq!("/Music/Sub", normalized.default_path);
+    }
+
+    #[test]
+    fn upsert_storage_evicts_cached_backend() {
+        ease_client_tokio::tokio_runtime().block_on(async {
+            let tempdir = tempfile::tempdir().expect("create tempdir");
+            let documents_dir = tempdir.path().join("documents");
+            let cache_dir = tempdir.path().join("cache");
+            std::fs::create_dir_all(&documents_dir).expect("create documents dir");
+            std::fs::create_dir_all(&cache_dir).expect("create cache dir");
+
+            let backend = crate::create_backend(crate::services::ArgInitializeApp {
+                app_document_dir: format!("{}/", documents_dir.display()),
+                app_cache_dir: format!("{}/", cache_dir.display()),
+                storage_path: "/".to_string(),
+            });
+            backend.init().expect("init backend");
+
+            let arg = sample_arg();
+            super::ct_upsert_storage(backend.clone(), arg)
+                .await
+                .expect("insert storage");
+            let storage = crate::services::list_storage(backend.get_context())
+                .await
+                .expect("list storage")
+                .into_iter()
+                .find(|storage| storage.alias == "demo")
+                .expect("inserted storage");
+
+            let cached = crate::services::get_storage_backend(backend.get_context(), storage.id)
+                .expect("load backend");
+            assert!(cached.is_some());
+            assert!(crate::services::storage_backend_cache_contains(backend.get_context(), storage.id));
+
+            let mut updated = sample_arg();
+            updated.id = Some(storage.id);
+            updated.password = "new-pass".to_string();
+            super::ct_upsert_storage(backend.clone(), updated)
+                .await
+                .expect("update storage");
+
+            assert!(!crate::services::storage_backend_cache_contains(backend.get_context(), storage.id));
+        });
     }
 }

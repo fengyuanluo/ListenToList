@@ -372,24 +372,39 @@ class StorageBrowserVM @Inject constructor(
         }
         val nextPage = state.page + 1
         val token = searchRequestSeq
+        val parentPath = browser.currentPathValue()
+        val query = state.query.trim()
+        val scope = state.scope
         viewModelScope.launch {
             _searchState.value = state.copy(loadingMore = true, error = null)
             val response = storageSearchRepository.search(
                 storageId = currentStorage.id,
-                parent = browser.currentPathValue(),
-                keywords = state.query.trim(),
-                scope = state.scope,
+                parent = parentPath,
+                keywords = query,
+                scope = scope,
                 page = nextPage,
                 perPage = STORAGE_BROWSER_SEARCH_PAGE_SIZE,
             )
-            if (token != searchRequestSeq || state.query.trim() != _searchState.value.query.trim()) {
+            if (
+                !isSearchRequestStillCurrent(
+                    requestToken = token,
+                    currentToken = searchRequestSeq,
+                    requestQuery = query,
+                    currentQuery = _searchState.value.query,
+                    requestScope = scope,
+                    currentScope = _searchState.value.scope,
+                    requestParentPath = parentPath,
+                    currentParentPath = _searchState.value.parentPath,
+                    liveParentPath = browser.currentPathValue(),
+                )
+            ) {
                 return@launch
             }
             applySearchResponse(
                 response = response,
                 page = nextPage,
                 append = true,
-                parentPath = browser.currentPathValue(),
+                parentPath = parentPath,
             )
         }
     }

@@ -206,6 +206,8 @@ class DebugDownloadProbeExecutor @Inject constructor(
             is ListStorageEntryChildrenResp.Ok -> response.v1
             ListStorageEntryChildrenResp.AuthenticationFailed -> error("列目录认证失败：$parentPath")
             ListStorageEntryChildrenResp.Timeout -> error("列目录超时：$parentPath")
+            ListStorageEntryChildrenResp.Unavailable -> error("列目录能力不可用：$parentPath")
+            ListStorageEntryChildrenResp.BlockedBySite -> error("列目录被站点拦截：$parentPath")
             ListStorageEntryChildrenResp.Unknown -> error("列目录失败：$parentPath")
         }
         return entries.firstOrNull { entry ->
