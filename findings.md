@@ -71,3 +71,8 @@
 - The safe minimum fix is to make loading-settle timeout a skip boundary for that metadata task, while recording the reason in diagnostics.
 - Metadata player `onPlayerError` and timeout are non-fatal for playback but still need route-level observability, so they now increment metadata failure counters in `PlaybackDiagnostics` and are exposed through debug smoke route history.
 - This fix does not introduce a global network-state policy or a shared prefetch/metadata concurrency budget; those remain larger product/architecture enhancements.
+
+## Playback Chain P3-1 Findings
+- Folder prefetch in `StorageBrowserVM.playFromFolder()` was unconditional once the folder song list was assembled, so even `SINGLE` and `SINGLE_LOOP` modes would still launch extra prefetch traffic for tracks that the current queue model does not need.
+- The lowest-risk correction is a pure play-mode gate: `LIST` and `LIST_LOOP` may prefetch the folder tail, while `SINGLE` and `SINGLE_LOOP` should skip it entirely.
+- This does not solve network-aware throttling. Weak-network, buffering, or user-intent gating still need a separate policy layer if the product wants to avoid folder prefetch during contention.
