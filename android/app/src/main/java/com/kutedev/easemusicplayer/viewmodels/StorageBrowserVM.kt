@@ -10,8 +10,8 @@ import com.kutedev.easemusicplayer.core.PLAYBACK_SOURCE_TAG_FOLDER_PREFETCH
 import com.kutedev.easemusicplayer.core.PlaybackCache
 import com.kutedev.easemusicplayer.core.PlaybackCachePolicy
 import com.kutedev.easemusicplayer.core.PlaybackDataSourceFactory
-import com.kutedev.easemusicplayer.core.shouldPrefetchFolderForPlayMode
 import com.kutedev.easemusicplayer.core.buildPlaybackMusicUri
+import com.kutedev.easemusicplayer.core.shouldPrefetchFolder
 import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import com.kutedev.easemusicplayer.singleton.PermissionRepository
@@ -635,7 +635,12 @@ class StorageBrowserVM @Inject constructor(
                 }
                 playlistRepository.requestTotalDuration(ensured)
                 folderPrefetcher.cancel()
-                if (shouldPrefetchFolderForPlayMode(playerRepository.playMode.value)) {
+                if (
+                    shouldPrefetchFolder(
+                        playMode = playerRepository.playMode.value,
+                        isPlaybackLoading = playerRepository.loading.value,
+                    )
+                ) {
                     prefetchFolderSongs(
                         songs = songs,
                         musicIds = ensured,
