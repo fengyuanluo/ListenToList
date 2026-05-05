@@ -28,7 +28,7 @@ pub fn app_destroy(cx: &BackendContext) -> BResult<()> {
 fn init_database(cx: &BackendContext, arg: &ArgInitializeApp) -> BResult<()> {
     static SCHEMA_VERSION: u32 = 5;
 
-    cx.database_server().init(arg.app_document_dir.clone());
+    cx.database_server().init(arg.app_document_dir.clone())?;
     let old_schema_version = cx.database_server().get_schema_version()?;
 
     if old_schema_version < SCHEMA_VERSION {
