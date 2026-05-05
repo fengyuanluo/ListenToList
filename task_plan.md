@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P3-1 are implemented and validated, and P3-2 is being narrowed by adding missing coverage for remaining observation gaps.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P3-1 are implemented and validated, and P3-2 now only has end-to-end smoke coverage gaps that require real weak-network or resume-change scenarios.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -84,6 +84,10 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P3-2 partial implementation complete: folder prefetch now also skips startup when main playback is loading/buffering.
 - P3-2 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
 - P3-2 broad validation passed after sequential rerun: `./gradlew :app:assembleDebug --warning-mode all`.
+- P3-2 network-type implementation complete: folder prefetch now also skips metered networks via `ConnectivityManager.isActiveNetworkMetered`.
+- P3-2 network-type targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
+- P3-2 network-type broad validation passed: `./gradlew :app:assembleDebug --warning-mode all`.
+- P3-2 network-type release manifest validation passed: `./gradlew :app:processReleaseMainManifest --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.

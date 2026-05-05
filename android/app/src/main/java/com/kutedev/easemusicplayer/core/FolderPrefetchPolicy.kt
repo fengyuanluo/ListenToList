@@ -12,6 +12,7 @@ internal fun shouldPrefetchFolderForPlayMode(playMode: PlayMode): Boolean {
 internal fun shouldPrefetchFolder(
     playMode: PlayMode,
     isPlaybackLoading: Boolean,
+    isNetworkMetered: Boolean,
 ): Boolean {
-    return shouldPrefetchFolderForPlayMode(playMode) && !isPlaybackLoading
+    return shouldPrefetchFolderForPlayMode(playMode) && !isPlaybackLoading && !isNetworkMetered
 }
