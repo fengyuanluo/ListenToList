@@ -43,6 +43,9 @@ import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.widgets.musics.MiniPlayer
 import kotlinx.coroutines.launch
 
+internal val BottomNavigationBarHeight = 60.dp
+internal val MiniPlayerHeight = 64.dp + EaseTheme.spacing.lg * 2
+
 private interface IBottomItem {
     val painterId: Int;
     val pageIndex: Int;
@@ -75,11 +78,21 @@ fun getBottomBarSpace(
     scaffoldPadding: PaddingValues
 ): Dp {
     val bottomInset = bottomSafePadding(scaffoldPadding)
-    var total = 60.dp + bottomInset
+    return calculateBottomBarSpace(
+        hasCurrentMusic = hasCurrentMusic,
+        bottomInset = bottomInset,
+    )
+}
+
+internal fun calculateBottomBarSpace(
+    hasCurrentMusic: Boolean,
+    bottomInset: Dp,
+): Dp {
+    var total = BottomNavigationBarHeight + bottomInset
     if (hasCurrentMusic) {
-        total += 124.dp;
+        total += MiniPlayerHeight
     }
-    return total;
+    return total
 }
 
 @Composable
@@ -149,7 +162,7 @@ fun BoxScope.BottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
+                    .height(BottomNavigationBarHeight)
             ) {
                 for (item in items) {
                     val isSelected = bottomBarPageState.currentPage == item.pageIndex;
