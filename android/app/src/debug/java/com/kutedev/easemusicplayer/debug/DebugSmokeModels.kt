@@ -96,6 +96,10 @@ data class DebugSmokeAssertions(
     val requireCurrentMetadataDuration: Boolean = false,
     val requireNextMetadataDuration: Boolean = false,
     val metadataWaitTimeoutMs: Long = 10_000,
+    val expectRecoveryToNext: Boolean = false,
+    val recoveryWaitTimeoutMs: Long = 20_000,
+    val minRouteRefreshCount: Int = 0,
+    val minRecoverySkipCount: Int = 0,
 )
 
 @Serializable

@@ -194,3 +194,17 @@
 - Second smoke attempt showed OpenList `test-openlist.wav` was tail after backend ordering, so no next metadata existed; restored `test-openlist-next.wav` / `test-webdav-next.wav` as the deterministic non-tail targets.
 - Final P3-2 real-device smoke passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18100 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`; artifacts at `artifacts/smoke/2026-05-05T11-30-00.417Z/`.
 - Verified `playmode-switch-preserve.json`: play mode cycled `LIST -> LIST_LOOP -> SINGLE -> SINGLE_LOOP -> LIST`, `currentMusicId=3` and `currentQueueEntryId=playlist:2:3` stayed unchanged, position advanced from 718ms to 5652ms, and `DIRECT_HTTP` playback diagnostics stayed present.
+- Continued P3-2 by adding a direct HTTP stalled-read recovery smoke scenario.
+- Extended debug smoke assertions with `expectRecoveryToNext`, `recoveryWaitTimeoutMs`, `minRouteRefreshCount`, and `minRecoverySkipCount`.
+- Added `/unstable` OpenList mock files and an `openlist-read-failure-recovery` scenario to `scripts/smoke-android.ts`.
+- First read-failure fixture used a truncated body with a larger declared length; real-device smoke failed because Media3 treated the short WAV as playable and naturally advanced without route refresh / recovery skip diagnostics.
+- Replaced the fixture with a stalled response that returns direct HTTP headers and keeps the body open so the client hits its read timeout.
+- Second real-device run hit the debug receiver timeout; logcat showed `PLAYBACK_ROUTE_RETRY` repeated on the same stalled item, revealing that Media3's default progressive load error retry policy delayed `onPlayerError()`.
+- Added `PlaybackLoadErrorPolicy` and wired it into the main playback `ProgressiveMediaSource.Factory` so recoverable IO/HTTP load failures fail fast to the existing playback error recovery path.
+- Added `PlaybackErrorRecoveryTest` coverage for load timeout / server error fail-fast boundaries.
+- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --warning-mode all`.
+- Debug compile validation passed: `cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
+- Assemble validation passed: `cd android && ./gradlew :app:assembleDebug --warning-mode all`.
+- Real-device smoke passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18103 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`; artifacts at `artifacts/smoke/2026-05-05T11-53-33.530Z/`.
+- Verified `openlist-read-failure-recovery.result.json`: stalled source `musicId=7` recorded `ERROR_CODE_IO_NETWORK_CONNECTION_FAILED`, `routeRefreshCount=1`, `recoverySkipCount=1`, then recovered to `musicId=8` with `DIRECT_HTTP`.
+- Updated `docs/BUGs/playback-chain-deep-review.md` to mark direct HTTP stalled-read recovery smoke covered and leave download resume under remote-file-change as the remaining P3-2 gap.

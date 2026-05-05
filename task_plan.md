@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P3-1 are implemented and validated, P3-2 play-mode preservation smoke is validated on a real device, and remaining P3-2 gaps require real weak-network or remote-file-change injection scenarios.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P3-1 are implemented and validated, P3-2 play-mode preservation and direct HTTP stalled-read recovery smoke are validated on a real device, and the remaining P3-2 gap is download resume under remote-file-change injection.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -91,6 +91,12 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P3-2 smoke tooling complete: debug session `READ_STATE` now exposes play mode, playback position, queue entry, and route history; smoke validates play-mode cycling without route/position reset.
 - P3-2 smoke validation passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18100 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
 - P3-2 smoke artifact: `artifacts/smoke/2026-05-05T11-30-00.417Z/playmode-switch-preserve.json`.
+- P3-2 direct HTTP stalled-read implementation complete: main playback now uses `PlaybackLoadErrorPolicy` to fail fast on recoverable load errors so `onPlayerError()` can perform route refresh / recovery skip, and debug smoke can inject OpenList stalled reads.
+- P3-2 direct HTTP targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --warning-mode all`.
+- P3-2 direct HTTP debug compile validation passed: `./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
+- P3-2 direct HTTP assemble validation passed: `./gradlew :app:assembleDebug --warning-mode all`.
+- P3-2 direct HTTP smoke validation passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18103 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
+- P3-2 direct HTTP smoke artifact: `artifacts/smoke/2026-05-05T11-53-33.530Z/openlist-read-failure-recovery.result.json`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.
@@ -117,3 +123,5 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 | `bun run smoke:android --device=172.20.65.10:45749` hung after "启动 mock playback server" and before the first scenario print | 1 | Terminated stale smoke/mock processes; device stayed online, but new artifacts were not produced. Will retry with explicit preflight and port. |
 | Retried smoke with `--port=18091`; it hung at the same point | 2 | Verified manual `adb reverse`, mkdir, push, start, and get-state all work; documented SG1 as a smoke runner timeout/progress-evidence issue. |
 | `bunx tsc --noEmit` failed on existing Bun globals/top-level await/module target issues | 1 | Treat as non-applicable script gate for this repo; validate smoke script by executing it with Bun. |
+| First direct HTTP read-failure smoke used a truncated WAV response; Media3 treated it as a short playable item and naturally advanced to the next track with no route refresh / skip diagnostics | 1 | Replaced the fixture with a stalled-read response that returns headers and keeps the body open, forcing the direct HTTP read timeout path. |
+| Stalled-read smoke hit the debug receiver's 35s timeout before playback recovery completed because Media3 retried the same load repeatedly | 2 | Added main playback `PlaybackLoadErrorPolicy` so recoverable IO/HTTP load errors fail fast to `onPlayerError()` and existing recovery can skip. |

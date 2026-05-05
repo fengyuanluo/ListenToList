@@ -9,6 +9,7 @@ type ServerHandle = {
 
 const OPENLIST_TOKEN = "openlist-smoke-token";
 const OPENLIST_FILES = ["/music/test-openlist.wav", "/music/test-openlist-next.wav"] as const;
+const OPENLIST_UNSTABLE_FILES = ["/unstable/test-openlist-timeout-next.wav", "/unstable/test-openlist-timeout.wav"] as const;
 const WEBDAV_FILES = ["/music/test-webdav.wav", "/music/test-webdav-next.wav"] as const;
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -107,6 +108,24 @@ function rangeResponse(req: Request, bytes: Buffer, contentType = "audio/wav"): 
   });
 }
 
+function stalledReadResponse(contentType = "audio/wav"): Response {
+  return new Response(
+    new ReadableStream({
+      start() {
+        // Keep the response open after headers so the client hits its read timeout.
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        "content-type": contentType,
+        "accept-ranges": "bytes",
+        connection: "close",
+      },
+    },
+  );
+}
+
 function webdavListing(basePath: string, files: Array<{ filePath: string; bytes: Buffer }>): string {
   const items = files
     .map(({ filePath, bytes }) => {
@@ -150,7 +169,10 @@ export function startMockPlaybackServer(port = 18080): ServerHandle {
   const openListBuffers: Record<string, Buffer> = {
     [OPENLIST_FILES[0]]: createWaveBuffer({ frequency: 440, seconds: 20 }),
     [OPENLIST_FILES[1]]: createWaveBuffer({ frequency: 554, seconds: 20 }),
+    [OPENLIST_UNSTABLE_FILES[0]]: createWaveBuffer({ frequency: 330, seconds: 20 }),
+    [OPENLIST_UNSTABLE_FILES[1]]: createWaveBuffer({ frequency: 660, seconds: 20 }),
   };
+  const stalledOpenListPaths = new Set<string>([OPENLIST_UNSTABLE_FILES[0]]);
   const webDavBuffers: Record<string, Buffer> = {
     [WEBDAV_FILES[0]]: createWaveBuffer({ frequency: 660, seconds: 20 }),
     [WEBDAV_FILES[1]]: createWaveBuffer({ frequency: 880, seconds: 20 }),
@@ -183,8 +205,13 @@ export function startMockPlaybackServer(port = 18080): ServerHandle {
         }
         const body = await readJsonBody(req);
         const dir = body?.path ?? "/";
-        const items = dir === "/music"
-          ? OPENLIST_FILES.map((filePath) => ({
+        const files = dir === "/music"
+          ? [...OPENLIST_FILES]
+          : dir === "/unstable"
+            ? [...OPENLIST_UNSTABLE_FILES]
+            : null;
+        const items = files
+          ? files.map((filePath) => ({
               name: path.posix.basename(filePath),
               size: openListBuffers[filePath]!.byteLength,
               is_dir: false,
@@ -192,7 +219,10 @@ export function startMockPlaybackServer(port = 18080): ServerHandle {
               type: 4,
             }))
           : dir === "/"
-            ? [{ name: "music", size: null, is_dir: true, sign: "", type: 1 }]
+            ? [
+                { name: "music", size: null, is_dir: true, sign: "", type: 1 },
+                { name: "unstable", size: null, is_dir: true, sign: "", type: 1 },
+              ]
             : [];
         return json({
           code: 200,
@@ -227,6 +257,9 @@ export function startMockPlaybackServer(port = 18080): ServerHandle {
         const fileBytes = openListBuffers[requestedPath as keyof typeof openListBuffers];
         if (!fileBytes) {
           return new Response("not found", { status: 404 });
+        }
+        if (stalledOpenListPaths.has(requestedPath)) {
+          return stalledReadResponse();
         }
         return rangeResponse(req, fileBytes);
       }

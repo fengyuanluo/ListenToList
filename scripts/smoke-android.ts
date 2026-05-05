@@ -53,6 +53,8 @@ type DebugSmokeResult = {
   nextMetadataDurationSynced?: boolean | null;
 };
 
+type DebugSmokeRouteRecord = NonNullable<DebugSmokeResult["routeHistory"]>[number];
+
 type DebugSessionCommandType = "CYCLE_PLAY_MODE" | "STOP_PLAYBACK" | "READ_STATE";
 
 type DebugSessionCommandResult = {
@@ -195,12 +197,13 @@ async function waitForSmokeResult(
   device: string,
   requestId: string,
   initialResult: DebugSmokeResult | null,
+  timeoutMs = 20_000,
 ): Promise<DebugSmokeResult> {
   if (initialResult) {
     return initialResult;
   }
   const started = Date.now();
-  while (Date.now() - started < 20_000) {
+  while (Date.now() - started < timeoutMs) {
     const logcat = dumpLogcat(device);
     const fromLogcat = extractLogcatResult(logcat, requestId);
     if (fromLogcat) {
@@ -288,6 +291,48 @@ function assertScenarioResult(result: DebugSmokeResult, scenario: Scenario, logc
         `\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
     );
   }
+  const assertions = "assertions" in scenario.payload &&
+    typeof scenario.payload.assertions === "object" &&
+    scenario.payload.assertions
+    ? scenario.payload.assertions as any
+    : {};
+  const maxRouteRefreshCount = Math.max(0, ...(result.routeHistory ?? []).map((entry) => entry.routeRefreshCount ?? 0));
+  if (typeof assertions.minRouteRefreshCount === "number" && maxRouteRefreshCount < assertions.minRouteRefreshCount) {
+    throw new Error(
+      `${scenario.name} route refresh 次数不足: expected>=${assertions.minRouteRefreshCount} actual=${maxRouteRefreshCount}` +
+        `\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
+    );
+  }
+  const maxRecoverySkipCount = Math.max(0, ...(result.routeHistory ?? []).map((entry) => entry.recoverySkipCount ?? 0));
+  if (typeof assertions.minRecoverySkipCount === "number" && maxRecoverySkipCount < assertions.minRecoverySkipCount) {
+    throw new Error(
+      `${scenario.name} recovery skip 次数不足: expected>=${assertions.minRecoverySkipCount} actual=${maxRecoverySkipCount}` +
+        `\nresult=${JSON.stringify(result, null, 2)}\nlogcat=${logcatPath}`,
+    );
+  }
+}
+
+function assertRecoveryScenario(
+  result: DebugSmokeResult,
+  scenarioName: string,
+  expectedRecoveredRoute: DebugSmokeResult["actualResolverMode"],
+): void {
+  const routeHistory = result.routeHistory ?? [];
+  const refreshed = routeHistory.some((entry) => (entry.routeRefreshCount ?? 0) > 0);
+  const skipped = routeHistory.some((entry) => (entry.recoverySkipCount ?? 0) > 0);
+  const recoveredRoute = routeHistory.find(
+    (entry): entry is DebugSmokeRouteRecord =>
+      entry.sourceTag === "playback" &&
+      entry.musicId === result.musicId &&
+      entry.resolverMode === expectedRecoveredRoute,
+  );
+  if (!refreshed || !skipped || !recoveredRoute) {
+    throw new Error(
+      `${scenarioName} recovery diagnostics 不完整` +
+        `\nrefreshed=${refreshed} skipped=${skipped} expectedRecoveredRoute=${expectedRecoveredRoute}` +
+        `\nresult=${JSON.stringify(result, null, 2)}`,
+    );
+  }
 }
 
 async function runScenario(device: string, scenario: Scenario, artifactsDir: string): Promise<DebugSmokeResult> {
@@ -318,6 +363,9 @@ async function runScenario(device: string, scenario: Scenario, artifactsDir: str
     device,
     String(scenario.payload.requestId),
     extractBroadcastResult(broadcastOutput),
+    typeof (scenario.payload as any).assertions?.recoveryWaitTimeoutMs === "number"
+      ? Math.max(20_000, ((scenario.payload as any).assertions.recoveryWaitTimeoutMs as number) + 10_000)
+      : 20_000,
   );
   const resultText = JSON.stringify(result, null, 2);
   writeFileSync(path.join(artifactsDir, `${scenario.name}.result.json`), resultText);
@@ -600,6 +648,47 @@ async function main(): Promise<void> {
         await assertPlayModeSwitchPreservesPlayback(device, artifactsDir);
       }
     }
+
+    const directHttpReadFailureScenario: Scenario = {
+      name: "openlist-read-failure-recovery",
+      expectedRoute: "DIRECT_HTTP",
+      payload: {
+        requestId: "smoke-openlist-read-failure-001",
+        resetBefore: true,
+        storage: {
+          type: "OPEN_LIST",
+          alias: "Smoke OpenList Read Failure",
+          addr: `${server.baseUrl}/openlist`,
+          username: "user",
+          password: "pass",
+          isAnonymous: false,
+          replaceExistingAlias: true,
+        },
+        playlist: {
+          folderPath: "/unstable",
+          targetEntryPath: "/unstable/test-openlist-timeout-next.wav",
+          playlistName: "Smoke /unstable openlist",
+        },
+        play: {
+          auto: true,
+          seekToMs: 0,
+          awaitReadyTimeoutMs: 15_000,
+        },
+        assertions: {
+          expectedResolverMode: "DIRECT_HTTP",
+          expectRecoveryToNext: true,
+          recoveryWaitTimeoutMs: 45_000,
+          minRouteRefreshCount: 1,
+          minRecoverySkipCount: 1,
+          requireCurrentMetadataDuration: true,
+          metadataWaitTimeoutMs: 15_000,
+        },
+      },
+    };
+    smokeSummaryScenarios.push(directHttpReadFailureScenario);
+    logStep(`运行 scenario: ${directHttpReadFailureScenario.name}`);
+    const readFailureResult = await runScenario(device, directHttpReadFailureScenario, artifactsDir);
+    assertRecoveryScenario(readFailureResult, directHttpReadFailureScenario.name, "DIRECT_HTTP");
 
     const downloadPrepareScenario: Scenario = {
       name: "download-offline-prepare",
