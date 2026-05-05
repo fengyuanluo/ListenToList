@@ -52,3 +52,11 @@
 - Documented CD1: `scripts/base.ts` exported a stale `CLIENT_ROOT` pointing at nonexistent `rust-libs/ease-client`.
 - Removed the stale `CLIENT_ROOT` export.
 - Validated CD1: `rg CLIENT_ROOT scripts` has no hits, `bun run doctor:android-env` passed, and `git diff --check` passed.
+- Committed CD1 as `98725d2 fix: remove stale rust client path`.
+- Started release/CI/signing workflow review.
+- Reviewed `.github/workflows/release.yml`, `package.json`, `scripts/build-apk.ts`, `android/app/build.gradle.kts`, `.gitignore`, and local ignored signing-file boundaries.
+- Documented RC1: missing or malformed release signing secrets failed through low-signal Brotli/Gradle errors because `scripts/build-apk.ts` used non-null assertions before validation.
+- Patched `scripts/build-apk.ts` to validate `ANDROID_SIGN_JKS` and `ANDROID_SIGN_PASSWORD` before writing signing files and to wrap keystore decode failures with the expected secret format.
+- Validated RC1 missing-secret path: `env -u ANDROID_SIGN_JKS -u ANDROID_SIGN_PASSWORD bun run ./scripts/build-apk.ts` fails immediately with `ANDROID_SIGN_PASSWORD is required for release APK signing`.
+- Validated RC1 malformed-secret path: `env ANDROID_SIGN_PASSWORD=test ANDROID_SIGN_JKS=not-a-valid-secret bun run ./scripts/build-apk.ts` fails with `Failed to decode ANDROID_SIGN_JKS. Expected a brotli-compressed keystore encoded as base64.`
+- `git diff --check` passed after RC1.

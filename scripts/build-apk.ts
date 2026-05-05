@@ -12,16 +12,39 @@ import { BUILD_GRADLE_KTS, ROOT, TARGETS } from "./base";
 import fs from "node:fs";
 import zlib from "node:zlib";
 
+function requireSigningEnv(name: string, value: string | undefined): string {
+  if (!value?.trim()) {
+    throw new Error(
+      `${name} is required for release APK signing. ` +
+        "ANDROID_SIGN_JKS must be a brotli-compressed keystore encoded as base64, " +
+        "and ANDROID_SIGN_PASSWORD must match the keystore/key password.",
+    );
+  }
+  return value;
+}
+
 function decodeAndDecompress(
   base64Encoded: string,
   outputFilePath: string,
 ): void {
-  const decodedBuffer = Buffer.from(base64Encoded, "base64");
-  const decompressed = zlib.brotliDecompressSync(decodedBuffer);
-  fs.writeFileSync(outputFilePath, decompressed);
+  try {
+    const decodedBuffer = Buffer.from(base64Encoded, "base64");
+    const decompressed = zlib.brotliDecompressSync(decodedBuffer);
+    fs.writeFileSync(outputFilePath, decompressed);
+  } catch (cause) {
+    throw new Error(
+      "Failed to decode ANDROID_SIGN_JKS. Expected a brotli-compressed keystore encoded as base64.",
+      { cause },
+    );
+  }
 }
 
 const { ANDROID_SIGN_PASSWORD, ANDROID_SIGN_JKS } = process.env;
+const signingPassword = requireSigningEnv(
+  "ANDROID_SIGN_PASSWORD",
+  ANDROID_SIGN_PASSWORD,
+);
+const signingJks = requireSigningEnv("ANDROID_SIGN_JKS", ANDROID_SIGN_JKS);
 
 const version = (() => {
   const buildGradleKts = readFileSync(BUILD_GRADLE_KTS, "utf8");
@@ -41,13 +64,13 @@ const srcDir = path.resolve(androidDir, "./app/build/outputs/apk/release");
 const dstDir = path.resolve(ROOT, "./artifacts/apk");
 
 // Generate jks from environment
-decodeAndDecompress(ANDROID_SIGN_JKS!, jksPath);
+decodeAndDecompress(signingJks, jksPath);
 
 // Signing
 writeFileSync(
   keyPropertiesPath,
-  `storePassword=${ANDROID_SIGN_PASSWORD}
-    keyPassword=${ANDROID_SIGN_PASSWORD}
+  `storePassword=${signingPassword}
+    keyPassword=${signingPassword}
     keyAlias=key0
     storeFile=root.jks`,
 );
