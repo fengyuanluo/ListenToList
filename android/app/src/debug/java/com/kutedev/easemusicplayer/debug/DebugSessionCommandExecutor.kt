@@ -2,11 +2,13 @@ package com.kutedev.easemusicplayer.debug
 
 import android.content.Context
 import android.os.Bundle
+import androidx.media3.common.C
 import androidx.media3.session.SessionCommand
-import dagger.hilt.android.qualifiers.ApplicationContext
 import com.kutedev.easemusicplayer.core.PLAYER_CYCLE_PLAY_MODE_COMMAND
 import com.kutedev.easemusicplayer.core.PLAYER_STOP_PLAYBACK_COMMAND
+import com.kutedev.easemusicplayer.core.PlaybackDiagnostics
 import com.kutedev.easemusicplayer.singleton.PlayerRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -27,15 +29,23 @@ class DebugSessionCommandExecutor @Inject constructor(
                     SessionCommand(PLAYER_CYCLE_PLAY_MODE_COMMAND, Bundle.EMPTY)
                 DebugSessionCommandType.STOP_PLAYBACK ->
                     SessionCommand(PLAYER_STOP_PLAYBACK_COMMAND, Bundle.EMPTY)
+                DebugSessionCommandType.READ_STATE -> null
             }
-            withContext(Dispatchers.Main.immediate) {
-                controller.sendCustomCommand(command, Bundle.EMPTY).await()
+            if (command != null) {
+                withContext(Dispatchers.Main.immediate) {
+                    controller.sendCustomCommand(command, Bundle.EMPTY).await()
+                }
             }
             delay(request.waitAfterCommandMs)
-            val playbackState = withContext(Dispatchers.Main.immediate) { controller.playbackState }
-            val isPlaying = withContext(Dispatchers.Main.immediate) { controller.isPlaying }
-            val currentTitle = withContext(Dispatchers.Main.immediate) {
-                controller.mediaMetadata.title?.toString()
+            val controllerState = withContext(Dispatchers.Main.immediate) {
+                ControllerState(
+                    playbackState = controller.playbackState,
+                    isPlaying = controller.isPlaying,
+                    currentTitle = controller.mediaMetadata.title?.toString(),
+                    currentPositionMs = controller.currentPosition,
+                    bufferedPositionMs = controller.bufferedPosition,
+                    durationMs = controller.duration.takeIf { it != C.TIME_UNSET && it > 0 },
+                )
             }
 
             DebugSessionCommandResult(
@@ -45,9 +55,15 @@ class DebugSessionCommandExecutor @Inject constructor(
                 message = "debug session command 执行成功",
                 command = request.command,
                 playMode = playerRepository.playMode.value.name,
-                playbackState = playbackState,
-                isPlaying = isPlaying,
-                currentTitle = currentTitle,
+                playbackState = controllerState.playbackState,
+                isPlaying = controllerState.isPlaying,
+                currentTitle = controllerState.currentTitle,
+                currentMusicId = playerRepository.music.value?.meta?.id?.value,
+                currentQueueEntryId = playerRepository.currentQueueEntryIdValue(),
+                currentPositionMs = controllerState.currentPositionMs,
+                bufferedPositionMs = controllerState.bufferedPositionMs,
+                durationMs = controllerState.durationMs,
+                routeHistory = playbackRouteHistory(),
             )
         } catch (error: Exception) {
             easeError("debug session command execute failed: $error")
@@ -60,4 +76,35 @@ class DebugSessionCommandExecutor @Inject constructor(
             )
         }
     }
+
+    private fun playbackRouteHistory(): List<DebugSmokeRouteRecord> {
+        return PlaybackDiagnostics.historySnapshot().map { snapshot ->
+            DebugSmokeRouteRecord(
+                musicId = snapshot.musicId,
+                route = snapshot.route,
+                resolvedUri = snapshot.resolvedUri,
+                sourceTag = snapshot.sourceTag,
+                resolverMode = debugSmokeResolverModeFromRoute(snapshot.route),
+                routeRefreshCount = snapshot.routeRefreshCount,
+                recoverySkipCount = snapshot.recoverySkipCount,
+                cacheBypassCount = snapshot.cacheBypassCount,
+                metadataFailureCount = snapshot.metadataFailureCount,
+                lastPlaybackErrorCode = snapshot.lastPlaybackErrorCode,
+                lastPlaybackErrorName = snapshot.lastPlaybackErrorName,
+                lastCacheBypassReason = snapshot.lastCacheBypassReason,
+                lastMetadataFailureMusicId = snapshot.lastMetadataFailureMusicId,
+                lastMetadataFailureStage = snapshot.lastMetadataFailureStage,
+                lastMetadataFailureMessage = snapshot.lastMetadataFailureMessage,
+            )
+        }
+    }
 }
+
+private data class ControllerState(
+    val playbackState: Int,
+    val isPlaying: Boolean,
+    val currentTitle: String?,
+    val currentPositionMs: Long,
+    val bufferedPositionMs: Long,
+    val durationMs: Long?,
+)

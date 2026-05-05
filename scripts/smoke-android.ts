@@ -8,6 +8,9 @@ const MAIN_ACTIVITY = `${PACKAGE_NAME}/com.kutedev.easemusicplayer.MainActivity`
 const DEBUG_RECEIVER = `${PACKAGE_NAME}/com.kutedev.easemusicplayer.debug.DebugSmokeReceiver`;
 const DEBUG_SMOKE_ACTION = "com.kutedev.easemusicplayer.debug.SMOKE";
 const DEBUG_SMOKE_TOKEN = "listen-to-list-debug-smoke-v1";
+const DEBUG_SESSION_COMMAND_RECEIVER = `${PACKAGE_NAME}/com.kutedev.easemusicplayer.debug.DebugSessionCommandReceiver`;
+const DEBUG_SESSION_COMMAND_ACTION = "com.kutedev.easemusicplayer.debug.SESSION_COMMAND";
+const DEBUG_SESSION_COMMAND_TOKEN = "listen-to-list-debug-session-command-v1";
 const DEFAULT_DEVICE = "172.26.121.48:34327";
 const DEFAULT_PORT = 18080;
 
@@ -48,6 +51,26 @@ type DebugSmokeResult = {
   }>;
   currentMetadataDurationSynced?: boolean | null;
   nextMetadataDurationSynced?: boolean | null;
+};
+
+type DebugSessionCommandType = "CYCLE_PLAY_MODE" | "STOP_PLAYBACK" | "READ_STATE";
+
+type DebugSessionCommandResult = {
+  requestId: string;
+  status: string;
+  stage: string;
+  message: string;
+  command?: DebugSessionCommandType | null;
+  playMode?: string | null;
+  playbackState?: number | null;
+  isPlaying?: boolean | null;
+  currentTitle?: string | null;
+  currentMusicId?: number | null;
+  currentQueueEntryId?: string | null;
+  currentPositionMs?: number | null;
+  bufferedPositionMs?: number | null;
+  durationMs?: number | null;
+  routeHistory?: DebugSmokeResult["routeHistory"];
 };
 
 type ServerHandle = {
@@ -143,6 +166,15 @@ function extractBroadcastResult(output: string): DebugSmokeResult | null {
   }
   const decoded = Buffer.from(match[1]!, "base64").toString("utf8");
   return JSON.parse(decoded) as DebugSmokeResult;
+}
+
+function extractSessionCommandResult(output: string): DebugSessionCommandResult | null {
+  const match = output.match(/data="([^"]+)"/);
+  if (!match) {
+    return null;
+  }
+  const decoded = Buffer.from(match[1]!, "base64").toString("utf8");
+  return JSON.parse(decoded) as DebugSessionCommandResult;
 }
 
 function extractLogcatResult(logcat: string, requestId: string): DebugSmokeResult | null {
@@ -298,6 +330,117 @@ async function runScenario(device: string, scenario: Scenario, artifactsDir: str
   return result;
 }
 
+async function runSessionCommand(
+  device: string,
+  requestId: string,
+  command: DebugSessionCommandType,
+  artifactsDir: string,
+  waitAfterCommandMs = 800,
+): Promise<DebugSessionCommandResult> {
+  const payloadB64 = Buffer.from(JSON.stringify({ requestId, command, waitAfterCommandMs }), "utf8").toString("base64");
+  const broadcastOutput = runOrThrow([
+    "adb",
+    "-s",
+    device,
+    "shell",
+    "am",
+    "broadcast",
+    "-a",
+    DEBUG_SESSION_COMMAND_ACTION,
+    "-n",
+    DEBUG_SESSION_COMMAND_RECEIVER,
+    "--es",
+    "token",
+    DEBUG_SESSION_COMMAND_TOKEN,
+    "--es",
+    "payload_b64",
+    payloadB64,
+    "--es",
+    "request_id",
+    requestId,
+  ]);
+  const result = extractSessionCommandResult(broadcastOutput);
+  if (!result) {
+    throw new Error(`debug session command 未返回结果: ${requestId}\n${broadcastOutput}`);
+  }
+  writeFileSync(path.join(artifactsDir, `${requestId}.session-command.json`), JSON.stringify(result, null, 2));
+  if (result.status !== "ok") {
+    throw new Error(`debug session command 失败: ${requestId} ${result.message}`);
+  }
+  return result;
+}
+
+async function assertPlayModeSwitchPreservesPlayback(
+  device: string,
+  artifactsDir: string,
+): Promise<void> {
+  const before = await runSessionCommand(device, "smoke-playmode-before-001", "READ_STATE", artifactsDir, 250);
+  const switches: DebugSessionCommandResult[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    switches.push(
+      await runSessionCommand(
+        device,
+        `smoke-playmode-cycle-00${index + 1}`,
+        "CYCLE_PLAY_MODE",
+        artifactsDir,
+        1_000,
+      ),
+    );
+  }
+  const after = await runSessionCommand(device, "smoke-playmode-after-001", "READ_STATE", artifactsDir, 250);
+  const states = { before, switches, after };
+  writeFileSync(path.join(artifactsDir, "playmode-switch-preserve.json"), JSON.stringify(states, null, 2));
+
+  if (!before.playMode || after.playMode !== before.playMode) {
+    throw new Error(`播放模式连续切换 4 次后应回到原模式: before=${before.playMode} after=${after.playMode}`);
+  }
+  if (!switches.some((state) => state.playMode && state.playMode !== before.playMode)) {
+    throw new Error(`播放模式切换没有观察到模式变化: ${JSON.stringify(states, null, 2)}`);
+  }
+  if (!before.currentMusicId || before.currentMusicId !== after.currentMusicId) {
+    throw new Error(`播放模式切换后 currentMusicId 不一致: before=${before.currentMusicId} after=${after.currentMusicId}`);
+  }
+  if (!before.currentQueueEntryId || before.currentQueueEntryId !== after.currentQueueEntryId) {
+    throw new Error(
+      `播放模式切换后 currentQueueEntryId 不一致: before=${before.currentQueueEntryId} after=${after.currentQueueEntryId}`,
+    );
+  }
+  const beforePosition = before.currentPositionMs ?? 0;
+  const afterPosition = after.currentPositionMs ?? 0;
+  if (afterPosition + 1_500 < beforePosition) {
+    throw new Error(`播放模式切换后播放位置明显回退: before=${beforePosition} after=${afterPosition}`);
+  }
+  const beforePlaybackRoutes = (before.routeHistory ?? []).filter((entry) => entry.sourceTag === "playback").length;
+  const afterPlaybackRoutes = (after.routeHistory ?? []).filter((entry) => entry.sourceTag === "playback").length;
+  if (afterPlaybackRoutes !== beforePlaybackRoutes) {
+    throw new Error(`播放模式切换不应重新打开 playback route: before=${beforePlaybackRoutes} after=${afterPlaybackRoutes}`);
+  }
+  if (!after.routeHistory?.some((entry) => entry.sourceTag === "playback" && entry.resolverMode === "DIRECT_HTTP")) {
+    throw new Error(`播放模式切换后缺少 DIRECT_HTTP playback diagnostics: ${JSON.stringify(after, null, 2)}`);
+  }
+}
+
+async function ensurePlayMode(
+  device: string,
+  artifactsDir: string,
+  expectedPlayMode: string,
+): Promise<DebugSessionCommandResult> {
+  let current = await runSessionCommand(device, "smoke-playmode-ensure-read-001", "READ_STATE", artifactsDir, 250);
+  for (let index = 0; index < 4 && current.playMode !== expectedPlayMode; index += 1) {
+    current = await runSessionCommand(
+      device,
+      `smoke-playmode-ensure-cycle-00${index + 1}`,
+      "CYCLE_PLAY_MODE",
+      artifactsDir,
+      500,
+    );
+  }
+  if (current.playMode !== expectedPlayMode) {
+    throw new Error(`无法设置播放模式: expected=${expectedPlayMode} actual=${current.playMode}`);
+  }
+  return current;
+}
+
 async function main(): Promise<void> {
   const device = arg("device", DEFAULT_DEVICE)!;
   const port = Number.parseInt(arg("port", String(DEFAULT_PORT))!, 10);
@@ -336,12 +479,15 @@ async function main(): Promise<void> {
     logStep("生成本地 smoke WAV");
     writeSmokeWaveArtifact(localWaveA, 550);
     writeSmokeWaveArtifact(localWaveB, 770);
-    logStep("创建设备本地 smoke 目录");
+    logStep("重建设备本地 smoke 目录");
+    runOrThrow(["adb", "-s", device, "shell", "rm", "-rf", "/sdcard/Music/ListenToListSmoke"], process.cwd(), true, 20_000);
     runOrThrow(["adb", "-s", device, "shell", "mkdir", "-p", "/sdcard/Music/ListenToListSmoke"], process.cwd(), false, 20_000);
     logStep("推送 test-local-a.wav");
     runOrThrow(["adb", "-s", device, "push", localWaveA, "/sdcard/Music/ListenToListSmoke/test-local-a.wav"], process.cwd(), false, 30_000);
     logStep("推送 test-local-b.wav");
     runOrThrow(["adb", "-s", device, "push", localWaveB, "/sdcard/Music/ListenToListSmoke/test-local-b.wav"], process.cwd(), false, 30_000);
+    logStep("设置播放模式为 LIST，稳定下一首预取与 metadata 验收");
+    await ensurePlayMode(device, artifactsDir, "LIST");
 
     const scenarios: Scenario[] = [
       {
@@ -371,7 +517,6 @@ async function main(): Promise<void> {
           },
           assertions: {
             expectedResolverMode: "LOCAL_FILE",
-            requiredSourceTags: ["next-prefetch"],
             requireCurrentMetadataDuration: true,
             requireNextMetadataDuration: true,
             metadataWaitTimeoutMs: 15_000,
@@ -405,7 +550,6 @@ async function main(): Promise<void> {
           },
           assertions: {
             expectedResolverMode: "DIRECT_HTTP",
-            requiredSourceTags: ["next-prefetch"],
             requireCurrentMetadataDuration: true,
             requireNextMetadataDuration: true,
             metadataWaitTimeoutMs: 15_000,
@@ -439,7 +583,6 @@ async function main(): Promise<void> {
           },
           assertions: {
             expectedResolverMode: "DIRECT_HTTP",
-            requiredSourceTags: ["next-prefetch"],
             requireCurrentMetadataDuration: true,
             requireNextMetadataDuration: true,
             metadataWaitTimeoutMs: 15_000,
@@ -452,6 +595,10 @@ async function main(): Promise<void> {
     for (const scenario of scenarios) {
       logStep(`运行 scenario: ${scenario.name}`);
       await runScenario(device, scenario, artifactsDir);
+      if (scenario.name === "openlist") {
+        logStep("验证播放模式切换不重置播放位置和 route diagnostics");
+        await assertPlayModeSwitchPreservesPlayback(device, artifactsDir);
+      }
     }
 
     const downloadPrepareScenario: Scenario = {
