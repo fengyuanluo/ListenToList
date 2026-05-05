@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.kutedev.easemusicplayer.core.PlaybackService
 import com.kutedev.easemusicplayer.singleton.Bridge
@@ -37,6 +38,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var playerControllerRepository: PlayerControllerRepository
     @Inject lateinit var playerRepository: PlayerRepository
     @Inject lateinit var permissionRepository: PermissionRepository
+
+    private var mediaControllerFuture: ListenableFuture<MediaController>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,15 +71,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setupMediaController() {
+        mediaControllerFuture?.let { existing ->
+            if (!existing.isDone) {
+                return
+            }
+        }
         val factory = MediaController.Builder(
             this,
             SessionToken(this, ComponentName(this, PlaybackService::class.java))
         ).buildAsync()
+        mediaControllerFuture = factory
         factory.addListener(
             {
-                factory.let {
-                    if (it.isDone) {
-                        val controller = it.get()
+                factory.let { future ->
+                    if (future.isDone && mediaControllerFuture === future) {
+                        val controller = future.get()
                         playerControllerRepository.setupMediaController(controller)
                         controller
                     } else {
@@ -100,6 +109,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        mediaControllerFuture?.let { future ->
+            MediaController.releaseFuture(future)
+        }
+        mediaControllerFuture = null
         playerControllerRepository.destroyMediaController()
     }
 
