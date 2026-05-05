@@ -37,8 +37,10 @@ type DebugSmokeResult = {
     resolverMode?: string | null;
     routeRefreshCount?: number | null;
     recoverySkipCount?: number | null;
+    cacheBypassCount?: number | null;
     lastPlaybackErrorCode?: number | null;
     lastPlaybackErrorName?: string | null;
+    lastCacheBypassReason?: number | null;
   }>;
   currentMetadataDurationSynced?: boolean | null;
   nextMetadataDurationSynced?: boolean | null;

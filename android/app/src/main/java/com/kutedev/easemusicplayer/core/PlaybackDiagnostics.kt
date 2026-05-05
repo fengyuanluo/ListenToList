@@ -9,8 +9,10 @@ data class PlaybackRouteSnapshot(
     val sourceTag: String? = null,
     val routeRefreshCount: Int = 0,
     val recoverySkipCount: Int = 0,
+    val cacheBypassCount: Int = 0,
     val lastPlaybackErrorCode: Int? = null,
     val lastPlaybackErrorName: String? = null,
+    val lastCacheBypassReason: Int? = null,
 )
 
 const val PLAYBACK_ROUTE_DIRECT_HTTP = "direct_http"
@@ -45,8 +47,10 @@ object PlaybackDiagnostics {
             sourceTag = sourceTag,
             routeRefreshCount = current.routeRefreshCount,
             recoverySkipCount = current.recoverySkipCount,
+            cacheBypassCount = current.cacheBypassCount,
             lastPlaybackErrorCode = current.lastPlaybackErrorCode,
             lastPlaybackErrorName = current.lastPlaybackErrorName,
+            lastCacheBypassReason = current.lastCacheBypassReason,
         )
         synchronized(history) {
             snapshot = next
@@ -79,6 +83,21 @@ object PlaybackDiagnostics {
             incrementRouteRefresh = false,
             incrementSkip = true,
         )
+    }
+
+    fun recordCacheBypass(reason: Int) {
+        synchronized(history) {
+            val current = snapshot
+            val next = current.copy(
+                cacheBypassCount = current.cacheBypassCount + 1,
+                lastCacheBypassReason = reason,
+            )
+            snapshot = next
+            history += next
+            if (history.size > 64) {
+                history.removeAt(0)
+            }
+        }
     }
 
     fun currentSnapshot(): PlaybackRouteSnapshot {

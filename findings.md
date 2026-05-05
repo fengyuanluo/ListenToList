@@ -60,3 +60,8 @@
 - The current Android-side direct HTTP path can safely add its own connect/read timeouts without changing the remote route contract.
 - Open-time retries are the right place to handle transient 408/429/5xx and network causes for direct HTTP, while 401/403/404 still belong to cache invalidation / resolver refresh semantics.
 - Read-stage network errors should still be left to the existing playback recovery path rather than retried inside `MusicPlaybackDataSource.open()`.
+
+## Playback Chain P2-4 Findings
+- Media3 `CacheDataSource.Factory` supports an `EventListener` with `onCacheIgnored(reason)`, which is exactly the missing signal for `FLAG_IGNORE_CACHE_ON_ERROR`.
+- The safe minimum fix is observability first: record cache bypass count and last reason in `PlaybackDiagnostics` and carry those fields through debug smoke route history.
+- Automatic cache deletion is intentionally not part of this fix because active `SimpleCache` spans may be in use by playback, metadata, or prefetch; clearing requires a separate lifecycle-safe maintenance path.
