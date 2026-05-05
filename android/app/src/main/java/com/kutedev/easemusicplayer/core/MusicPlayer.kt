@@ -72,7 +72,16 @@ private data class PlaybackRecoveryState(
     val direction: Int,
     val attemptedQueueEntryIds: MutableSet<String>,
     var skipToastShown: Boolean = false,
+    var currentRetryAttempted: Boolean = false,
 )
+
+internal fun shouldRetryCurrentAfterRecoverableError(
+    hasRecoveryCandidate: Boolean,
+    currentEntryInSnapshot: Boolean,
+    currentRetryAttempted: Boolean,
+): Boolean {
+    return !hasRecoveryCandidate && currentEntryInSnapshot && !currentRetryAttempted
+}
 
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
@@ -1012,6 +1021,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         val currentQueueEntryId = playerRepository.currentQueueEntryIdValue() ?: seed.queueEntryId
+        val currentEntryInSnapshot = snapshot.entries.any { it.queueEntryId == currentQueueEntryId }
         var candidateEntry = findRecoveryCandidate(snapshot, currentQueueEntryId, active.direction, active.attemptedQueueEntryIds)
         var candidate = candidateEntry?.let { entry ->
             bridge.run { ctGetMusic(it, entry.musicId) }
@@ -1024,6 +1034,25 @@ class PlaybackService : MediaSessionService() {
             }
         }
         if (candidateEntry == null || candidate == null) {
+            if (
+                shouldRetryCurrentAfterRecoverableError(
+                    hasRecoveryCandidate = candidateEntry != null,
+                    currentEntryInSnapshot = currentEntryInSnapshot,
+                    currentRetryAttempted = active.currentRetryAttempted,
+                )
+            ) {
+                active.currentRetryAttempted = true
+                playbackRuntimeKernel.playResolvedQueue(
+                    player = player,
+                    snapshot = snapshot.copy(currentQueueEntryId = currentQueueEntryId),
+                    currentMusic = current,
+                    currentQueueEntryId = currentQueueEntryId,
+                    direction = active.direction,
+                    sourcePlaylist = if (snapshot.context.type == PlaybackContextType.USER_PLAYLIST) playerRepository.playlist.value else null,
+                    seedRecovery = false,
+                )
+                return
+            }
             recoveryState = null
             toastRepository.emitToast("歌曲资源不可用")
             stopPlayback(player)
