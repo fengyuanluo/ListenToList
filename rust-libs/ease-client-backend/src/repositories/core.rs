@@ -30,19 +30,20 @@ impl DatabaseServer {
         })
     }
 
-    pub fn init(&self, document_dir: String) {
+    pub fn init(&self, document_dir: String) -> BResult<()> {
         let p = document_dir.to_string() + "data.redb";
         {
             let mut w = self._db.write().unwrap();
             let db = redb::Database::builder()
                 .set_cache_size(80 << 20)
                 .create(&p)
-                .expect("failed to init database");
+                .map_err(|error| anyhow::anyhow!("failed to init database at {p}: {error}"))?;
             let blob_manager = BlobManager::open(document_dir + "blobs");
             *w = Some((Arc::new(db), blob_manager));
         }
 
-        self.init_database().unwrap();
+        self.init_database()?;
+        Ok(())
     }
 
     pub fn destroy(&self) {

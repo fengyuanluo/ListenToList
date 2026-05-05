@@ -154,6 +154,12 @@ pub(crate) fn evict_storage_backend_cache(cx: &BackendContext, storage_id: Stora
     w.remove(&storage_id);
 }
 
+#[cfg(test)]
+pub(crate) fn storage_backend_cache_contains(cx: &BackendContext, storage_id: StorageId) -> bool {
+    let state = cx.storage_state().cache.read().unwrap();
+    state.contains_key(&storage_id)
+}
+
 pub fn get_storage_backend(
     cx: &BackendContext,
     storage_id: StorageId,

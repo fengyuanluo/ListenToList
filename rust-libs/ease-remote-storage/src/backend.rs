@@ -249,6 +249,39 @@ mod test {
         handle.abort();
     }
 
+    #[tokio::test]
+    async fn stream_file_without_content_length_still_streams() {
+        let addr: SocketAddr = ([127, 0, 0, 1], 0).into();
+        let make_service = hyper::service::make_service_fn(|_| async move {
+            Ok::<_, Infallible>(hyper::service::service_fn(|_| async move {
+                let (mut tx, body) = Body::channel();
+                tokio::spawn(async move {
+                    let _ = tx.send_data(Bytes::from_static(b"hello")).await;
+                });
+                let mut resp = Response::new(body);
+                *resp.status_mut() = StatusCode::OK;
+                resp.headers_mut().remove(reqwest::header::CONTENT_LENGTH);
+                Ok::<_, Infallible>(resp)
+            }))
+        });
+        let server = hyper::Server::bind(&addr).serve(make_service);
+        let port = server.local_addr().port();
+        let handle = tokio::spawn(async move {
+            server.await.unwrap();
+        });
+
+        let response = reqwest::get(format!("http://127.0.0.1:{port}/stream"))
+            .await
+            .expect("request")
+            .error_for_status()
+            .expect("status");
+        let file = StreamFile::new_with_chunk_timeout(response, 0, Some(Duration::from_millis(40)));
+        let bytes = file.bytes().await.expect("bytes");
+        assert_eq!(bytes.as_ref(), b"hello");
+
+        handle.abort();
+    }
+
     #[test]
     fn stream_file_bytes_reads_local_file_outside_tokio_context() {
         let dir = std::env::temp_dir().join(format!(
@@ -290,13 +323,14 @@ impl StreamFile {
         let url = resp.url().to_string();
         let name = url.split('/').next_back().unwrap();
         let header_map = resp.headers();
-        let content_length = header_map.get(reqwest::header::CONTENT_LENGTH).map(|v| {
-            let v = v.to_str().unwrap();
-            v.parse::<usize>().unwrap()
-        });
+        let content_length = header_map
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<usize>().ok());
         let content_type = header_map
             .get(reqwest::header::CONTENT_TYPE)
-            .map(|v| v.to_str().unwrap().to_string());
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.to_string());
         Self {
             inner: StreamFileInner::Response(resp),
             total: content_length,

@@ -84,6 +84,11 @@ class Bridge @Inject constructor(
         if (!_isInit) {
             return
         }
+        runCatching {
+            _backend!!.deinit()
+        }.onFailure { error ->
+            easeError("bridge deinit failed: $error")
+        }
         _backend!!.destroy()
         _backend = null
         _isInit = false
