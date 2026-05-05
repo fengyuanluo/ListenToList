@@ -376,6 +376,13 @@ class DownloadRepository @Inject constructor(
                     file.exists() && file.isFile && file.canRead()
                 }
             },
+            contentUriLength = ::contentUriLength,
+            fileLength = { path ->
+                File(path)
+                    .takeIf { file -> file.exists() && file.isFile && file.canRead() }
+                    ?.length()
+                    ?.takeIf { length -> length >= 0L }
+            },
         )
         resolution.recordUpdate?.let { update ->
             persistRecords(records.value.replaceRecord(update))
@@ -840,6 +847,15 @@ class DownloadRepository @Inject constructor(
             appContext.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false
         }.getOrDefault(false)
     }
+
+    private fun contentUriLength(uriString: String): Long? {
+        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return null
+        return runCatching {
+            appContext.contentResolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
+                asset.length.takeIf { it >= 0L }
+            }
+        }.getOrNull()
+    }
 }
 
 private fun Data.longOrNull(key: String): Long? {
@@ -919,10 +935,24 @@ internal fun resolveCompletedPlaybackSourceFromRecord(
     record: PersistedDownloadRecord,
     canReadContentUri: (String) -> Boolean,
     canReadFile: (String) -> Boolean,
+    contentUriLength: (String) -> Long? = { null },
+    fileLength: (String) -> Long? = { null },
 ): CompletedPlaybackSourceResolution {
+    val expectedSize = record.totalBytes?.takeIf { it > 0L }
+        ?: record.bytesDownloaded.takeIf { it > 0L }
     record.destinationUri
         ?.takeIf { uri -> canReadContentUri(uri) }
         ?.let { uri ->
+            val actualLength = contentUriLength(uri)
+            if (expectedSize != null && actualLength != null && actualLength != expectedSize) {
+                return CompletedPlaybackSourceResolution(
+                    source = null,
+                    recordUpdate = record.copy(
+                        status = DownloadTaskStatus.FAILED.name,
+                        errorMessage = "离线文件大小不匹配，已回退在线源",
+                    ),
+                )
+            }
             return CompletedPlaybackSourceResolution(
                 source = ResolvedMusicPlaybackSource.ContentUri(uri),
             )
@@ -931,6 +961,16 @@ internal fun resolveCompletedPlaybackSourceFromRecord(
         .takeIf { it.isNotBlank() }
         ?.takeIf { path -> canReadFile(path) }
         ?.let { path ->
+            val actualLength = fileLength(path)
+            if (expectedSize != null && actualLength != null && actualLength != expectedSize) {
+                return CompletedPlaybackSourceResolution(
+                    source = null,
+                    recordUpdate = record.copy(
+                        status = DownloadTaskStatus.FAILED.name,
+                        errorMessage = "离线文件大小不匹配，已回退在线源",
+                    ),
+                )
+            }
             return CompletedPlaybackSourceResolution(
                 source = ResolvedMusicPlaybackSource.DownloadedFile(path),
             )
