@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 is committed, P0-2 validation is complete and ready for commit.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 and P0-2 are committed, P1-1 validation is complete and ready for commit.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -40,6 +40,10 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P0-2 implementation complete: weak-network/HTTP playback IO errors now enter existing recovery, invalidate current resolver cache, and record route refresh / skip / last error diagnostics.
 - P0-2 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
 - P0-2 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- P0-2 committed as `c9fedca fix: recover from transient playback io failures`.
+- P1-1 implementation complete: storage OAuth token updates, storage upserts, and storage removals now invalidate the Android playback resolver cache after successful backend writes.
+- P1-1 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
+- P1-1 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.

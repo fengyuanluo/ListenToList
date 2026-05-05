@@ -1,6 +1,6 @@
 package com.kutedev.easemusicplayer.singleton
 
-import androidx.lifecycle.viewModelScope
+import com.kutedev.easemusicplayer.core.PlaybackSourceResolverCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,16 +35,19 @@ class StorageRepository @Inject constructor(
     suspend fun updateRefreshToken(code: String) {
         val token = bridge.run { ctGetRefreshToken(it, code) } ?: return
         _oauthRefreshToken.value = token
+        PlaybackSourceResolverCache.invalidateAll()
     }
 
     suspend fun upsertStorage(arg: ArgUpsertStorage) {
-        bridge.run { ctUpsertStorage(it, arg) }
+        bridge.run { ctUpsertStorage(it, arg) } ?: return
+        PlaybackSourceResolverCache.invalidateAll()
         reload()
     }
 
     suspend fun remove(id: StorageId) {
         _preRemoveStorageEvent.emit(id)
-        bridge.run { ctRemoveStorage(it, id) }
+        bridge.run { ctRemoveStorage(it, id) } ?: return
+        PlaybackSourceResolverCache.invalidateAll()
         _onRemoveStorageEvent.emit(Unit)
         reload()
     }

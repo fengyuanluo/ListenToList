@@ -26,3 +26,8 @@
 - Existing `recoverFromPlaybackError()` already advances through the runtime queue using the seeded direction and avoids retrying attempted queue entries, so the safest P0-2 repair is to broaden recoverable IO classification rather than rewrite queue recovery.
 - Recoverable weak-network coverage now includes Media3 network failure, network timeout, bad HTTP status, read-position-out-of-range, file-not-found, plus common transient causes such as socket timeout, connection failure, interrupted IO, socket reset, unknown host, and early EOF.
 - `PlaybackDiagnostics` previously only recorded route snapshots; P0-2 needs route-refresh, skip-count, and last error signals so debug smoke can distinguish weak-network recovery from a generic route record.
+
+## Playback Chain P1-1 Findings
+- `StorageRepository` is the Android aggregation point for storage configuration and auth mutations: `updateRefreshToken()`, `upsertStorage()`, and `remove()`.
+- `PlaybackSourceResolverCache` already had `invalidateAll()`, but before P1-1 only download/delete and playback error branches used resolver invalidation. Storage account edits could therefore leave old direct URLs or auth headers alive until TTL expiry.
+- The safe invalidation boundary is after successful backend calls. Failed `ctGetRefreshToken`, `ctUpsertStorage`, or `ctRemoveStorage` calls should not clear cache and mask the real persistence/auth failure.

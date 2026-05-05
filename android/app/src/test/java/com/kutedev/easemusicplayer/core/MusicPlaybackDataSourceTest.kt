@@ -17,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uniffi.ease_client_schema.MusicId
 
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE)
@@ -157,6 +158,38 @@ class MusicPlaybackDataSourceTest {
         second.close()
 
         assertEquals(1, resolveCalls)
+    }
+
+    @Test
+    fun resolverCache_invalidateAllForcesFreshResolve() {
+        var resolveCalls = 0
+        fun resolveThroughCache(): ResolvedMusicPlaybackSource? {
+            return PlaybackSourceResolverCache.resolve(MusicId(142L)) {
+                resolveCalls += 1
+                ResolvedMusicPlaybackSource.DirectHttp(
+                    url = "https://example.com/music/$resolveCalls.wav",
+                    headers = emptyList(),
+                    cacheKey = "music-cache-key-$resolveCalls",
+                )
+            }
+        }
+
+        assertEquals(
+            "https://example.com/music/1.wav",
+            (resolveThroughCache() as ResolvedMusicPlaybackSource.DirectHttp).url,
+        )
+        assertEquals(
+            "https://example.com/music/1.wav",
+            (resolveThroughCache() as ResolvedMusicPlaybackSource.DirectHttp).url,
+        )
+
+        PlaybackSourceResolverCache.invalidateAll()
+
+        assertEquals(
+            "https://example.com/music/2.wav",
+            (resolveThroughCache() as ResolvedMusicPlaybackSource.DirectHttp).url,
+        )
+        assertEquals(2, resolveCalls)
     }
 
     @Test
