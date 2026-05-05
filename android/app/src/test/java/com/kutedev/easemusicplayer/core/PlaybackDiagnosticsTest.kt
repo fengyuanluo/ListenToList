@@ -27,6 +27,7 @@ class PlaybackDiagnosticsTest {
         PlaybackDiagnostics.recordRouteRefresh(error, musicId = 12L)
         PlaybackDiagnostics.recordRecoverySkip(error, musicId = 12L)
         PlaybackDiagnostics.recordCacheBypass(reason = 1)
+        PlaybackDiagnostics.recordMetadataFailure(musicId = 12L, stage = "timeout", error = error)
 
         PlaybackDiagnostics.record(
             musicId = 13L,
@@ -42,6 +43,10 @@ class PlaybackDiagnosticsTest {
         assertEquals(1, snapshot.recoverySkipCount)
         assertEquals(1, snapshot.cacheBypassCount)
         assertEquals(1, snapshot.lastCacheBypassReason)
+        assertEquals(1, snapshot.metadataFailureCount)
+        assertEquals(12L, snapshot.lastMetadataFailureMusicId)
+        assertEquals("timeout", snapshot.lastMetadataFailureStage)
+        assertEquals("PlaybackException: network timeout", snapshot.lastMetadataFailureMessage)
         assertEquals(
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             snapshot.lastPlaybackErrorCode,
@@ -68,9 +73,13 @@ class PlaybackDiagnosticsTest {
         assertEquals(0, snapshot.routeRefreshCount)
         assertEquals(0, snapshot.recoverySkipCount)
         assertEquals(0, snapshot.cacheBypassCount)
+        assertEquals(0, snapshot.metadataFailureCount)
         assertNull(snapshot.lastPlaybackErrorCode)
         assertNull(snapshot.lastPlaybackErrorName)
         assertNull(snapshot.lastCacheBypassReason)
+        assertNull(snapshot.lastMetadataFailureMusicId)
+        assertNull(snapshot.lastMetadataFailureStage)
+        assertNull(snapshot.lastMetadataFailureMessage)
         assertEquals(emptyList<PlaybackRouteSnapshot>(), PlaybackDiagnostics.historySnapshot())
     }
 
@@ -83,5 +92,24 @@ class PlaybackDiagnosticsTest {
         assertEquals(2, snapshot.cacheBypassCount)
         assertEquals(2, snapshot.lastCacheBypassReason)
         assertEquals(2, PlaybackDiagnostics.historySnapshot().size)
+    }
+
+    @Test
+    fun metadataFailureRecordsFailureDetails() {
+        PlaybackDiagnostics.recordMetadataFailure(
+            musicId = 21L,
+            stage = "player_error",
+            error = IllegalStateException("metadata player failed"),
+        )
+
+        val snapshot = PlaybackDiagnostics.currentSnapshot()
+        assertEquals(21L, snapshot.musicId)
+        assertEquals(1, snapshot.metadataFailureCount)
+        assertEquals(21L, snapshot.lastMetadataFailureMusicId)
+        assertEquals("player_error", snapshot.lastMetadataFailureStage)
+        assertEquals(
+            "IllegalStateException: metadata player failed",
+            snapshot.lastMetadataFailureMessage,
+        )
     }
 }

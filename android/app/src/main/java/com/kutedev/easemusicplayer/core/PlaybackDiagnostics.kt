@@ -10,9 +10,13 @@ data class PlaybackRouteSnapshot(
     val routeRefreshCount: Int = 0,
     val recoverySkipCount: Int = 0,
     val cacheBypassCount: Int = 0,
+    val metadataFailureCount: Int = 0,
     val lastPlaybackErrorCode: Int? = null,
     val lastPlaybackErrorName: String? = null,
     val lastCacheBypassReason: Int? = null,
+    val lastMetadataFailureMusicId: Long? = null,
+    val lastMetadataFailureStage: String? = null,
+    val lastMetadataFailureMessage: String? = null,
 )
 
 const val PLAYBACK_ROUTE_DIRECT_HTTP = "direct_http"
@@ -48,9 +52,13 @@ object PlaybackDiagnostics {
             routeRefreshCount = current.routeRefreshCount,
             recoverySkipCount = current.recoverySkipCount,
             cacheBypassCount = current.cacheBypassCount,
+            metadataFailureCount = current.metadataFailureCount,
             lastPlaybackErrorCode = current.lastPlaybackErrorCode,
             lastPlaybackErrorName = current.lastPlaybackErrorName,
             lastCacheBypassReason = current.lastCacheBypassReason,
+            lastMetadataFailureMusicId = current.lastMetadataFailureMusicId,
+            lastMetadataFailureStage = current.lastMetadataFailureStage,
+            lastMetadataFailureMessage = current.lastMetadataFailureMessage,
         )
         synchronized(history) {
             snapshot = next
@@ -91,6 +99,28 @@ object PlaybackDiagnostics {
             val next = current.copy(
                 cacheBypassCount = current.cacheBypassCount + 1,
                 lastCacheBypassReason = reason,
+            )
+            snapshot = next
+            history += next
+            if (history.size > 64) {
+                history.removeAt(0)
+            }
+        }
+    }
+
+    fun recordMetadataFailure(
+        musicId: Long?,
+        stage: String,
+        error: Throwable?,
+    ) {
+        synchronized(history) {
+            val current = snapshot
+            val next = current.copy(
+                musicId = musicId ?: current.musicId,
+                metadataFailureCount = current.metadataFailureCount + 1,
+                lastMetadataFailureMusicId = musicId,
+                lastMetadataFailureStage = stage,
+                lastMetadataFailureMessage = error?.let { "${it::class.java.simpleName}: ${it.message}" } ?: stage,
             )
             snapshot = next
             history += next

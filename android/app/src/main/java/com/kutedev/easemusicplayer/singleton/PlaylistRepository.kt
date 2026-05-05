@@ -8,6 +8,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.kutedev.easemusicplayer.core.BuildMediaContext
 import com.kutedev.easemusicplayer.core.PlaybackDataSourceFactory
 import com.kutedev.easemusicplayer.core.PlaybackCache
+import com.kutedev.easemusicplayer.core.PlaybackDiagnostics
 import com.kutedev.easemusicplayer.core.PLAYBACK_SOURCE_TAG_METADATA
 import com.kutedev.easemusicplayer.core.buildMediaItem
 import com.kutedev.easemusicplayer.core.probeMusicMetadataDirectly
@@ -70,6 +71,10 @@ private data class MetadataSyncRequest(
 
 private const val METADATA_SYNC_LOADING_WAIT_MS = 15_000L
 private const val METADATA_SYNC_TIMEOUT_MS = 20_000L
+internal const val METADATA_DIAGNOSTIC_STAGE_LOADING_TIMEOUT = "loading_timeout"
+internal const val METADATA_DIAGNOSTIC_STAGE_SYNC = "sync"
+internal const val METADATA_DIAGNOSTIC_STAGE_PLAYER_ERROR = "player_error"
+internal const val METADATA_DIAGNOSTIC_STAGE_TIMEOUT = "timeout"
 
 @OptIn(FlowPreview::class)
 @Singleton
@@ -249,9 +254,16 @@ class PlaylistRepository @Inject constructor(
             } ?: break
 
             try {
-                waitForPlaybackToSettle()
+                if (!waitForPlaybackToSettle(request.musicId)) {
+                    continue
+                }
                 syncMetadataFor(request.musicId)
             } catch (error: Exception) {
+                PlaybackDiagnostics.recordMetadataFailure(
+                    musicId = request.musicId.value,
+                    stage = METADATA_DIAGNOSTIC_STAGE_SYNC,
+                    error = error,
+                )
                 easeError("metadata sync failed for music=${request.musicId.value}: $error")
             } finally {
                 synchronized(metadataQueueLock) {
@@ -269,7 +281,7 @@ class PlaylistRepository @Inject constructor(
         }
     }
 
-    private suspend fun waitForPlaybackToSettle() {
+    private suspend fun waitForPlaybackToSettle(id: MusicId): Boolean {
         val settled = withTimeoutOrNull(METADATA_SYNC_LOADING_WAIT_MS) {
             while (playerRepository.loading.value) {
                 delay(250)
@@ -277,8 +289,15 @@ class PlaylistRepository @Inject constructor(
             true
         }
         if (settled != true) {
+            PlaybackDiagnostics.recordMetadataFailure(
+                musicId = id.value,
+                stage = METADATA_DIAGNOSTIC_STAGE_LOADING_TIMEOUT,
+                error = null,
+            )
             easeError("metadata sync wait for playback settle timed out after ${METADATA_SYNC_LOADING_WAIT_MS}ms")
+            return false
         }
+        return true
     }
 
     private suspend fun syncMetadataFor(id: MusicId) {
@@ -398,6 +417,11 @@ class PlaylistRepository @Inject constructor(
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
+                    PlaybackDiagnostics.recordMetadataFailure(
+                        musicId = musicAbstract.meta.id.value,
+                        stage = METADATA_DIAGNOSTIC_STAGE_PLAYER_ERROR,
+                        error = error,
+                    )
                     easeError("request total duration failed: $error")
                     finishSignal.complete(Unit)
                 }
@@ -431,6 +455,11 @@ class PlaylistRepository @Inject constructor(
                     finishSignal.await()
                 }
                 if (completed == null) {
+                    PlaybackDiagnostics.recordMetadataFailure(
+                        musicId = musicAbstract.meta.id.value,
+                        stage = METADATA_DIAGNOSTIC_STAGE_TIMEOUT,
+                        error = null,
+                    )
                     easeError("request total duration timed out after ${METADATA_SYNC_TIMEOUT_MS}ms")
                 }
                 withContext(Dispatchers.Main) {

@@ -65,3 +65,9 @@
 - Media3 `CacheDataSource.Factory` supports an `EventListener` with `onCacheIgnored(reason)`, which is exactly the missing signal for `FLAG_IGNORE_CACHE_ON_ERROR`.
 - The safe minimum fix is observability first: record cache bypass count and last reason in `PlaybackDiagnostics` and carry those fields through debug smoke route history.
 - Automatic cache deletion is intentionally not part of this fix because active `SimpleCache` spans may be in use by playback, metadata, or prefetch; clearing requires a separate lifecycle-safe maintenance path.
+
+## Playback Chain P2-5 Findings
+- `PlaylistRepository.waitForPlaybackToSettle()` used to log loading timeout and then continue into metadata probing anyway, so a main playback buffering stall could still be followed by extra metadata network work.
+- The safe minimum fix is to make loading-settle timeout a skip boundary for that metadata task, while recording the reason in diagnostics.
+- Metadata player `onPlayerError` and timeout are non-fatal for playback but still need route-level observability, so they now increment metadata failure counters in `PlaybackDiagnostics` and are exposed through debug smoke route history.
+- This fix does not introduce a global network-state policy or a shared prefetch/metadata concurrency budget; those remain larger product/architecture enhancements.
