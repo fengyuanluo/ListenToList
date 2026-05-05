@@ -493,6 +493,9 @@ internal fun decideDownloadResumeAction(
     if (sizeHint != null && existingBytes == sizeHint) {
         return DownloadResumeAction.APPEND
     }
+    if (sizeHint == null) {
+        return DownloadResumeAction.RESTART_FROM_ZERO
+    }
     if (remainingBytesAfterOffset == null) {
         return DownloadResumeAction.APPEND
     }
@@ -500,7 +503,7 @@ internal fun decideDownloadResumeAction(
         return DownloadResumeAction.REJECT
     }
     val resumedTotalBytes = existingBytes + remainingBytesAfterOffset
-    return if (sizeHint != null && resumedTotalBytes != sizeHint) {
+    return if (resumedTotalBytes != sizeHint) {
         DownloadResumeAction.RESTART_FROM_ZERO
     } else {
         DownloadResumeAction.APPEND

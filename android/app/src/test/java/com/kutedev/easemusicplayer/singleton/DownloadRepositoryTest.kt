@@ -155,6 +155,22 @@ class DownloadRepositoryTest {
     }
 
     @Test
+    fun decideDownloadResumeAction_restartsUnknownSizePartialDownloads() {
+        assertEquals(
+            DownloadResumeAction.RESTART_FROM_ZERO,
+            decideDownloadResumeAction(existingBytes = 20L, sizeHint = null, remainingBytesAfterOffset = 80L),
+        )
+        assertEquals(
+            DownloadResumeAction.RESTART_FROM_ZERO,
+            decideDownloadResumeAction(existingBytes = 20L, sizeHint = null, remainingBytesAfterOffset = null),
+        )
+        assertEquals(
+            DownloadResumeAction.APPEND,
+            decideDownloadResumeAction(existingBytes = 0L, sizeHint = null, remainingBytesAfterOffset = null),
+        )
+    }
+
+    @Test
     fun resolveCompletedPlaybackSourceFromRecord_returnsNullAndFailsRecordWhenOfflineFileMissing() {
         val record = PersistedDownloadRecord(
             id = UUID.randomUUID().toString(),

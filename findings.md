@@ -92,3 +92,7 @@
 - A stalled direct HTTP response is a better weak-read fixture because it returns headers and keeps the body open until `DefaultHttpDataSource` hits its read timeout.
 - Real-device stalled-read smoke exposed a real second-order gap: Media3's default progressive load error policy can retry a recoverable direct HTTP load repeatedly before `onPlayerError()` fires, so weak-network recovery is delayed even when `isRecoverablePlaybackError()` is correct.
 - Main playback now uses a custom `PlaybackLoadErrorPolicy` to fail fast on recoverable IO/HTTP load errors and hand control to `onPlayerError()`; real-device smoke at `artifacts/smoke/2026-05-05T11-53-33.530Z/openlist-read-failure-recovery.result.json` proves `routeRefreshCount=1`, `recoverySkipCount=1`, and recovery to the next `DIRECT_HTTP` track after a stalled OpenList read.
+
+## Playback Chain Residual Review Findings
+- Static follow-up review found that the P2-2 download resume fix was only size-identity reliable when a persisted `totalBytes` / `sizeHint` existed. The follow-up repair now makes unknown-size partial downloads restart from zero instead of appending unverifiable `.part` prefixes.
+- Static follow-up review found that weak-network recovery is currently skip-oriented. When the runtime queue has no unattempted adjacent candidate, including a single-entry queue or `SINGLE` / `SINGLE_LOOP` mode, `findRecoveryCandidate()` returns null and `recoverFromPlaybackError()` stops playback instead of trying a descriptor refresh / same-track retry policy.
