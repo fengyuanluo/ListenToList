@@ -10,12 +10,14 @@ import com.kutedev.easemusicplayer.core.PLAYBACK_SOURCE_TAG_FOLDER_PREFETCH
 import com.kutedev.easemusicplayer.core.PlaybackCache
 import com.kutedev.easemusicplayer.core.PlaybackCachePolicy
 import com.kutedev.easemusicplayer.core.PlaybackDataSourceFactory
+import com.kutedev.easemusicplayer.core.shouldPrefetchFolderForPlayMode
 import com.kutedev.easemusicplayer.core.buildPlaybackMusicUri
 import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.DownloadRepository
 import com.kutedev.easemusicplayer.singleton.PermissionRepository
 import com.kutedev.easemusicplayer.singleton.PlaylistRepository
 import com.kutedev.easemusicplayer.singleton.PlayerControllerRepository
+import com.kutedev.easemusicplayer.singleton.PlayerRepository
 import com.kutedev.easemusicplayer.singleton.StorageRepository
 import com.kutedev.easemusicplayer.singleton.StorageSearchRepository
 import com.kutedev.easemusicplayer.singleton.ToastRepository
@@ -79,6 +81,7 @@ class StorageBrowserVM @Inject constructor(
     private val storageRepository: StorageRepository,
     private val storageSearchRepository: StorageSearchRepository,
     private val playlistRepository: PlaylistRepository,
+    private val playerRepository: PlayerRepository,
     private val playerControllerRepository: PlayerControllerRepository,
     private val downloadRepository: DownloadRepository,
     private val permissionRepository: PermissionRepository,
@@ -632,11 +635,13 @@ class StorageBrowserVM @Inject constructor(
                 }
                 playlistRepository.requestTotalDuration(ensured)
                 folderPrefetcher.cancel()
-                prefetchFolderSongs(
-                    songs = songs,
-                    musicIds = ensured,
-                    startIndex = index,
-                )
+                if (shouldPrefetchFolderForPlayMode(playerRepository.playMode.value)) {
+                    prefetchFolderSongs(
+                        songs = songs,
+                        musicIds = ensured,
+                        startIndex = index,
+                    )
+                }
                 playerControllerRepository.playFolder(
                     storageId = storageId,
                     folderPath = folderPath,

@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P2-5 are implemented and validated, final completion audit pending.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P3-1 are implemented and validated, with P3-2 remaining as the last documented observation gap before final completion audit.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -78,6 +78,9 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P2-5 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
 - P2-5 debug compile validation passed: `./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
 - P2-5 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- P3-1 implementation complete: folder prefetch now gates on play mode and skips `SINGLE` / `SINGLE_LOOP`, keeping list modes unchanged.
+- P3-1 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
+- P3-1 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.
@@ -92,6 +95,7 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - Phase 12 complete: release/CI/signing review documented RC1, validated it, and committed `f08a93e fix: validate release signing inputs`.
 - Phase 13 complete: performance/memory review documented PM1, targeted and broad validation passed, and committed `25b3758 fix: downsample decoded artwork images`.
 - Phase 14 complete: final completion audit written to `docs/BUGs/2026-05-05-deep-review/completion_audit.md`.
+- Phase 15 complete: playback-chain P3-1 folder prefetch gating documented and validated.
 
 ## Completion Audit
 - Complete. See `docs/BUGs/2026-05-05-deep-review/completion_audit.md`.

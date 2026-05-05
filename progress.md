@@ -163,3 +163,12 @@
 - Broad Android gate passed after PM1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Committed PM1 as `25b3758 fix: downsample decoded artwork images`.
 - Wrote final completion audit to `docs/BUGs/2026-05-05-deep-review/completion_audit.md`.
+- Continued playback-chain deep review on the active doc.
+- Rechecked `docs/BUGs/playback-chain-deep-review.md` and confirmed P3-1 was still an actionable gap while P3-2 was a documentation-level test-matrix observation.
+- Added `FolderPrefetchPolicy.kt` as a pure play-mode gate for folder prefetch decisions.
+- Patched `StorageBrowserVM.playFromFolder()` to skip folder prefetch when the current play mode is `SINGLE` or `SINGLE_LOOP`.
+- Added `FolderPrefetchPolicyTest` to cover the play-mode matrix.
+- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
+- Broad Android validation passed after the P3-1 gate: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- `git diff --check` passed after the P3-1 patch.
+- Updated `docs/BUGs/playback-chain-deep-review.md` to mark P3-1 as completed and narrow P3-2 to the remaining observation gap.
