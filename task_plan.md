@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-Phase 8: continue the next domain pass, starting with real-device playback smoke baseline.
+Complete: final audit recorded for the 2026-05-05 deep review sweep.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -47,10 +47,11 @@ Phase 8: continue the next domain pass, starting with real-device playback smoke
 - Phase 10 complete: import/metadata/lyrics/LrcApi review documented ML1, validated it, and committed `1f02fae fix: preserve cached lrcapi covers`.
 - Phase 11 complete: code-conflict/dead-code/script truth-source review documented CD1, validated it, and committed `98725d2 fix: remove stale rust client path`.
 - Phase 12 complete: release/CI/signing review documented RC1, validated it, and committed `f08a93e fix: validate release signing inputs`.
-- Phase 13 complete: performance/memory review documented PM1, targeted and broad validation passed, and is ready for commit.
+- Phase 13 complete: performance/memory review documented PM1, targeted and broad validation passed, and committed `25b3758 fix: downsample decoded artwork images`.
+- Phase 14 complete: final completion audit written to `docs/BUGs/2026-05-05-deep-review/completion_audit.md`.
 
 ## Completion Audit
-- Not yet complete. The previous batch is archived, but the new deep review, task center, fixes, tests, commits, and final audit are still pending.
+- Complete. See `docs/BUGs/2026-05-05-deep-review/completion_audit.md`.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
