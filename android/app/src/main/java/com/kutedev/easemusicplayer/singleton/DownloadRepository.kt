@@ -17,7 +17,6 @@ import com.kutedev.easemusicplayer.core.PlaybackSourceResolverCache
 import com.kutedev.easemusicplayer.core.ResolvedMusicPlaybackSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import java.io.FileNotFoundException
 import java.io.IOException
 import java.util.UUID
 import javax.inject.Inject
@@ -133,6 +132,11 @@ private data class BuiltDownloadRequest(
 private data class PreparedRestartRequest(
     val request: OneTimeWorkRequest,
     val record: PersistedDownloadRecord,
+)
+
+internal data class CompletedPlaybackSourceResolution(
+    val source: ResolvedMusicPlaybackSource?,
+    val recordUpdate: PersistedDownloadRecord? = null,
 )
 
 private sealed class DownloadDirectorySpec {
@@ -364,21 +368,20 @@ class DownloadRepository @Inject constructor(
             .firstOrNull()
             ?: return null
 
-        record.destinationUri?.takeIf(::canReadContentUri)?.let { uri ->
-            return ResolvedMusicPlaybackSource.ContentUri(uri)
-        }
-        record.destinationPath.takeIf { it.isNotBlank() }
-            ?.takeIf { path -> File(path).let { it.exists() && it.isFile && it.canRead() } }
-            ?.let { path ->
-                return ResolvedMusicPlaybackSource.DownloadedFile(path)
-            }
-        val failed = record.copy(
-            status = DownloadTaskStatus.FAILED.name,
-            errorMessage = "离线文件不可用或已被删除",
+        val resolution = resolveCompletedPlaybackSourceFromRecord(
+            record = record,
+            canReadContentUri = ::canReadContentUri,
+            canReadFile = { path ->
+                File(path).let { file ->
+                    file.exists() && file.isFile && file.canRead()
+                }
+            },
         )
-        persistRecords(records.value.replaceRecord(failed))
-        PlaybackSourceResolverCache.invalidateAll()
-        throw FileNotFoundException("completed download is missing for storage=$storageId path=$sourcePath")
+        resolution.recordUpdate?.let { update ->
+            persistRecords(records.value.replaceRecord(update))
+            PlaybackSourceResolverCache.invalidateAll()
+        }
+        return resolution.source
     }
 
     private fun buildDownloadRequest(
@@ -910,6 +913,35 @@ private fun WorkInfo.State.toDownloadStatus(): DownloadTaskStatus {
 
 private fun WorkInfo.State.isTerminal(): Boolean {
     return this == WorkInfo.State.SUCCEEDED || this == WorkInfo.State.FAILED || this == WorkInfo.State.CANCELLED
+}
+
+internal fun resolveCompletedPlaybackSourceFromRecord(
+    record: PersistedDownloadRecord,
+    canReadContentUri: (String) -> Boolean,
+    canReadFile: (String) -> Boolean,
+): CompletedPlaybackSourceResolution {
+    record.destinationUri
+        ?.takeIf { uri -> canReadContentUri(uri) }
+        ?.let { uri ->
+            return CompletedPlaybackSourceResolution(
+                source = ResolvedMusicPlaybackSource.ContentUri(uri),
+            )
+        }
+    record.destinationPath
+        .takeIf { it.isNotBlank() }
+        ?.takeIf { path -> canReadFile(path) }
+        ?.let { path ->
+            return CompletedPlaybackSourceResolution(
+                source = ResolvedMusicPlaybackSource.DownloadedFile(path),
+            )
+        }
+    return CompletedPlaybackSourceResolution(
+        source = null,
+        recordUpdate = record.copy(
+            status = DownloadTaskStatus.FAILED.name,
+            errorMessage = "离线文件不可用或已被删除",
+        ),
+    )
 }
 
 internal fun mergePersistedDownloadRecords(
