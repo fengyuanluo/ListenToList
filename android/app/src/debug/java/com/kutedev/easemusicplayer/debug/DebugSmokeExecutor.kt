@@ -495,9 +495,13 @@ class DebugSmokeExecutor @Inject constructor(
                 routeRefreshCount = snapshot.routeRefreshCount,
                 recoverySkipCount = snapshot.recoverySkipCount,
                 cacheBypassCount = snapshot.cacheBypassCount,
+                metadataFailureCount = snapshot.metadataFailureCount,
                 lastPlaybackErrorCode = snapshot.lastPlaybackErrorCode,
                 lastPlaybackErrorName = snapshot.lastPlaybackErrorName,
                 lastCacheBypassReason = snapshot.lastCacheBypassReason,
+                lastMetadataFailureMusicId = snapshot.lastMetadataFailureMusicId,
+                lastMetadataFailureStage = snapshot.lastMetadataFailureStage,
+                lastMetadataFailureMessage = snapshot.lastMetadataFailureMessage,
             )
         }
     }

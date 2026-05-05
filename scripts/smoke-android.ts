@@ -38,9 +38,13 @@ type DebugSmokeResult = {
     routeRefreshCount?: number | null;
     recoverySkipCount?: number | null;
     cacheBypassCount?: number | null;
+    metadataFailureCount?: number | null;
     lastPlaybackErrorCode?: number | null;
     lastPlaybackErrorName?: string | null;
     lastCacheBypassReason?: number | null;
+    lastMetadataFailureMusicId?: number | null;
+    lastMetadataFailureStage?: string | null;
+    lastMetadataFailureMessage?: string | null;
   }>;
   currentMetadataDurationSynced?: boolean | null;
   nextMetadataDurationSynced?: boolean | null;

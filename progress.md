@@ -84,6 +84,15 @@
 - Debug compile validation passed for P2-4: `cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
 - Broad Android validation passed for P2-4: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed for P2-4: `git diff --check`.
+- Committed P2-4 as `94e7131 fix: expose playback cache bypass diagnostics`.
+- Started P2-5 from `docs/BUGs/playback-chain-deep-review.md`.
+- Reviewed `PlaylistRepository` metadata queue, `PlayerRepository.loading`, metadata player error/timeout handling, and debug smoke diagnostics output.
+- Patched metadata queue loading timeout to record diagnostics and skip that metadata task instead of continuing into extra remote metadata work.
+- Patched metadata player error/timeout handling to record metadata failure details in `PlaybackDiagnostics` and expose them through debug smoke route history.
+- Targeted P2-5 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
+- Debug compile validation passed for P2-5: `cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
+- Broad Android validation passed for P2-5: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P2-5: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.

@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P2-4 are implemented and validated, and the remaining P2-5 metadata scheduling item is still open.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P2-5 are implemented and validated, final completion audit pending.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -73,6 +73,11 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P2-4 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
 - P2-4 debug compile validation passed: `./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
 - P2-4 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- P2-4 committed as `94e7131 fix: expose playback cache bypass diagnostics`.
+- P2-5 implementation complete: metadata loading timeouts now skip remote metadata work and metadata player failures/timeouts are recorded in `PlaybackDiagnostics` and debug smoke route history.
+- P2-5 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
+- P2-5 debug compile validation passed: `./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
+- P2-5 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.

@@ -139,9 +139,13 @@ data class DebugSmokeRouteRecord(
     val routeRefreshCount: Int = 0,
     val recoverySkipCount: Int = 0,
     val cacheBypassCount: Int = 0,
+    val metadataFailureCount: Int = 0,
     val lastPlaybackErrorCode: Int? = null,
     val lastPlaybackErrorName: String? = null,
     val lastCacheBypassReason: Int? = null,
+    val lastMetadataFailureMusicId: Long? = null,
+    val lastMetadataFailureStage: String? = null,
+    val lastMetadataFailureMessage: String? = null,
 )
 
 fun decodeDebugSmokePayload(payloadB64: String): DebugSmokeRequest {
