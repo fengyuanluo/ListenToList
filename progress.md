@@ -60,3 +60,12 @@
 - Validated RC1 missing-secret path: `env -u ANDROID_SIGN_JKS -u ANDROID_SIGN_PASSWORD bun run ./scripts/build-apk.ts` fails immediately with `ANDROID_SIGN_PASSWORD is required for release APK signing`.
 - Validated RC1 malformed-secret path: `env ANDROID_SIGN_PASSWORD=test ANDROID_SIGN_JKS=not-a-valid-secret bun run ./scripts/build-apk.ts` fails with `Failed to decode ANDROID_SIGN_JKS. Expected a brotli-compressed keystore encoded as base64.`
 - `git diff --check` passed after RC1.
+- Committed RC1 as `f08a93e fix: validate release signing inputs`.
+- Started performance/memory review.
+- Reviewed `AssetRepository`, `EaseImage`, `ThemeBackgroundImage`, cover usage points, playback cache/prefetch, and download worker streaming paths.
+- Documented PM1: cover and theme background images decoded at source size instead of display-constrained size, creating avoidable peak bitmap allocations.
+- Patched `AssetRepository`, `AssetVM`, `EaseImage`, and `ThemeBackgroundImage` to use target-size-aware bitmap sampling and size-sensitive bitmap cache keys.
+- Added `AssetRepositoryTest` coverage for bitmap sample-size selection.
+- Targeted PM1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.AssetRepositoryTest' --warning-mode all`; this run also executed `:app:compileDebugKotlin`.
+- `git diff --check` passed after PM1.
+- Broad Android gate passed after PM1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.

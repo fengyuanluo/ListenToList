@@ -1,5 +1,6 @@
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -8,7 +9,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kutedev.easemusicplayer.core.DataSourceKeyH
@@ -23,25 +23,29 @@ fun EaseImage(
     vm: AssetVM = hiltViewModel()
 ) {
     var oldKey: DataSourceKeyH by remember { mutableStateOf(DataSourceKeyH(dataSourceKey)) }
-    var bitmap: ImageBitmap? by remember { mutableStateOf(vm.getBitmap(dataSourceKey)) }
     val key = DataSourceKeyH(dataSourceKey)
 
-    LaunchedEffect(key.hashCode(), bitmap != null) {
-        if (key != oldKey || bitmap == null) {
-            oldKey = key
-            bitmap = vm.loadBitmap(key.value())
+    BoxWithConstraints(modifier = modifier) {
+        val maxWidthPx = constraints.maxWidth.takeIf { it != Int.MAX_VALUE && it > 0 }
+        val maxHeightPx = constraints.maxHeight.takeIf { it != Int.MAX_VALUE && it > 0 }
+        var bitmap: ImageBitmap? by remember(maxWidthPx, maxHeightPx) {
+            mutableStateOf(vm.getBitmap(dataSourceKey, maxWidthPx, maxHeightPx))
         }
+
+        LaunchedEffect(key.hashCode(), maxWidthPx, maxHeightPx, bitmap != null) {
+            if (key != oldKey || bitmap == null) {
+                oldKey = key
+                bitmap = vm.loadBitmap(key.value(), maxWidthPx, maxHeightPx)
+            }
+        }
+
+        val target = bitmap ?: return@BoxWithConstraints
+
+        Image(
+            modifier = Modifier.fillMaxSize(),
+            bitmap = target,
+            contentDescription = null,
+            contentScale = contentScale,
+        )
     }
-
-
-    if (bitmap == null) {
-        return
-    }
-
-    Image(
-        modifier = modifier,
-        bitmap = bitmap!!,
-        contentDescription = null,
-        contentScale = contentScale,
-    )
 }
