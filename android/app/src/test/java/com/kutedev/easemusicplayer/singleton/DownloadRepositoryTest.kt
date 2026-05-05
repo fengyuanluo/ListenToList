@@ -2,7 +2,9 @@ package com.kutedev.easemusicplayer.singleton
 
 import androidx.work.Data
 import androidx.work.WorkInfo
+import com.kutedev.easemusicplayer.core.DownloadResumeAction
 import com.kutedev.easemusicplayer.core.ResolvedMusicPlaybackSource
+import com.kutedev.easemusicplayer.core.decideDownloadResumeAction
 import com.kutedev.easemusicplayer.core.shouldRejectResumeState
 import java.util.UUID
 import org.junit.Assert.assertEquals
@@ -121,12 +123,35 @@ class DownloadRepositoryTest {
     }
 
     @Test
-    fun shouldRejectResumeState_rejectsStaleTempAndUnsupportedRange() {
+    fun shouldRejectResumeState_rejectsUnsupportedRangeOnly() {
         assertFalse(shouldRejectResumeState(existingBytes = 0L, sizeHint = 100L, remainingBytesAfterOffset = 0L))
         assertFalse(shouldRejectResumeState(existingBytes = 100L, sizeHint = 100L, remainingBytesAfterOffset = null))
-        assertEquals(true, shouldRejectResumeState(existingBytes = 101L, sizeHint = 100L, remainingBytesAfterOffset = null))
         assertEquals(true, shouldRejectResumeState(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 0L))
         assertFalse(shouldRejectResumeState(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 80L))
+    }
+
+    @Test
+    fun decideDownloadResumeAction_restartsWhenRemoteSizeIdentityChanges() {
+        assertEquals(
+            DownloadResumeAction.RESTART_FROM_ZERO,
+            decideDownloadResumeAction(existingBytes = 101L, sizeHint = 100L, remainingBytesAfterOffset = null),
+        )
+        assertEquals(
+            DownloadResumeAction.RESTART_FROM_ZERO,
+            decideDownloadResumeAction(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 70L),
+        )
+        assertEquals(
+            DownloadResumeAction.RESTART_FROM_ZERO,
+            decideDownloadResumeAction(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 90L),
+        )
+        assertEquals(
+            DownloadResumeAction.APPEND,
+            decideDownloadResumeAction(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 80L),
+        )
+        assertEquals(
+            DownloadResumeAction.REJECT,
+            decideDownloadResumeAction(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 0L),
+        )
     }
 
     @Test

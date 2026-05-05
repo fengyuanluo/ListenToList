@@ -58,6 +58,15 @@
 - Targeted P2-1 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
 - Broad Android validation passed for P2-1: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed for P2-1: `git diff --check`.
+- Committed P2-1 as `467098f fix: validate completed download playback size`.
+- Started P2-2 from `docs/BUGs/playback-chain-deep-review.md`.
+- Reviewed `DownloadWorker`, `DownloadRepository`, Rust `AssetStream`, `StreamFile.size()`, and OpenList/WebDAV/OneDrive range download implementations.
+- Confirmed existing UniFFI only exposes size-level stream identity for the active offset; stronger etag/mtime/provider revision would require backend/FFI expansion.
+- Patched resumed downloads to compare `existingBytes + AssetStream.size()` with recorded `totalBytes`; mismatches now reset the `.part` file or SAF temp document and restart download from offset 0.
+- Added `DownloadResumeAction` and `decideDownloadResumeAction()` so append/restart/reject decisions are covered by JVM tests.
+- Targeted P2-2 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
+- Broad Android validation passed for P2-2: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P2-2: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.

@@ -122,33 +122,49 @@ class DownloadWorker(
         existingBytes: Long,
     ): DownloadCopyResult {
         var downloadedBytes = existingBytes.coerceAtLeast(0L)
-        if (shouldRejectResumeState(
-                existingBytes = downloadedBytes,
-                sizeHint = sizeHint,
-                remainingBytesAfterOffset = null,
-            )
-        ) {
-            throw IOException("临时下载文件长度异常，需删除后重新下载")
+        var expectedTotalBytes = sizeHint
+        if (downloadedBytes > 0L && expectedTotalBytes != null && downloadedBytes > expectedTotalBytes) {
+            resetTargetTemp(target)
+            downloadedBytes = 0L
+            expectedTotalBytes = null
         }
-        if (sizeHint != null && downloadedBytes == sizeHint) {
+        if (expectedTotalBytes != null && downloadedBytes == expectedTotalBytes) {
             return DownloadCopyResult(
                 downloadedBytes = downloadedBytes,
-                totalBytes = sizeHint,
+                totalBytes = expectedTotalBytes,
             )
         }
         var stream = openAssetStream(sourceKey, offset = downloadedBytes)
-        var totalBytes = sizeHint ?: stream.size()?.toLong()?.let { downloadedBytes + it }
-        var lastProgressBytes = downloadedBytes
-
-        if (shouldRejectResumeState(
+        var initialRemainingBytes = stream.size()?.toLong()
+        when (
+            decideDownloadResumeAction(
                 existingBytes = downloadedBytes,
-                sizeHint = sizeHint,
-                remainingBytesAfterOffset = stream.size()?.toLong(),
+                sizeHint = expectedTotalBytes,
+                remainingBytesAfterOffset = initialRemainingBytes,
             )
         ) {
-            runCatching { stream.close() }
-            throw IOException("远端不支持从已下载位置继续，需重新开始下载")
+            DownloadResumeAction.APPEND -> Unit
+            DownloadResumeAction.RESTART_FROM_ZERO -> {
+                runCatching { stream.close() }
+                resetTargetTemp(target)
+                downloadedBytes = 0L
+                expectedTotalBytes = null
+                setProgress(
+                    workDataOf(
+                        DownloadWorkKeys.PROGRESS_BYTES to 0L,
+                        DownloadWorkKeys.PROGRESS_TOTAL_BYTES to -1L,
+                    )
+                )
+                stream = openAssetStream(sourceKey, offset = 0L)
+                initialRemainingBytes = stream.size()?.toLong()
+            }
+            DownloadResumeAction.REJECT -> {
+                runCatching { stream.close() }
+                throw IOException("远端不支持从已下载位置继续，需重新开始下载")
+            }
         }
+        var totalBytes = initialRemainingBytes?.let { downloadedBytes + it } ?: expectedTotalBytes
+        var lastProgressBytes = downloadedBytes
 
         if (downloadedBytes > 0L) {
             setProgress(
@@ -309,6 +325,23 @@ class DownloadWorker(
         }
     }
 
+    private fun resetTargetTemp(target: DownloadWorkerTarget) {
+        when (target) {
+            is DownloadWorkerTarget.FilePath -> {
+                val tempFile = File(target.tempPath)
+                tempFile.parentFile?.mkdirs()
+                if (tempFile.exists() && !tempFile.delete()) {
+                    throw IOException("无法重置临时下载文件")
+                }
+            }
+            is DownloadWorkerTarget.ContentTree -> {
+                applicationContext.contentResolver.openOutputStream(Uri.parse(target.tempUri), "w")
+                    ?.use { }
+                    ?: throw IOException("无法重置临时下载文件")
+            }
+        }
+    }
+
     private fun openTargetOutput(target: DownloadWorkerTarget, append: Boolean): OutputStream {
         return when (target) {
             is DownloadWorkerTarget.FilePath -> {
@@ -433,14 +466,43 @@ internal fun shouldRejectResumeState(
     sizeHint: Long?,
     remainingBytesAfterOffset: Long?,
 ): Boolean {
+    return decideDownloadResumeAction(
+        existingBytes = existingBytes,
+        sizeHint = sizeHint,
+        remainingBytesAfterOffset = remainingBytesAfterOffset,
+    ) == DownloadResumeAction.REJECT
+}
+
+internal enum class DownloadResumeAction {
+    APPEND,
+    RESTART_FROM_ZERO,
+    REJECT,
+}
+
+internal fun decideDownloadResumeAction(
+    existingBytes: Long,
+    sizeHint: Long?,
+    remainingBytesAfterOffset: Long?,
+): DownloadResumeAction {
     if (existingBytes <= 0L) {
-        return false
+        return DownloadResumeAction.APPEND
     }
     if (sizeHint != null && existingBytes > sizeHint) {
-        return true
+        return DownloadResumeAction.RESTART_FROM_ZERO
     }
     if (sizeHint != null && existingBytes == sizeHint) {
-        return false
+        return DownloadResumeAction.APPEND
     }
-    return remainingBytesAfterOffset == 0L
+    if (remainingBytesAfterOffset == null) {
+        return DownloadResumeAction.APPEND
+    }
+    if (remainingBytesAfterOffset == 0L) {
+        return DownloadResumeAction.REJECT
+    }
+    val resumedTotalBytes = existingBytes + remainingBytesAfterOffset
+    return if (sizeHint != null && resumedTotalBytes != sizeHint) {
+        DownloadResumeAction.RESTART_FROM_ZERO
+    } else {
+        DownloadResumeAction.APPEND
+    }
 }
