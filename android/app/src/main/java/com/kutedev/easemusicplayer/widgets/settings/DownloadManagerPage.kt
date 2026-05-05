@@ -42,6 +42,7 @@ import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
+import com.kutedev.easemusicplayer.singleton.DownloadDirectoryState
 import com.kutedev.easemusicplayer.singleton.DownloadTaskItem
 import com.kutedev.easemusicplayer.singleton.DownloadTaskStatus
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
@@ -50,6 +51,36 @@ import com.kutedev.easemusicplayer.viewmodels.DownloadManagerVM
 
 private val paddingX = SettingPaddingX
 private val taskShape = RoundedCornerShape(EaseTheme.radius.compact)
+
+@Composable
+private fun DownloadDirectorySummary(
+    state: DownloadDirectoryState,
+    maxLines: Int = 2,
+) {
+    val summary = if (state.isDefaultAppPrivate) {
+        stringResource(id = R.string.setting_downloads_dir_default_private, state.summary)
+    } else {
+        stringResource(id = R.string.setting_downloads_dir, state.summary)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
+        Text(
+            text = summary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EaseTheme.typography.bodySmall,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
+        state.errorMessage?.takeIf { it.isNotBlank() }?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = EaseTheme.typography.caption,
+                maxLines = maxLines,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
 
 @Composable
 private fun DownloadStatusChip(
@@ -224,7 +255,7 @@ private fun DownloadTaskCard(
 @Composable
 private fun DownloadDirectoryDialog(
     open: Boolean,
-    summary: String,
+    directoryState: DownloadDirectoryState,
     canReset: Boolean,
     onPickDirectory: () -> Unit,
     onResetDirectory: () -> Unit,
@@ -246,11 +277,7 @@ private fun DownloadDirectoryDialog(
                 text = stringResource(id = R.string.download_settings_title),
                 style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
             )
-            Text(
-                text = stringResource(id = R.string.setting_downloads_dir, summary),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = EaseTheme.typography.bodySmall,
-            )
+            DownloadDirectorySummary(state = directoryState, maxLines = 4)
             Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
                 EaseTextButton(
                     text = stringResource(id = R.string.download_settings_change_directory),
@@ -398,13 +425,7 @@ fun DownloadManagerPage(
             modifier = contentModifier,
         ) {
             item {
-                Text(
-                    text = stringResource(id = R.string.setting_downloads_dir, directoryState.summary),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = EaseTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                DownloadDirectorySummary(state = directoryState)
             }
 
             if (tasks.isEmpty()) {
@@ -450,7 +471,7 @@ fun DownloadManagerPage(
 
     DownloadDirectoryDialog(
         open = showDirectoryDialog,
-        summary = directoryState.summary,
+        directoryState = directoryState,
         canReset = directoryState.treeUri != null,
         onPickDirectory = { pickDirectoryLauncher.launch(null) },
         onResetDirectory = {

@@ -69,7 +69,7 @@ fun interface MusicPlaybackSourceResolver {
     fun resolve(musicId: MusicId): ResolvedMusicPlaybackSource?
 }
 
-internal object PlaybackSourceResolverCache {
+object PlaybackSourceResolverCache {
     private data class CacheEntry(
         val resolved: ResolvedMusicPlaybackSource?,
         val expiresAtMs: Long,
@@ -117,6 +117,12 @@ internal object PlaybackSourceResolverCache {
     fun invalidate(musicId: MusicId) {
         synchronized(lock) {
             entries.remove(musicId.value)
+        }
+    }
+
+    fun invalidateAll() {
+        synchronized(lock) {
+            entries.clear()
         }
     }
 

@@ -190,7 +190,8 @@
     <string name="common_download">Download</string>
     <string name="setting_downloads_title">Download Manager</string>
     <string name="setting_downloads_desc">Review active, failed, and completed downloads</string>
-    <string name="setting_downloads_dir">Downloaded files are stored under: %1$s</string>
+    <string name="setting_downloads_dir">Offline files are stored under: %1$s</string>
+    <string name="setting_downloads_dir_default_private">Offline files use the app-private default folder: %1$s</string>
     <string name="download_empty_title">No downloads yet</string>
     <string name="download_status_queued">Queued</string>
     <string name="download_status_running">Downloading</string>

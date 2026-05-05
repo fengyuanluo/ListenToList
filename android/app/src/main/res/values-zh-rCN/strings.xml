@@ -170,7 +170,8 @@
     <string name="common_download">下载</string>
     <string name="setting_downloads_title">下载管理</string>
     <string name="setting_downloads_desc">查看进行中、失败与已完成的下载任务</string>
-    <string name="setting_downloads_dir">下载文件保存目录：%1$s</string>
+    <string name="setting_downloads_dir">离线文件保存目录：%1$s</string>
+    <string name="setting_downloads_dir_default_private">离线文件使用默认应用内目录：%1$s</string>
     <string name="download_empty_title">还没有下载任务</string>
     <string name="download_status_queued">排队中</string>
     <string name="download_status_running">下载中</string>

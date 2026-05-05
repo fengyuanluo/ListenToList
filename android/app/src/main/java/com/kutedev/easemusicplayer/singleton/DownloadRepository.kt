@@ -13,9 +13,11 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.kutedev.easemusicplayer.core.DownloadWorker
+import com.kutedev.easemusicplayer.core.PlaybackSourceResolverCache
 import com.kutedev.easemusicplayer.core.ResolvedMusicPlaybackSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.util.UUID
 import javax.inject.Inject
@@ -75,6 +77,8 @@ enum class DownloadTaskStatus {
 data class DownloadDirectoryState(
     val summary: String,
     val treeUri: String? = null,
+    val isDefaultAppPrivate: Boolean = false,
+    val errorMessage: String? = null,
 )
 
 data class DownloadTaskItem(
@@ -337,6 +341,7 @@ class DownloadRepository @Inject constructor(
                 toastRepository.emitToast("已删除任务，但部分本地文件删除失败")
             }
         }
+        PlaybackSourceResolverCache.invalidateAll()
     }
 
     suspend fun cancel(id: UUID) {
@@ -363,11 +368,17 @@ class DownloadRepository @Inject constructor(
             return ResolvedMusicPlaybackSource.ContentUri(uri)
         }
         record.destinationPath.takeIf { it.isNotBlank() }
-            ?.takeIf { File(it).exists() }
+            ?.takeIf { path -> File(path).let { it.exists() && it.isFile && it.canRead() } }
             ?.let { path ->
                 return ResolvedMusicPlaybackSource.DownloadedFile(path)
             }
-        return null
+        val failed = record.copy(
+            status = DownloadTaskStatus.FAILED.name,
+            errorMessage = "离线文件不可用或已被删除",
+        )
+        persistRecords(records.value.replaceRecord(failed))
+        PlaybackSourceResolverCache.invalidateAll()
+        throw FileNotFoundException("completed download is missing for storage=$storageId path=$sourcePath")
     }
 
     private fun buildDownloadRequest(
@@ -633,7 +644,10 @@ class DownloadRepository @Inject constructor(
             return DownloadDirectorySpec.Default(defaultDownloadDir())
         }
         val tree = resolveTreeDirectory(treeUri)
-            ?: throw IOException("下载目录不可用，请重新设置")
+            ?: run {
+                markDownloadDirectoryUnavailable(state, "下载目录不可用，请重新设置")
+                throw IOException("下载目录不可用，请重新设置")
+            }
         return DownloadDirectorySpec.Custom(treeUri = treeUri, tree = tree)
     }
 
@@ -651,7 +665,10 @@ class DownloadRepository @Inject constructor(
     }
 
     private fun defaultDownloadDirectoryState(): DownloadDirectoryState {
-        return DownloadDirectoryState(summary = defaultDownloadDir().absolutePath)
+        return DownloadDirectoryState(
+            summary = defaultDownloadDir().absolutePath,
+            isDefaultAppPrivate = true,
+        )
     }
 
     private fun loadDownloadDirectoryState(): DownloadDirectoryState {
@@ -678,6 +695,13 @@ class DownloadRepository @Inject constructor(
             }
         }.apply()
         directoryState.value = state
+    }
+
+    private fun markDownloadDirectoryUnavailable(
+        state: DownloadDirectoryState,
+        message: String,
+    ) {
+        persistDownloadDirectoryState(state.copy(errorMessage = message))
     }
 
     private fun resolveTreeDirectory(treeUri: String): DocumentFile? {
