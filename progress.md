@@ -69,3 +69,5 @@
 - Targeted PM1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.AssetRepositoryTest' --warning-mode all`; this run also executed `:app:compileDebugKotlin`.
 - `git diff --check` passed after PM1.
 - Broad Android gate passed after PM1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Committed PM1 as `25b3758 fix: downsample decoded artwork images`.
+- Wrote final completion audit to `docs/BUGs/2026-05-05-deep-review/completion_audit.md`.
