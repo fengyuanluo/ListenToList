@@ -45,11 +45,35 @@ private data class LrcApiCacheKey(
     val album: String,
 )
 
-private data class LrcApiCachedResult(
+internal data class LrcApiCachedResult(
     val lyrics: Lyrics?,
     val lyricsStatus: LrcApiFetchStatus,
+    val cover: ByteArray?,
     val coverStatus: LrcApiFetchStatus,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is LrcApiCachedResult) return false
+
+        if (lyrics != other.lyrics) return false
+        if (lyricsStatus != other.lyricsStatus) return false
+        if (cover != null) {
+            if (other.cover == null) return false
+            if (!cover.contentEquals(other.cover)) return false
+        } else if (other.cover != null) {
+            return false
+        }
+        return coverStatus == other.coverStatus
+    }
+
+    override fun hashCode(): Int {
+        var result = lyrics?.hashCode() ?: 0
+        result = 31 * result + lyricsStatus.hashCode()
+        result = 31 * result + (cover?.contentHashCode() ?: 0)
+        result = 31 * result + coverStatus.hashCode()
+        return result
+    }
+}
 
 private const val MAX_LRCAPI_CACHE_ENTRIES = 64
 
@@ -330,19 +354,20 @@ private fun buildSettingsFingerprint(settings: LrcApiSettings): String {
     ).joinToString("|")
 }
 
-private fun LrcApiFetchResult.toCachedResult(): LrcApiCachedResult {
+internal fun LrcApiFetchResult.toCachedResult(): LrcApiCachedResult {
     return LrcApiCachedResult(
         lyrics = lyrics,
         lyricsStatus = lyricsStatus,
+        cover = cover,
         coverStatus = coverStatus,
     )
 }
 
-private fun LrcApiCachedResult.toFetchResult(): LrcApiFetchResult {
+internal fun LrcApiCachedResult.toFetchResult(): LrcApiFetchResult {
     return LrcApiFetchResult(
         lyrics = lyrics,
         lyricsStatus = lyricsStatus,
-        cover = null,
+        cover = cover,
         coverStatus = coverStatus,
     )
 }
