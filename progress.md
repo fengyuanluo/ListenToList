@@ -172,3 +172,11 @@
 - Broad Android validation passed after the P3-1 gate: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - `git diff --check` passed after the P3-1 patch.
 - Updated `docs/BUGs/playback-chain-deep-review.md` to mark P3-1 as completed and narrow P3-2 to the remaining observation gap.
+- Continued P3-2 by converting the folder prefetch buffering gap into a startup gate.
+- Patched `shouldPrefetchFolder()` to require both list-mode playback and `isPlaybackLoading == false`.
+- Updated `StorageBrowserVM.playFromFolder()` to pass `playerRepository.loading.value` into the folder prefetch policy.
+- Extended `FolderPrefetchPolicyTest` with loading/buffering coverage.
+- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
+- Broad validation attempt initially failed because I incorrectly ran targeted test and `assembleDebug` in parallel; concurrent Gradle/Kotlin/Hilt tasks raced on generated `build/tmp/kotlin-classes` and `build/generated/hilt` files. This is a validation-runner error, not accepted evidence against the source patch.
+- Stopped the Gradle daemon and reran broad validation sequentially.
+- Sequential broad validation passed: `cd android && ./gradlew :app:assembleDebug --warning-mode all`.

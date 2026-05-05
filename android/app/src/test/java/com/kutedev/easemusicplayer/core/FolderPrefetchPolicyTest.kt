@@ -13,4 +13,13 @@ class FolderPrefetchPolicyTest {
         assertTrue(shouldPrefetchFolderForPlayMode(PlayMode.LIST))
         assertTrue(shouldPrefetchFolderForPlayMode(PlayMode.LIST_LOOP))
     }
+
+    @Test
+    fun shouldPrefetchFolder_skipsWhenPlaybackIsLoading() {
+        assertTrue(shouldPrefetchFolder(playMode = PlayMode.LIST, isPlaybackLoading = false))
+        assertTrue(shouldPrefetchFolder(playMode = PlayMode.LIST_LOOP, isPlaybackLoading = false))
+        assertFalse(shouldPrefetchFolder(playMode = PlayMode.LIST, isPlaybackLoading = true))
+        assertFalse(shouldPrefetchFolder(playMode = PlayMode.LIST_LOOP, isPlaybackLoading = true))
+        assertFalse(shouldPrefetchFolder(playMode = PlayMode.SINGLE, isPlaybackLoading = false))
+    }
 }

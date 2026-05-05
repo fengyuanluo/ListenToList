@@ -8,3 +8,10 @@ internal fun shouldPrefetchFolderForPlayMode(playMode: PlayMode): Boolean {
         PlayMode.SINGLE, PlayMode.SINGLE_LOOP -> false
     }
 }
+
+internal fun shouldPrefetchFolder(
+    playMode: PlayMode,
+    isPlaybackLoading: Boolean,
+): Boolean {
+    return shouldPrefetchFolderForPlayMode(playMode) && !isPlaybackLoading
+}

@@ -76,3 +76,8 @@
 - Folder prefetch in `StorageBrowserVM.playFromFolder()` was unconditional once the folder song list was assembled, so even `SINGLE` and `SINGLE_LOOP` modes would still launch extra prefetch traffic for tracks that the current queue model does not need.
 - The lowest-risk correction is a pure play-mode gate: `LIST` and `LIST_LOOP` may prefetch the folder tail, while `SINGLE` and `SINGLE_LOOP` should skip it entirely.
 - This does not solve network-aware throttling. Weak-network, buffering, or user-intent gating still need a separate policy layer if the product wants to avoid folder prefetch during contention.
+
+## Playback Chain P3-2 Findings
+- The first actionable P3-2 gap overlaps P3-1: even after play-mode gating, folder prefetch should not start while main playback is already loading/buffering, because `PlayerRepository.loading` is the app-level signal set from Media3 `STATE_BUFFERING`.
+- A startup-only loading gate is safe and low-risk: if playback is loading at folder-play time, skip new folder prefetch; list-mode playback itself still proceeds through `PlayerControllerRepository.playFolder()`.
+- This still does not cancel an already-running folder prefetch if playback enters buffering later. That requires collecting the loading flow and coordinating cancellation inside or near `FolderPrefetcher`, which is broader than the current startup gate.
