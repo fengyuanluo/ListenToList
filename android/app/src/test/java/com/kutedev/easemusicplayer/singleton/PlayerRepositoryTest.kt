@@ -14,6 +14,7 @@ import uniffi.ease_client_backend.Music
 import uniffi.ease_client_backend.MusicAbstract
 import uniffi.ease_client_backend.MusicMeta
 import uniffi.ease_client_schema.MusicId
+import uniffi.ease_client_schema.PlayMode
 import uniffi.ease_client_schema.PlaylistId
 import uniffi.ease_client_schema.StorageEntryLoc
 import uniffi.ease_client_schema.StorageId
@@ -74,6 +75,33 @@ class PlayerRepositoryTest {
         assertEquals(second.queueEntryId, repository.currentQueueEntryId.value)
         assertEquals(second.queueEntryId, repository.playbackQueue.value?.currentQueueEntryId)
         assertEquals(MusicId(22L), repository.music.value?.meta?.id)
+    }
+
+    @Test
+    fun singleLoopDisablesAdjacentUiCandidatesButKeepsCompletionRepeatCandidate() {
+        val repository = createRepository()
+        val context = PlaybackContext(
+            type = PlaybackContextType.USER_PLAYLIST,
+            playlistId = PlaylistId(1L),
+        )
+        val first = buildEntry(31L, context, order = 0U)
+        val second = buildEntry(32L, context, order = 1U)
+        val third = buildEntry(33L, context, order = 2U)
+        repository.setPlaybackSession(
+            music = buildMusic(32L, listOf(1U)),
+            queueSnapshot = PlaybackQueueSnapshot(
+                context = context,
+                entries = listOf(first, second, third),
+                currentQueueEntryId = second.queueEntryId,
+            ),
+            currentQueueEntryId = second.queueEntryId,
+        )
+
+        repository.setPlayModeForTest(PlayMode.SINGLE_LOOP)
+
+        assertEquals(null, repository.previousMusic.value)
+        assertEquals(null, repository.nextMusic.value)
+        assertEquals(MusicId(32L), repository.onCompleteMusic.value?.meta?.id)
     }
 
     private fun createRepository(): PlayerRepository {

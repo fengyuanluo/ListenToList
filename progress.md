@@ -32,6 +32,15 @@
 - Targeted P1-2/P1-3 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDataUriTest' --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackPrefetchSpecTest' --warning-mode all`.
 - Broad Android validation passed for P1-2/P1-3: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed for P1-2/P1-3: `git diff --check`.
+- Committed P1-2/P1-3 as `399d4e6 fix: unify playback cache keys`.
+- Started P1-4 from `docs/BUGs/playback-chain-deep-review.md`.
+- Reviewed UI consumers of `previousMusic` / `nextMusic`, `PlayerRepository` mode-derived flows, `buildPlaybackQueuePlan()`, `PlaybackRuntimeKernel.seekAdjacentMediaItem()`, and MiniPlayer / PlayerPage controls.
+- Chose the product-consistent fix: `SINGLE_LOOP` repeats only the current track, so UI adjacent candidates should be disabled like `SINGLE`; `onCompleteMusic` remains current track for automatic repeat.
+- Patched `PlayerRepository.previousMusic` / `nextMusic` to return null for `SINGLE_LOOP`.
+- Added `PlayerRepositoryTest.singleLoopDisablesAdjacentUiCandidatesButKeepsCompletionRepeatCandidate`.
+- Targeted P1-4 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.PlayerRepositoryTest' --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --warning-mode all`.
+- Broad Android validation passed for P1-4: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P1-4: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.
