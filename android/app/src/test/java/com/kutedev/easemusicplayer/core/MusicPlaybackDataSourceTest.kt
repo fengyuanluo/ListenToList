@@ -8,6 +8,7 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import java.io.File
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.Collections
 import kotlin.math.min
 import org.junit.Assert.assertEquals
@@ -196,7 +197,7 @@ class MusicPlaybackDataSourceTest {
     @Test
     fun directHttp404_invalidatesCacheAndRetriesResolve() {
         var resolveCalls = 0
-        val http = FlakyHttpDataSource()
+        val http = FlakyHttpDataSource(firstResponseCode = 404)
         val dataSource = MusicPlaybackDataSource(
             resolver = MusicPlaybackSourceResolver { musicId ->
                 PlaybackSourceResolverCache.resolve(musicId) {
@@ -223,6 +224,70 @@ class MusicPlaybackDataSourceTest {
         assertEquals(4L, opened)
         assertEquals(2, resolveCalls)
         assertEquals(Uri.parse("https://example.com/music/2.wav"), http.openedSpec?.uri)
+    }
+
+    @Test
+    fun directHttpTransientServerError_retriesOpenWithoutResolverRefresh() {
+        var resolveCalls = 0
+        val http = FlakyHttpDataSource(firstResponseCode = 503)
+        val dataSource = MusicPlaybackDataSource(
+            resolver = MusicPlaybackSourceResolver { musicId ->
+                PlaybackSourceResolverCache.resolve(musicId) {
+                    resolveCalls += 1
+                    ResolvedMusicPlaybackSource.DirectHttp(
+                        url = "https://example.com/music/retry.wav",
+                        headers = emptyList(),
+                        cacheKey = "music-cache-key",
+                    )
+                }
+            },
+            httpDataSourceFactory = DataSource.Factory { http },
+            fileDataSourceFactory = DataSource.Factory { RecordingDataSource() },
+            contentDataSourceFactory = DataSource.Factory { RecordingDataSource() },
+            streamFallbackFactory = DataSource.Factory { RecordingDataSource() },
+        )
+
+        val opened = dataSource.open(
+            DataSpec.Builder()
+                .setUri(Uri.parse("ease://data?music=144"))
+                .build()
+        )
+
+        assertEquals(4L, opened)
+        assertEquals(1, resolveCalls)
+        assertEquals(2, http.openAttempts)
+        assertEquals(Uri.parse("https://example.com/music/retry.wav"), http.openedSpec?.uri)
+    }
+
+    @Test
+    fun shouldRetryDirectHttpOpen_onlyRetriesTransientOpenFailures() {
+        val dataSpec = DataSpec.Builder()
+            .setUri(Uri.parse("https://example.com/music.wav"))
+            .build()
+
+        assertEquals(true, shouldRetryDirectHttpOpen(httpStatusError(503)))
+        assertEquals(true, shouldRetryDirectHttpOpen(httpStatusError(429)))
+        assertEquals(false, shouldRetryDirectHttpOpen(httpStatusError(404)))
+        assertEquals(
+            true,
+            shouldRetryDirectHttpOpen(
+                HttpDataSource.HttpDataSourceException.createForIOException(
+                    SocketTimeoutException("connect timeout"),
+                    dataSpec,
+                    HttpDataSource.HttpDataSourceException.TYPE_OPEN,
+                )
+            ),
+        )
+        assertEquals(
+            false,
+            shouldRetryDirectHttpOpen(
+                HttpDataSource.HttpDataSourceException.createForIOException(
+                    SocketTimeoutException("read timeout"),
+                    dataSpec,
+                    HttpDataSource.HttpDataSourceException.TYPE_READ,
+                )
+            ),
+        )
     }
 
     @Test
@@ -302,6 +367,20 @@ class MusicPlaybackDataSourceTest {
 
         assertEquals(List(5) { "music:46" }, routeKeys)
     }
+
+    private fun httpStatusError(code: Int): HttpDataSource.InvalidResponseCodeException {
+        val dataSpec = DataSpec.Builder()
+            .setUri(Uri.parse("https://example.com/music.wav"))
+            .build()
+        return HttpDataSource.InvalidResponseCodeException(
+            code,
+            "HTTP $code",
+            IOException("http status $code"),
+            Collections.emptyMap(),
+            dataSpec,
+            ByteArray(0),
+        )
+    }
 }
 
 private class RecordingDataSource(
@@ -338,10 +417,13 @@ private class RecordingDataSource(
     override fun close() = Unit
 }
 
-private class FlakyHttpDataSource : DataSource {
+private class FlakyHttpDataSource(
+    private val firstResponseCode: Int,
+) : DataSource {
     var openedSpec: DataSpec? = null
         private set
-    private var openAttempts = 0
+    var openAttempts = 0
+        private set
 
     override fun addTransferListener(transferListener: TransferListener) = Unit
 
@@ -349,9 +431,9 @@ private class FlakyHttpDataSource : DataSource {
         openAttempts += 1
         if (openAttempts == 1) {
             throw HttpDataSource.InvalidResponseCodeException(
-                404,
-                "Not Found",
-                IOException("expired direct url"),
+                firstResponseCode,
+                "HTTP $firstResponseCode",
+                IOException("direct http open failed"),
                 Collections.emptyMap(),
                 dataSpec,
                 ByteArray(0),
