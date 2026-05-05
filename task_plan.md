@@ -45,7 +45,8 @@ Phase 8: continue the next domain pass, starting with real-device playback smoke
 - Phase 8 complete: fixed SG1 smoke runner hang and passed real-device playback/download smoke on `172.20.65.10:45749`.
 - Phase 9 complete: theme/UI layout review documented UI1, validated it, and committed `7def8d0 fix: align bottom chrome spacing`.
 - Phase 10 complete: import/metadata/lyrics/LrcApi review documented ML1, validated it, and committed `1f02fae fix: preserve cached lrcapi covers`.
-- Phase 11 in progress: code-conflict/dead-code/script truth-source review documented CD1 and code fix is pending validation.
+- Phase 11 complete: code-conflict/dead-code/script truth-source review documented CD1, validated it, and committed `98725d2 fix: remove stale rust client path`.
+- Phase 12 complete: release/CI/signing review documented RC1, validated it, and is ready for commit.
 
 ## Completion Audit
 - Not yet complete. The previous batch is archived, but the new deep review, task center, fixes, tests, commits, and final audit are still pending.
