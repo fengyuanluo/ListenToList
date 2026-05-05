@@ -97,6 +97,10 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P3-2 direct HTTP assemble validation passed: `./gradlew :app:assembleDebug --warning-mode all`.
 - P3-2 direct HTTP smoke validation passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18103 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
 - P3-2 direct HTTP smoke artifact: `artifacts/smoke/2026-05-05T11-53-33.530Z/openlist-read-failure-recovery.result.json`.
+- Playback-chain residual review refreshed: `docs/BUGs/playback-chain-deep-review.md` now records the remaining unknown-size download resume identity gap and the single-entry / single-mode weak-network recovery semantics gap.
+- P2-2 residual implementation complete: unknown-size partial downloads now restart from zero instead of appending unverifiable temp bytes.
+- P2-2 residual targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
+- P2-2 residual broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.

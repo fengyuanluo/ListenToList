@@ -208,3 +208,12 @@
 - Real-device smoke passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18103 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`; artifacts at `artifacts/smoke/2026-05-05T11-53-33.530Z/`.
 - Verified `openlist-read-failure-recovery.result.json`: stalled source `musicId=7` recorded `ERROR_CODE_IO_NETWORK_CONNECTION_FAILED`, `routeRefreshCount=1`, `recoverySkipCount=1`, then recovered to `musicId=8` with `DIRECT_HTTP`.
 - Updated `docs/BUGs/playback-chain-deep-review.md` to mark direct HTTP stalled-read recovery smoke covered and leave download resume under remote-file-change as the remaining P3-2 gap.
+- Resumed the requested playback-chain deep review from the existing handoff and re-read current playback, resolver, cache, prefetch, queue, metadata, session, and download implementation paths.
+- Confirmed most high-priority route/cache/metadata/prefetch/play-mode issues were already documented and many were implemented; no new source edits were made in this pass.
+- Added two residual review findings to `docs/BUGs/playback-chain-deep-review.md`: unknown-size resumed downloads still cannot prove source identity before append, and single-entry / single-mode recoverable playback errors currently stop instead of retrying the current track after descriptor refresh.
+- Updated `findings.md` with the same residual review findings for future continuation.
+- Started fixing the unknown-size resumed-download residual gap from `docs/BUGs/playback-chain-deep-review.md`.
+- Patched `DownloadWorker.decideDownloadResumeAction()` so existing partial downloads with no persisted `sizeHint` restart from zero instead of appending unverifiable temp bytes.
+- Added `DownloadRepositoryTest.decideDownloadResumeAction_restartsUnknownSizePartialDownloads`.
+- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
+- Broad Android validation passed: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
