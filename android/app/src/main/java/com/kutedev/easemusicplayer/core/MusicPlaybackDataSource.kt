@@ -11,9 +11,15 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import com.kutedev.easemusicplayer.singleton.Bridge
 import com.kutedev.easemusicplayer.singleton.DownloadRepository
+import java.io.EOFException
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.ConnectException
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.LinkedHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +37,10 @@ const val PLAYBACK_SOURCE_TAG_FOLDER_PREFETCH = "folder-prefetch"
 const val PLAYBACK_SOURCE_TAG_METADATA = "metadata"
 
 private const val PLAYBACK_HTTP_USER_AGENT = "EaseMusicPlayer/1.0"
+private const val PLAYBACK_HTTP_CONNECT_TIMEOUT_MS = 10_000
+private const val PLAYBACK_HTTP_READ_TIMEOUT_MS = 30_000
 private const val MAX_DIRECT_HTTP_OPEN_RETRIES = 1
+private const val PLAYBACK_HTTP_OPEN_RETRY_DELAY_MS = 200L
 private const val PLAYBACK_RESOLVER_CACHE_MAX_ENTRIES = 256
 private const val PLAYBACK_RESOLVER_DIRECT_HTTP_TTL_MS = 60_000L
 private const val PLAYBACK_RESOLVER_STREAM_FALLBACK_TTL_MS = 15_000L
@@ -268,6 +277,19 @@ class MusicPlaybackDataSource(
                     safeEaseError(
                         "PLAYBACK_ROUTE_RETRY source=$sourceTag music=${musicId.value} code=${error.responseCode} attempt=$attempt"
                     )
+                    sleepBeforeDirectHttpRetry()
+                    continue
+                }
+                if (
+                    resolved is ResolvedMusicPlaybackSource.DirectHttp &&
+                    shouldRetryDirectHttpOpen(error) &&
+                    attempt < MAX_DIRECT_HTTP_OPEN_RETRIES
+                ) {
+                    attempt += 1
+                    safeEaseError(
+                        "PLAYBACK_ROUTE_RETRY source=$sourceTag music=${musicId.value} code=${error.responseCode} attempt=$attempt"
+                    )
+                    sleepBeforeDirectHttpRetry()
                     continue
                 }
                 if (error.responseCode == 404) {
@@ -275,6 +297,21 @@ class MusicPlaybackDataSource(
                     throw FileNotFoundException("music ${musicId.value} not found").apply {
                         initCause(error)
                     }
+                }
+                throw error
+            } catch (error: HttpDataSource.HttpDataSourceException) {
+                closeQuietly()
+                if (
+                    resolved is ResolvedMusicPlaybackSource.DirectHttp &&
+                    shouldRetryDirectHttpOpen(error) &&
+                    attempt < MAX_DIRECT_HTTP_OPEN_RETRIES
+                ) {
+                    attempt += 1
+                    safeEaseError(
+                        "PLAYBACK_ROUTE_RETRY source=$sourceTag music=${musicId.value} error=${error::class.java.simpleName} attempt=$attempt"
+                    )
+                    sleepBeforeDirectHttpRetry()
+                    continue
                 }
                 throw error
             } catch (error: Exception) {
@@ -327,6 +364,8 @@ fun buildMusicPlaybackDataSourceFactory(
     val httpFactory = DefaultHttpDataSource.Factory()
         .setAllowCrossProtocolRedirects(true)
         .setUserAgent(PLAYBACK_HTTP_USER_AGENT)
+        .setConnectTimeoutMs(PLAYBACK_HTTP_CONNECT_TIMEOUT_MS)
+        .setReadTimeoutMs(PLAYBACK_HTTP_READ_TIMEOUT_MS)
 
     val resolver = MusicPlaybackSourceResolver { musicId: MusicId ->
         try {
@@ -352,6 +391,43 @@ fun buildMusicPlaybackDataSourceFactory(
             sourceTag = sourceTag,
         )
     }
+}
+
+internal fun shouldRetryDirectHttpOpen(error: Throwable): Boolean {
+    if (error is HttpDataSource.InvalidResponseCodeException) {
+        return error.responseCode == 408 || error.responseCode == 429 || error.responseCode >= 500
+    }
+    if (error is HttpDataSource.HttpDataSourceException && error.type != HttpDataSource.HttpDataSourceException.TYPE_OPEN) {
+        return false
+    }
+    return error.findCause<InterruptedIOException>() != null ||
+        error.findCause<SocketTimeoutException>() != null ||
+        error.findCause<ConnectException>() != null ||
+        error.findCause<UnknownHostException>() != null ||
+        error.findCause<SocketException>() != null ||
+        error.findCause<EOFException>() != null
+}
+
+private fun sleepBeforeDirectHttpRetry() {
+    try {
+        Thread.sleep(PLAYBACK_HTTP_OPEN_RETRY_DELAY_MS)
+    } catch (error: InterruptedException) {
+        Thread.currentThread().interrupt()
+        throw InterruptedIOException("direct HTTP retry interrupted").apply {
+            initCause(error)
+        }
+    }
+}
+
+private inline fun <reified T : Throwable> Throwable.findCause(): T? {
+    var cursor: Throwable? = this
+    while (cursor != null) {
+        if (cursor is T) {
+            return cursor
+        }
+        cursor = cursor.cause
+    }
+    return null
 }
 
 private fun sanitizePlaybackRouteUriForLog(uri: Uri): String {

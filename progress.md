@@ -67,6 +67,14 @@
 - Targeted P2-2 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
 - Broad Android validation passed for P2-2: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed for P2-2: `git diff --check`.
+- Committed P2-2 as `4ee67bb fix: restart stale resumed downloads`.
+- Started P2-3 from `docs/BUGs/playback-chain-deep-review.md`.
+- Reviewed `MusicPlaybackDataSource`, `PlaybackErrorRecovery`, `PlaybackCache`, and `PlaylistRepository` for direct HTTP timeout/retry and metadata/cache-health scope.
+- Patched direct HTTP playback to set explicit connect/read timeouts and retry transient open failures once, while preserving 401/403/404 resolver-refresh semantics.
+- Added `shouldRetryDirectHttpOpen()` plus unit coverage for transient server, 404, and open/read-stage retry boundaries.
+- Targeted P2-3 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
+- Broad Android validation passed for P2-3: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P2-3: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.

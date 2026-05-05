@@ -54,3 +54,9 @@
 - Rust `AssetStream.size()` reflects remaining bytes after the requested offset, because `StreamFile.size()` returns `total - byte_offset` and the Rust providers pass through range-aware `byte_offset`.
 - The Android-side lowest reliable source-identity gate is therefore `existingBytes + stream.size() == recorded totalBytes`. If that check fails, the temp output must be discarded and the worker must reopen the stream at offset 0 rather than append mixed content.
 - This P2-2 fix intentionally does not claim etag/last-modified/provider-revision validation, because those identities are not currently exposed through the existing Rust/UniFFI download stream API.
+
+## Playback Chain P2-3 Findings
+- Direct HTTP playback should not rely on the default Media3 timeout behavior alone, because the Rust fallback providers already use explicit response/chunk timeout constants and limited retries.
+- The current Android-side direct HTTP path can safely add its own connect/read timeouts without changing the remote route contract.
+- Open-time retries are the right place to handle transient 408/429/5xx and network causes for direct HTTP, while 401/403/404 still belong to cache invalidation / resolver refresh semantics.
+- Read-stage network errors should still be left to the existing playback recovery path rather than retried inside `MusicPlaybackDataSource.open()`.
