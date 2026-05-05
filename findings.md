@@ -40,3 +40,7 @@
 ## Playback Chain P1-4 Findings
 - Current queue planning treats `SINGLE_LOOP` as a one-item Media3 timeline with `REPEAT_MODE_ONE`; `PlaybackService` and `PlaybackRuntimeKernel` do not expose adjacent seek/wrap semantics for that mode.
 - Therefore UI-facing `previousMusic` / `nextMusic` must match `SINGLE`, not `LIST_LOOP`. The only automatic next candidate in `SINGLE_LOOP` is `onCompleteMusic`, which should remain the current track for repeat completion.
+
+## Playback Chain P1-5 Findings
+- `syncQueueForPlayMode()` used to rebuild the player queue even when only the repeat mode changed or when the current item could be preserved in place. That needlessly stopped playback, cleared media items, and reopened sources in weak-network scenarios.
+- The safe optimization boundary is to keep the current item and only mutate the surrounding Media3 timeline when the desired plan still contains the current `mediaId` exactly once. If that cannot be guaranteed, the existing rebuild path remains the fallback.

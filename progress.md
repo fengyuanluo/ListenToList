@@ -41,6 +41,16 @@
 - Targeted P1-4 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.PlayerRepositoryTest' --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --warning-mode all`.
 - Broad Android validation passed for P1-4: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed for P1-4: `git diff --check`.
+- Committed P1-4 as `6b061ac fix: align single loop adjacent controls`.
+- Started P1-5 from `docs/BUGs/playback-chain-deep-review.md`.
+- Reviewed `syncQueueForPlayMode()`, `buildPlaybackQueuePlan()`, `PlaybackRuntimeKernel.seekAdjacentMediaItem()`, and existing queue-edit in-place logic.
+- Patched `syncQueueForPlayMode()` to attempt in-place Media3 timeline updates when the current item can be preserved, instead of always stop/clear/prepare on play-mode changes.
+- Added `buildPlaybackTimelineInPlaceUpdate()` helper plus `PlaybackTimelineInPlaceUpdate` model.
+- Added `MusicPlayerUtilTest` coverage for list<->single-loop in-place timeline updates and fallback rejection.
+- First implementation pass needed an additional helper because the raw Media3 rebuild path still handled all mode changes; the new helper now isolates the preserve-current-item case.
+- Targeted P1-5 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --warning-mode all`.
+- Broad Android validation passed for P1-5: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P1-5: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.
