@@ -43,6 +43,7 @@ app.*.map.json
 
 # Output
 /artifacts
+/docs/BUGs/
 
 
 rust-libs/ease-client-backend/src/controllers/generated.rs
