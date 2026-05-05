@@ -136,6 +136,10 @@ data class DebugSmokeRouteRecord(
     val resolvedUri: String? = null,
     val sourceTag: String? = null,
     val resolverMode: DebugSmokeResolverMode? = null,
+    val routeRefreshCount: Int = 0,
+    val recoverySkipCount: Int = 0,
+    val lastPlaybackErrorCode: Int? = null,
+    val lastPlaybackErrorName: String? = null,
 )
 
 fun decodeDebugSmokePayload(payloadB64: String): DebugSmokeRequest {

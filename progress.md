@@ -1,6 +1,18 @@
 # Progress Log
 
 ## 2026-05-05
+- Continued playback-chain fix ledger from `docs/BUGs/playback-chain-deep-review.md`.
+- Confirmed worktree was clean and branch was ahead of origin by P0-1 commit `212dcbc`.
+- Reviewed P0-2 source path: `PlaybackService.onPlayerError()`, `recoverFromPlaybackError()`, `MusicPlaybackDataSource`, `PlaybackDiagnostics`, debug smoke route models.
+- Added `PlaybackErrorRecovery.kt` with testable recoverable playback error classification for weak-network and HTTP IO failures.
+- Rewired `PlaybackService` to use the recoverable classifier, invalidate the current `PlaybackSourceResolverCache` entry, and continue through existing queue recovery instead of clearing the session on transient IO errors.
+- Extended `PlaybackDiagnostics` and debug smoke route records with `routeRefreshCount`, `recoverySkipCount`, `lastPlaybackErrorCode`, and `lastPlaybackErrorName`.
+- Added `PlaybackErrorRecoveryTest` and `PlaybackDiagnosticsTest`.
+- First combined targeted test failed because `PlaybackDiagnosticsTest` constructed `PlaybackException` under plain JVM and hit unmocked `SystemClock.elapsedRealtime`.
+- Fixed `PlaybackDiagnosticsTest` by running it with Robolectric.
+- Targeted P0-2 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
+- Broad Android validation passed for P0-2: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.

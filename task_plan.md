@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-Complete: final audit recorded for the 2026-05-05 deep review sweep.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 is committed, P0-2 validation is complete and ready for commit.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -35,6 +35,11 @@ Complete: final audit recorded for the 2026-05-05 deep review sweep.
 - If docs/scripts/CI/source disagree, use current source and executable scripts as truth, then update docs or ledgers in the same round.
 
 ## Status
+- New continuation: source-derived playback-chain fixes are being processed against `docs/BUGs/playback-chain-deep-review.md`.
+- P0-1 complete and committed as `212dcbc fix: fall back when offline downloads disappear`.
+- P0-2 implementation complete: weak-network/HTTP playback IO errors now enter existing recovery, invalidate current resolver cache, and record route refresh / skip / last error diagnostics.
+- P0-2 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
+- P0-2 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.

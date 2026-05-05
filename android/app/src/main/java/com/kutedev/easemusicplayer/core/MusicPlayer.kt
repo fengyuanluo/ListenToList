@@ -35,7 +35,6 @@ import com.kutedev.easemusicplayer.singleton.ToastRepository
 import com.kutedev.easemusicplayer.singleton.buildPlaylistQueueEntryId
 import com.kutedev.easemusicplayer.singleton.buildFolderQueueEntryId
 import com.kutedev.easemusicplayer.singleton.buildTemporaryQueueEntryId
-import java.io.FileNotFoundException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -282,9 +281,12 @@ class PlaybackService : MediaSessionService() {
                 playerRepository.setIsLoading(false)
                 _prefetcher?.cancel()
                 easeError("playback error: $error")
-                if (shouldRecoverFromPlaybackError(error)) {
+                if (isRecoverablePlaybackError(error)) {
+                    val musicId = playerRepository.music.value?.meta?.id
+                    PlaybackDiagnostics.recordRouteRefresh(error, musicId?.value)
+                    musicId?.let(PlaybackSourceResolverCache::invalidate)
                     serviceScope.launch {
-                        recoverFromPlaybackError(player as ExoPlayer)
+                        recoverFromPlaybackError(player as ExoPlayer, error)
                     }
                 } else {
                     recoveryState = null
@@ -985,14 +987,7 @@ class PlaybackService : MediaSessionService() {
         _prefetcher?.prefetch(uri, PlaybackCachePolicy.prefetchBytesForSeconds())
     }
 
-    private fun shouldRecoverFromPlaybackError(error: PlaybackException): Boolean {
-        if (error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) {
-            return true
-        }
-        return error.findCause<FileNotFoundException>() != null
-    }
-
-    private suspend fun recoverFromPlaybackError(player: ExoPlayer) {
+    private suspend fun recoverFromPlaybackError(player: ExoPlayer, error: PlaybackException) {
         val snapshot = playerRepository.playbackQueueValue()
         val current = playerRepository.music.value
         val seed = playerRepository.recoverySeed.value
@@ -1037,6 +1032,7 @@ class PlaybackService : MediaSessionService() {
             active.skipToastShown = true
         }
         active.attemptedQueueEntryIds.add(candidateEntry.queueEntryId)
+        PlaybackDiagnostics.recordRecoverySkip(error, current.meta.id.value)
         playbackRuntimeKernel.playResolvedQueue(
             player = player,
             snapshot = snapshot.copy(currentQueueEntryId = candidateEntry.queueEntryId),
@@ -1143,14 +1139,4 @@ class PlaybackService : MediaSessionService() {
         return null
     }
 
-    private inline fun <reified T : Throwable> Throwable.findCause(): T? {
-        var cursor: Throwable? = this
-        while (cursor != null) {
-            if (cursor is T) {
-                return cursor
-            }
-            cursor = cursor.cause
-        }
-        return null
-    }
 }
