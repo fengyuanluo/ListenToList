@@ -47,3 +47,8 @@
 - Patched `LrcApiCachedResult` to preserve cover bytes and added `LrcApiCacheModelsTest`.
 - Targeted ML1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.LrcApiCacheModelsTest' --warning-mode all`.
 - Broad Android gate passed after ML1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Committed ML1 as `1f02fae fix: preserve cached lrcapi covers`.
+- Started code-conflict/dead-code/script truth-source review.
+- Documented CD1: `scripts/base.ts` exported a stale `CLIENT_ROOT` pointing at nonexistent `rust-libs/ease-client`.
+- Removed the stale `CLIENT_ROOT` export.
+- Validated CD1: `rg CLIENT_ROOT scripts` has no hits, `bun run doctor:android-env` passed, and `git diff --check` passed.
