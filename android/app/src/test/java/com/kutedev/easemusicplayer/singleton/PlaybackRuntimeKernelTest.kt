@@ -8,6 +8,7 @@ import kotlinx.coroutines.Job
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -86,6 +87,33 @@ class PlaybackRuntimeKernelTest {
         assertEquals(4_567L, persisted.positionMs)
         assertFalse(persisted.playWhenReady)
         assertEquals(PlayMode.SINGLE.name, persisted.playMode)
+    }
+
+    @Test
+    fun clearPlaybackState_clearsRepositoryAndStoredSession() {
+        val fixture = createFixture()
+        val playlistId = PlaylistId(2L)
+        val context = PlaybackContext(
+            type = PlaybackContextType.USER_PLAYLIST,
+            playlistId = playlistId,
+        )
+        val first = buildEntry(21L, context, order = 0U)
+        fixture.playerRepository.setPlaybackSession(
+            music = buildMusic(21L, order = listOf(0U)),
+            queueSnapshot = PlaybackQueueSnapshot(
+                context = context,
+                entries = listOf(first),
+                currentQueueEntryId = first.queueEntryId,
+            ),
+            currentQueueEntryId = first.queueEntryId,
+        )
+        fixture.kernel.persistCurrentSession(positionMs = 123L, playWhenReady = true)
+
+        fixture.kernel.clearPlaybackState()
+
+        assertNull(fixture.playerRepository.music.value)
+        assertNull(fixture.playerRepository.playbackQueue.value)
+        assertNull(fixture.store.load())
     }
 
     private fun createFixture(): TestFixture {

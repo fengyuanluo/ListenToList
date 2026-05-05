@@ -377,6 +377,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        _mediaSession?.player?.let { player ->
+            stopPlayback(player)
+        }
         stopSelf()
     }
 
@@ -1011,17 +1014,21 @@ class PlaybackService : MediaSessionService() {
         }
 
         val currentQueueEntryId = playerRepository.currentQueueEntryIdValue() ?: seed.queueEntryId
-        val candidateEntry = findRecoveryCandidate(snapshot, currentQueueEntryId, active.direction, active.attemptedQueueEntryIds)
-        if (candidateEntry == null) {
+        var candidateEntry = findRecoveryCandidate(snapshot, currentQueueEntryId, active.direction, active.attemptedQueueEntryIds)
+        var candidate = candidateEntry?.let { entry ->
+            bridge.run { ctGetMusic(it, entry.musicId) }
+        }
+        while (candidateEntry != null && candidate == null) {
+            active.attemptedQueueEntryIds.add(candidateEntry.queueEntryId)
+            candidateEntry = findRecoveryCandidate(snapshot, candidateEntry.queueEntryId, active.direction, active.attemptedQueueEntryIds)
+            candidate = candidateEntry?.let { entry ->
+                bridge.run { ctGetMusic(it, entry.musicId) }
+            }
+        }
+        if (candidateEntry == null || candidate == null) {
             recoveryState = null
             toastRepository.emitToast("歌曲资源不可用")
             stopPlayback(player)
-            return
-        }
-        val candidate = bridge.run { ctGetMusic(it, candidateEntry.musicId) }
-        if (candidate == null) {
-            active.attemptedQueueEntryIds.add(candidateEntry.queueEntryId)
-            recoverFromPlaybackError(player)
             return
         }
 
