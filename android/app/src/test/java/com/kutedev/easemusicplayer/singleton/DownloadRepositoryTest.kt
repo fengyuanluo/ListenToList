@@ -2,6 +2,7 @@ package com.kutedev.easemusicplayer.singleton
 
 import androidx.work.Data
 import androidx.work.WorkInfo
+import com.kutedev.easemusicplayer.core.shouldRejectResumeState
 import java.util.UUID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -115,5 +116,14 @@ class DownloadRepositoryTest {
         assertEquals(DownloadTaskStatus.PAUSED.name, paused.status)
         assertEquals(null, paused.workId)
         assertEquals(null, paused.errorMessage)
+    }
+
+    @Test
+    fun shouldRejectResumeState_rejectsStaleTempAndUnsupportedRange() {
+        assertFalse(shouldRejectResumeState(existingBytes = 0L, sizeHint = 100L, remainingBytesAfterOffset = 0L))
+        assertFalse(shouldRejectResumeState(existingBytes = 100L, sizeHint = 100L, remainingBytesAfterOffset = null))
+        assertEquals(true, shouldRejectResumeState(existingBytes = 101L, sizeHint = 100L, remainingBytesAfterOffset = null))
+        assertEquals(true, shouldRejectResumeState(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 0L))
+        assertFalse(shouldRejectResumeState(existingBytes = 20L, sizeHint = 100L, remainingBytesAfterOffset = 80L))
     }
 }

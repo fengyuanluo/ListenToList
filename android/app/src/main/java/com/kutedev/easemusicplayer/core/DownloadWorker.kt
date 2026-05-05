@@ -72,6 +72,7 @@ class DownloadWorker(
         val sourcePath = inputData.getString(DownloadWorkKeys.SOURCE_PATH)
         val sizeHint = inputData.getLong(DownloadWorkKeys.SIZE_BYTES, -1L).takeIf { it >= 0L }
         val target = parseTarget()
+        val existingBytes = target?.let(::existingDownloadedBytes) ?: 0L
         if (storageId < 0L || sourcePath.isNullOrBlank() || target == null) {
             return@withContext failure("下载任务参数不完整")
         }
@@ -86,7 +87,6 @@ class DownloadWorker(
         )
 
         return@withContext try {
-            val existingBytes = existingDownloadedBytes(target)
             val result = copyAssetToTarget(
                 sourceKey = sourceKey,
                 target = target,
@@ -122,9 +122,33 @@ class DownloadWorker(
         existingBytes: Long,
     ): DownloadCopyResult {
         var downloadedBytes = existingBytes.coerceAtLeast(0L)
+        if (shouldRejectResumeState(
+                existingBytes = downloadedBytes,
+                sizeHint = sizeHint,
+                remainingBytesAfterOffset = null,
+            )
+        ) {
+            throw IOException("临时下载文件长度异常，需删除后重新下载")
+        }
+        if (sizeHint != null && downloadedBytes == sizeHint) {
+            return DownloadCopyResult(
+                downloadedBytes = downloadedBytes,
+                totalBytes = sizeHint,
+            )
+        }
         var stream = openAssetStream(sourceKey, offset = downloadedBytes)
         var totalBytes = sizeHint ?: stream.size()?.toLong()?.let { downloadedBytes + it }
         var lastProgressBytes = downloadedBytes
+
+        if (shouldRejectResumeState(
+                existingBytes = downloadedBytes,
+                sizeHint = sizeHint,
+                remainingBytesAfterOffset = stream.size()?.toLong(),
+            )
+        ) {
+            runCatching { stream.close() }
+            throw IOException("远端不支持从已下载位置继续，需重新开始下载")
+        }
 
         if (downloadedBytes > 0L) {
             setProgress(
@@ -403,3 +427,20 @@ private data class FinalizedTarget(
     val destinationPath: String = "",
     val destinationUri: String? = null,
 )
+
+internal fun shouldRejectResumeState(
+    existingBytes: Long,
+    sizeHint: Long?,
+    remainingBytesAfterOffset: Long?,
+): Boolean {
+    if (existingBytes <= 0L) {
+        return false
+    }
+    if (sizeHint != null && existingBytes > sizeHint) {
+        return true
+    }
+    if (sizeHint != null && existingBytes == sizeHint) {
+        return false
+    }
+    return remainingBytesAfterOffset == 0L
+}
