@@ -81,15 +81,22 @@ class DebugSmokeExecutor @Inject constructor(
                     targetMusicId = prepared.musicId,
                     timeoutMs = request.play.awaitReadyTimeoutMs,
                 )
+                var missingSourceTags = emptySet<String>()
                 if (ready) {
                     val expectedTags = buildSet {
                         add(PLAYBACK_SOURCE_TAG_PLAYBACK)
                         addAll(request.assertions.requiredSourceTags)
                     }
-                    awaitRouteTags(
+                    val tagsReady = awaitRouteTags(
                         expectedTags = expectedTags,
                         timeoutMs = DEBUG_SMOKE_PLAYBACK_ROUTE_TIMEOUT_MS,
                     )
+                    if (!tagsReady) {
+                        val actualTags = PlaybackDiagnostics.historySnapshot()
+                            .mapNotNull { it.sourceTag }
+                            .toSet()
+                        missingSourceTags = expectedTags - actualTags
+                    }
                 }
                 val routeHistory = playbackRouteHistory()
                 val playbackRoute = routeHistory.firstOrNull { it.sourceTag == PLAYBACK_SOURCE_TAG_PLAYBACK }
@@ -138,6 +145,25 @@ class DebugSmokeExecutor @Inject constructor(
                             status = "error",
                             stage = "assert",
                             message = "resolver 路由不符合预期: expected=$expectedResolverMode actual=$actualResolverMode",
+                            storageId = prepared.storageId,
+                            playlistId = prepared.playlistId,
+                            musicId = prepared.musicId,
+                            targetEntryPath = prepared.targetEntryPath,
+                            durationMs = readDurationOnMain(),
+                            expectedResolverMode = expectedResolverMode,
+                            actualResolverMode = actualResolverMode,
+                            resolvedUri = resolvedUri,
+                            routeHistory = routeHistory,
+                            currentMetadataDurationSynced = currentDurationSynced,
+                            nextMetadataDurationSynced = nextDurationSynced,
+                        )
+                    }
+                    if (missingSourceTags.isNotEmpty()) {
+                        return@runCatching DebugSmokeResult(
+                            requestId = request.requestId,
+                            status = "error",
+                            stage = "assert",
+                            message = "sourceTag 未在超时内出现: ${missingSourceTags.joinToString()}",
                             storageId = prepared.storageId,
                             playlistId = prepared.playlistId,
                             musicId = prepared.musicId,

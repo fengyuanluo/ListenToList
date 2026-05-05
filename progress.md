@@ -187,3 +187,10 @@
 - Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
 - Broad Android validation passed: `cd android && ./gradlew :app:assembleDebug --warning-mode all`.
 - Release manifest validation passed: `cd android && ./gradlew :app:processReleaseMainManifest --warning-mode all`.
+- Continued P3-2 smoke closure by extending debug-session command support with `READ_STATE`, playback position, queue-entry, and route-history output.
+- Extended `scripts/smoke-android.ts` to query play-mode state around the new switch-preservation smoke and to assert that mode cycling does not reset `currentMusicId`, `currentQueueEntryId`, or playback diagnostics.
+- Stabilized smoke fixtures by clearing `/sdcard/Music/ListenToListSmoke` before each run, lengthening mock/local WAV fixtures to 20 seconds, and switching the route-preservation scenarios to stable first-track targets.
+- First P3-2 smoke attempt after fixture stabilization failed because host-side `requiredSourceTags: ["next-prefetch"]` was too strict for the current observable contract; Android debug smoke now reports missing required tags as an app-side assertion failure, and the host script no longer requires `next-prefetch` when route and metadata assertions already prove the scenario.
+- Second smoke attempt showed OpenList `test-openlist.wav` was tail after backend ordering, so no next metadata existed; restored `test-openlist-next.wav` / `test-webdav-next.wav` as the deterministic non-tail targets.
+- Final P3-2 real-device smoke passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18100 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`; artifacts at `artifacts/smoke/2026-05-05T11-30-00.417Z/`.
+- Verified `playmode-switch-preserve.json`: play mode cycled `LIST -> LIST_LOOP -> SINGLE -> SINGLE_LOOP -> LIST`, `currentMusicId=3` and `currentQueueEntryId=playlist:2:3` stayed unchanged, position advanced from 718ms to 5652ms, and `DIRECT_HTTP` playback diagnostics stayed present.

@@ -82,3 +82,9 @@
 - A startup-only loading gate is safe and low-risk: if playback is loading at folder-play time, skip new folder prefetch; list-mode playback itself still proceeds through `PlayerControllerRepository.playFolder()`.
 - This still does not cancel an already-running folder prefetch if playback enters buffering later. That requires collecting the loading flow and coordinating cancellation inside or near `FolderPrefetcher`, which is broader than the current startup gate.
 - The next actionable P3-2 gap is network type: `ACCESS_NETWORK_STATE` plus `ConnectivityManager.isActiveNetworkMetered` is enough for a conservative startup gate. Unknown connectivity is treated as metered by the context helper so folder prefetch fails closed instead of consuming mobile data.
+
+## Playback Chain Smoke Stability Findings
+- The new play-mode-preservation smoke is sensitive to fixture length and on-device leftovers. A short 1.2-second WAV can advance through multiple tracks before assertions complete, which makes `next-prefetch` and position checks look flaky even when the playback code is correct.
+- The safest smoke fixture shape is to recreate `/sdcard/Music/ListenToListSmoke` on every run, push only the current test WAVs, and use longer mock WAVs so the queue stays on the intended track long enough to observe route history and metadata backfill.
+- For the route-preservation assertion, the target item must be a known non-tail entry after the backend's actual listing/order-key normalization. In the current mock datasets, `test-openlist-next.wav` and `test-webdav-next.wav` are the stable first entries in the Android-created playlist, so they keep next-metadata and next-prefetch observations deterministic.
+- The successful real-device smoke at `artifacts/smoke/2026-05-05T11-30-00.417Z/playmode-switch-preserve.json` proves play-mode cycling preserved `currentMusicId`, `currentQueueEntryId`, position progression, and `DIRECT_HTTP` playback diagnostics.

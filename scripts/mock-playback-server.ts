@@ -140,20 +140,20 @@ function webdavListing(basePath: string, files: Array<{ filePath: string; bytes:
 </multistatus>`;
 }
 
-export function writeSmokeWaveArtifact(filePath: string, frequency = 440): string {
+export function writeSmokeWaveArtifact(filePath: string, frequency = 440, seconds = 20): string {
   mkdirSync(path.dirname(filePath), { recursive: true });
-  writeFileSync(filePath, createWaveBuffer({ frequency }));
+  writeFileSync(filePath, createWaveBuffer({ frequency, seconds }));
   return filePath;
 }
 
 export function startMockPlaybackServer(port = 18080): ServerHandle {
   const openListBuffers: Record<string, Buffer> = {
-    [OPENLIST_FILES[0]]: createWaveBuffer({ frequency: 440 }),
-    [OPENLIST_FILES[1]]: createWaveBuffer({ frequency: 554 }),
+    [OPENLIST_FILES[0]]: createWaveBuffer({ frequency: 440, seconds: 20 }),
+    [OPENLIST_FILES[1]]: createWaveBuffer({ frequency: 554, seconds: 20 }),
   };
   const webDavBuffers: Record<string, Buffer> = {
-    [WEBDAV_FILES[0]]: createWaveBuffer({ frequency: 660 }),
-    [WEBDAV_FILES[1]]: createWaveBuffer({ frequency: 880 }),
+    [WEBDAV_FILES[0]]: createWaveBuffer({ frequency: 660, seconds: 20 }),
+    [WEBDAV_FILES[1]]: createWaveBuffer({ frequency: 880, seconds: 20 }),
   };
 
   const server = Bun.serve({

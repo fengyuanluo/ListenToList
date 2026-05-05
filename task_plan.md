@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P3-1 are implemented and validated, and P3-2 now only has end-to-end smoke coverage gaps that require real weak-network or resume-change scenarios.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 through P3-1 are implemented and validated, P3-2 play-mode preservation smoke is validated on a real device, and remaining P3-2 gaps require real weak-network or remote-file-change injection scenarios.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -88,6 +88,9 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P3-2 network-type targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
 - P3-2 network-type broad validation passed: `./gradlew :app:assembleDebug --warning-mode all`.
 - P3-2 network-type release manifest validation passed: `./gradlew :app:processReleaseMainManifest --warning-mode all`.
+- P3-2 smoke tooling complete: debug session `READ_STATE` now exposes play mode, playback position, queue entry, and route history; smoke validates play-mode cycling without route/position reset.
+- P3-2 smoke validation passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18100 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
+- P3-2 smoke artifact: `artifacts/smoke/2026-05-05T11-30-00.417Z/playmode-switch-preserve.json`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.

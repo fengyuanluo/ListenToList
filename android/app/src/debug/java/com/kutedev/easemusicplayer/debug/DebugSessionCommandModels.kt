@@ -14,6 +14,7 @@ const val DEBUG_SESSION_COMMAND_TOKEN = "listen-to-list-debug-session-command-v1
 enum class DebugSessionCommandType {
     CYCLE_PLAY_MODE,
     STOP_PLAYBACK,
+    READ_STATE,
 }
 
 @Serializable
@@ -34,6 +35,12 @@ data class DebugSessionCommandResult(
     val playbackState: Int? = null,
     val isPlaying: Boolean? = null,
     val currentTitle: String? = null,
+    val currentMusicId: Long? = null,
+    val currentQueueEntryId: String? = null,
+    val currentPositionMs: Long? = null,
+    val bufferedPositionMs: Long? = null,
+    val durationMs: Long? = null,
+    val routeHistory: List<DebugSmokeRouteRecord> = emptyList(),
 )
 
 fun decodeDebugSessionCommandPayload(payloadB64: String): DebugSessionCommandRequest {
