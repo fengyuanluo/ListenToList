@@ -55,6 +55,7 @@ class StorageSearchVM @Inject constructor(
     private val _sections = MutableStateFlow<List<StorageSearchSectionUiState>>(emptyList())
     private val _selectedStorageId = MutableStateFlow(initialSelectedStorageId)
     private var refreshSeq: Long = 0L
+    private val sectionRequestSeq = mutableMapOf<Long, Long>()
 
     val query = _query.asStateFlow()
     val scope = _scope.asStateFlow()
@@ -141,7 +142,7 @@ class StorageSearchVM @Inject constructor(
         if (query.isBlank()) {
             return
         }
-        val token = refreshSeq
+        val token = nextSectionRequestToken(storage.id)
         viewModelScope.launch {
             loadSectionPage(
                 storage = storage,
@@ -163,7 +164,7 @@ class StorageSearchVM @Inject constructor(
         if (query.isBlank()) {
             return
         }
-        val token = refreshSeq
+        val token = nextSectionRequestToken(section.storage.id)
         viewModelScope.launch {
             loadSectionPage(
                 storage = section.storage,
@@ -204,6 +205,7 @@ class StorageSearchVM @Inject constructor(
         scope: StorageSearchScope,
     ) {
         val token = ++refreshSeq
+        sectionRequestSeq.clear()
         _sections.value = storages.map { storage ->
             StorageSearchSectionUiState(storage = storage, loading = true)
         }
@@ -223,6 +225,9 @@ class StorageSearchVM @Inject constructor(
         }
         if (token != refreshSeq) {
             return
+        }
+        storages.forEach { storage ->
+            nextSectionRequestToken(storage.id)
         }
         _sections.value = storages.map { storage ->
             buildSectionState(
@@ -261,7 +266,16 @@ class StorageSearchVM @Inject constructor(
             page = page,
             perPage = STORAGE_AGGREGATE_SEARCH_PAGE_SIZE,
         )
-        if (token != refreshSeq || query != _query.value.trim() || scope != _scope.value) {
+        if (
+            !isSearchRequestStillCurrent(
+                requestToken = token,
+                currentToken = currentSectionRequestToken(storage.id),
+                requestQuery = query,
+                currentQuery = _query.value,
+                requestScope = scope,
+                currentScope = _scope.value,
+            )
+        ) {
             return
         }
         _sections.value = _sections.value.map { section ->
@@ -323,5 +337,15 @@ class StorageSearchVM @Inject constructor(
     private fun persistSearchState(query: String, scope: StorageSearchScope) {
         savedStateHandle[STATE_QUERY] = query
         savedStateHandle[STATE_SCOPE] = scope.name
+    }
+
+    private fun nextSectionRequestToken(storageId: StorageId): Long {
+        val next = (sectionRequestSeq[storageId.value] ?: 0L) + 1L
+        sectionRequestSeq[storageId.value] = next
+        return next
+    }
+
+    private fun currentSectionRequestToken(storageId: StorageId): Long {
+        return sectionRequestSeq[storageId.value] ?: 0L
     }
 }

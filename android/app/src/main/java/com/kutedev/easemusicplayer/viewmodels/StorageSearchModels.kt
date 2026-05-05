@@ -135,10 +135,10 @@ fun mergeSearchPages(
 ): List<StorageSearchEntry> {
     val merged = LinkedHashMap<String, StorageSearchEntry>()
     current.forEach { entry ->
-        merged[entry.path] = entry
+        merged[entry.stableSearchIdentity()] = entry
     }
     next.forEach { entry ->
-        merged[entry.path] = entry
+        merged[entry.stableSearchIdentity()] = entry
     }
     return merged.values.toList()
 }
@@ -149,9 +149,13 @@ fun dedupeSearchEntries(entries: List<StorageSearchEntry>): List<StorageSearchEn
     }
     val deduped = LinkedHashMap<String, StorageSearchEntry>()
     entries.forEach { entry ->
-        deduped[entry.path] = entry
+        deduped[entry.stableSearchIdentity()] = entry
     }
     return deduped.values.toList()
+}
+
+private fun StorageSearchEntry.stableSearchIdentity(): String {
+    return "${storageId.value}:$path:$isDir"
 }
 
 fun resolveSearchTotal(
@@ -167,4 +171,33 @@ fun resolveSearchTotal(
     val baseTotal = previousTotal ?: rawTotal
     val duplicateCount = (previousCount + incomingCount - mergedCount).coerceAtLeast(0)
     return maxOf(mergedCount, baseTotal - duplicateCount)
+}
+
+fun isSearchRequestStillCurrent(
+    requestToken: Long,
+    currentToken: Long,
+    requestQuery: String,
+    currentQuery: String,
+    requestScope: StorageSearchScope,
+    currentScope: StorageSearchScope,
+    requestParentPath: String? = null,
+    currentParentPath: String? = null,
+    liveParentPath: String? = null,
+): Boolean {
+    if (requestToken != currentToken) {
+        return false
+    }
+    if (requestQuery.trim() != currentQuery.trim()) {
+        return false
+    }
+    if (requestScope != currentScope) {
+        return false
+    }
+    if (requestParentPath != null && requestParentPath != currentParentPath) {
+        return false
+    }
+    if (requestParentPath != null && liveParentPath != null && requestParentPath != liveParentPath) {
+        return false
+    }
+    return true
 }

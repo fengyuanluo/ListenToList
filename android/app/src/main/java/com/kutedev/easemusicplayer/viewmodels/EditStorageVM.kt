@@ -462,6 +462,8 @@ class EditStorageVM @Inject constructor(
                 false
             }
 
+            ListStorageEntryChildrenResp.Unavailable,
+            ListStorageEntryChildrenResp.BlockedBySite,
             ListStorageEntryChildrenResp.Unknown -> {
                 _defaultPathFieldError.value = R.string.storage_edit_default_path_invalid
                 toastRepository.emitToastRes(R.string.storage_edit_default_path_invalid)

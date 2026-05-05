@@ -83,6 +83,8 @@ class StorageSearchRepository @Inject constructor(
                 false
             }
 
+            ListStorageEntryChildrenResp.Unavailable,
+            ListStorageEntryChildrenResp.BlockedBySite,
             ListStorageEntryChildrenResp.Unknown -> {
                 toastRepository.emitToastRes(com.kutedev.easemusicplayer.R.string.storage_search_play_failed)
                 false
