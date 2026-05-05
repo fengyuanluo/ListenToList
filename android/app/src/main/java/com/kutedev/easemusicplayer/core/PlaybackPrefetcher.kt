@@ -5,7 +5,6 @@ import androidx.media3.common.C
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.ContentMetadata
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +21,6 @@ class PlaybackPrefetcher(
 ) {
     private var prefetchJob: Job? = null
     private var writer: CacheWriter? = null
-    private val cacheKeyFactory = CacheKeyFactory.DEFAULT
 
     fun prefetch(uri: Uri, bytes: Long) {
         cancel()
@@ -31,12 +29,9 @@ class PlaybackPrefetcher(
         }
 
         prefetchJob = scope.launch(Dispatchers.IO) {
-            val baseSpec = DataSpec.Builder()
-                .setUri(uri)
-                .setPosition(0)
-                .setLength(bytes)
-                .build()
-            val cacheKey = cacheKeyFactory.buildCacheKey(baseSpec)
+            val prefetchSpec = buildPlaybackPrefetchSpec(uri, bytes) ?: return@launch
+            val baseSpec = prefetchSpec.dataSpec
+            val cacheKey = prefetchSpec.cacheKey
             val resolvedLength = resolvePrefetchLength(cacheKey, baseSpec)
             if (resolvedLength <= 0) {
                 return@launch

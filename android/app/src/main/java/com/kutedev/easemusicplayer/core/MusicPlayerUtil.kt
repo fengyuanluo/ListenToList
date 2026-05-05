@@ -151,6 +151,7 @@ private fun buildMediaItemInternal(
     return MediaItem.Builder()
         .setMediaId(mediaIdOverride ?: meta.id.value.toString())
         .setUri(buildPlaybackMusicUri(meta.id))
+        .setCustomCacheKey(buildPlaybackMusicCacheKey(meta.id))
         .setMediaMetadata(mediaMetadata)
         .build()
 }

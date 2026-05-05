@@ -15,7 +15,7 @@ Continue the ListenToList quality sweep requested by the user:
 - Final completion audit maps every explicit objective requirement to real file, command, device, test, and git evidence.
 
 ## Current Phase
-In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1 and P0-2 are committed, P1-1 validation is complete and ready for commit.
+In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by one; P0-1, P0-2, and P1-1 are committed, P1-2/P1-3 validation is complete and ready for commit.
 
 ## Phases
 1. Archive previous BUG batch and update active workspace docs.
@@ -44,6 +44,10 @@ In progress: fixing `docs/BUGs/playback-chain-deep-review.md` issue list one by 
 - P1-1 implementation complete: storage OAuth token updates, storage upserts, and storage removals now invalidate the Android playback resolver cache after successful backend writes.
 - P1-1 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
 - P1-1 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- P1-1 committed as `711fe01 fix: invalidate playback resolver cache on storage changes`.
+- P1-2/P1-3 implementation complete: playback, MediaItems, next prefetch, and folder prefetch now share stable `music:<id>` ExoPlayer cache keys.
+- P1-2/P1-3 targeted validation passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDataUriTest' --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackPrefetchSpecTest' --warning-mode all`.
+- P1-2/P1-3 broad validation passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Phase 1 complete: previous BUG batch archived and active README created.
 - Phase 2 complete: new review batch and task center created.
 - Phase 3 in progress: app shell/navigation/permissions/bootstrap review started.

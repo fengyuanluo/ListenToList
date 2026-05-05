@@ -21,6 +21,17 @@
 - Targeted P1-1 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
 - Broad Android validation passed for P1-1: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
 - Whitespace validation passed for P1-1: `git diff --check`.
+- Committed P1-1 as `711fe01 fix: invalidate playback resolver cache on storage changes`.
+- Started combined P1-2/P1-3 cache-key repair because both issues share the same prefetch/playback key mismatch root cause.
+- Patched `PlaybackDataUri` with stable `music:<id>` playback cache key helpers.
+- Patched `MusicPlaybackDataSource` to set `music:<id>` for direct HTTP, local file, downloaded file, content URI, and stream fallback delegate specs.
+- Patched `MusicPlayerUtil` to set `MediaItem.customCacheKey` to `music:<id>`.
+- Added shared `PlaybackPrefetchSpec` and rewired `PlaybackPrefetcher` / `FolderPrefetcher` to use the same key for precheck metadata and `DataSpec.key`.
+- First P1-2/P1-3 targeted compile attempt failed after helper extraction because `DataSpec` imports were removed while private helper signatures still referenced it.
+- Restored the `DataSpec` imports and reran validation successfully.
+- Targeted P1-2/P1-3 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDataUriTest' --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackPrefetchSpecTest' --warning-mode all`.
+- Broad Android validation passed for P1-2/P1-3: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+- Whitespace validation passed for P1-2/P1-3: `git diff --check`.
 - Continued from active thread goal.
 - Checked git status: clean `master`, synchronized with `origin/master`.
 - Confirmed only root `AGENTS.md` governs this workspace.

@@ -5,7 +5,6 @@ import androidx.media3.common.C
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.ContentMetadata
 import kotlinx.coroutines.CoroutineScope
@@ -27,7 +26,6 @@ class FolderPrefetcher(
 ) {
     private val writers = Collections.synchronizedList(mutableListOf<CacheWriter>())
     private var prefetchJob: Job? = null
-    private val cacheKeyFactory = CacheKeyFactory.DEFAULT
 
     fun prefetch(items: List<Pair<Uri, Long>>) {
         cancel()
@@ -40,12 +38,9 @@ class FolderPrefetcher(
                 if (bytes <= 0) {
                     continue
                 }
-                val baseSpec = DataSpec.Builder()
-                    .setUri(uri)
-                    .setPosition(0)
-                    .setLength(bytes)
-                    .build()
-                val cacheKey = cacheKeyFactory.buildCacheKey(baseSpec)
+                val prefetchSpec = buildPlaybackPrefetchSpec(uri, bytes) ?: continue
+                val baseSpec = prefetchSpec.dataSpec
+                val cacheKey = prefetchSpec.cacheKey
                 val resolvedLength = resolvePrefetchLength(cacheKey, baseSpec)
                 if (resolvedLength <= 0) {
                     continue
