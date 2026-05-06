@@ -29,10 +29,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,6 +65,7 @@ import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonColors
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseIndeterminateBar
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
@@ -78,6 +77,9 @@ import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
 import com.kutedev.easemusicplayer.viewmodels.BrowserScrollSnapshot
 import com.kutedev.easemusicplayer.viewmodels.EditStorageVM
+import com.moriafly.salt.ui.ItemOuterEdit
+import com.moriafly.salt.ui.ItemOuterTip
+import com.moriafly.salt.ui.UnstableSaltUiApi
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -282,7 +284,7 @@ private fun WebdavConfig(
 }
 
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(UnstableSaltUiApi::class, ExperimentalFoundationApi::class)
 private fun DefaultPathConfigSection(
     editStorageVM: EditStorageVM = hiltViewModel()
 ) {
@@ -306,7 +308,7 @@ private fun DefaultPathConfigSection(
                 .fillMaxWidth()
                 .bringIntoViewRequester(bringIntoViewRequester)
         ) {
-            TextField(
+            ItemOuterEdit(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onFocusChanged { state ->
@@ -318,11 +320,10 @@ private fun DefaultPathConfigSection(
                             }
                         }
                     },
-                value = form.defaultPath,
-                onValueChange = { value ->
+                text = form.defaultPath,
+                onChange = { value ->
                     editStorageVM.onDefaultPathInputChange(value)
                 },
-                isError = defaultPathFieldError != null,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(
                     onDone = {
@@ -333,11 +334,7 @@ private fun DefaultPathConfigSection(
             )
         }
         if (defaultPathFieldError != null) {
-            Text(
-                text = stringResource(id = defaultPathFieldError!!),
-                color = MaterialTheme.colorScheme.error,
-                style = EaseTheme.typography.micro,
-            )
+            ItemOuterTip(text = stringResource(id = defaultPathFieldError!!))
         }
         if (defaultPathBrowserExpanded) {
             DefaultPathBrowserDropdown(
@@ -633,7 +630,7 @@ private fun DefaultPathBrowserDropdown(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(0.6f))
+                        EaseIndeterminateBar(modifier = Modifier.fillMaxWidth(0.6f))
                         Text(
                             text = stringResource(id = R.string.storage_edit_default_path_picker_loading),
                             style = EaseTheme.typography.body,
@@ -727,7 +724,7 @@ private fun DefaultPathBrowserList(
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (isRefreshing) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            EaseIndeterminateBar(modifier = Modifier.fillMaxWidth())
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),

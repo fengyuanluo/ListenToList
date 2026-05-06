@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -43,6 +42,7 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseLinearProgressBar
 import com.kutedev.easemusicplayer.components.MusicCover
 import com.kutedev.easemusicplayer.viewmodels.PlayerVM
 import com.kutedev.easemusicplayer.core.LocalNavController
@@ -111,10 +111,10 @@ internal fun MiniPlayerSeekBar(
                 .clip(RoundedCornerShape(EaseTheme.radius.control))
                 .fillMaxWidth()
         ) {
-            LinearProgressIndicator(
+            EaseLinearProgressBar(
                 modifier = Modifier.fillMaxWidth(),
-                progress = { progress },
-                color = MaterialTheme.colorScheme.onSurface,
+                progress = progress,
+                indicatorColor = MaterialTheme.colorScheme.onSurface,
                 trackColor = EaseTheme.surfaces.secondary,
             )
         }

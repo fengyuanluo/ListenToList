@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +54,7 @@ import com.kutedev.easemusicplayer.components.EaseCheckbox
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseIndeterminateBar
 import com.kutedev.easemusicplayer.components.EaseSearchField
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
@@ -154,9 +154,8 @@ private fun StorageBrowserError(
         CurrentStorageStateType.TIMEOUT -> stringResource(id = R.string.import_musics_error_timeout_desc)
         CurrentStorageStateType.UNKNOWN_ERROR -> stringResource(id = R.string.import_musics_error_unknown_desc)
         CurrentStorageStateType.NEED_PERMISSION -> stringResource(id = R.string.import_musics_error_permission_desc)
-        else -> {
-            throw RuntimeException("unsupported type")
-        }
+        CurrentStorageStateType.LOADING,
+        CurrentStorageStateType.OK -> error("unsupported type")
     }
     val actionText = if (type == CurrentStorageStateType.NEED_PERMISSION) {
         stringResource(id = R.string.storage_browser_error_request_permission)
@@ -479,7 +478,7 @@ private fun StorageBrowserEntries(
 
     Column {
         if (isRefreshing) {
-            LinearProgressIndicator(
+            EaseIndeterminateBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("storage_browser_refreshing")

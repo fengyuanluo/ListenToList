@@ -85,7 +85,10 @@
   - Started migrating user-visible shells and high-traffic surfaces: bottom bar, dashboard, settings entry pages, playlist home/detail shells, search state cards, browser state cards, popup menus, and compact mini player.
   - Kept existing route and playback semantics intact while moving visual language toward SaltUI.
   - Replaced the last raw Material3 floating confirm buttons in `ImportPage` and `PlaylistsPage` with SaltUI-backed bottom action surfaces, and updated `PlayerPage` preview controls to use the same button system.
+  - Added a SaltUI-styled loading component layer and used it to replace remaining Material3 progress indicators in import, storage browse/edit, search loading, and mini-player surfaces.
+  - Replaced the default-path editor in `EditStorage` with SaltUI `ItemOuterEdit` / `ItemOuterTip` primitives so the storage editor no longer depends on the raw Material3 text field there.
 - Files created/modified:
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/Loading.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/appbar/BottomBar.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/dashboard/Page.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/*.kt`
@@ -95,6 +98,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/MiniPlayer.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/ImportPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/PlayerPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/devices/EditStorage.kt`
 
 ### Phase 5: Visual Regression, Smoke, and Release
 - **Status:** in_progress
@@ -103,8 +107,10 @@
   - Brought a wireless adb device online and reran instrumentation and smoke on real hardware.
   - Verified JNI/FFI generation still works on the upgraded Android toolchain.
   - Revalidated Kotlin compile, unit tests, and debug packaging after the import/playlist action-surface cleanup.
+  - Reworked the remaining loading surfaces to avoid infinite animations so Compose instrumentation can reach idle again.
+  - Re-ran JNI generation, unit tests, debug packaging, connected instrumentation, release packaging, and smoke on the current final state.
 - Files created/modified:
-  - `artifacts/smoke/2026-05-06T11-18-54.844Z/*`
+  - `artifacts/smoke/2026-05-06T12-26-50.968Z/*`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -146,12 +152,18 @@
 | Debug Kotlin compile (import/playlists action surfaces) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin --warning-mode all` | Import and playlist confirmation-surface cleanup compiles | Passed | ✓ |
 | Debug unit tests (import/playlists action surfaces) | `cd android && ./gradlew --no-daemon testDebugUnitTest --warning-mode all` | Existing JVM/Robolectric coverage still passes after the action-surface cleanup | Passed | ✓ |
 | Debug assemble (import/playlists action surfaces) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Debug APK still packages after the action-surface cleanup | Passed | ✓ |
+| Debug Kotlin compile (loading/editor polish) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin --warning-mode all` | Loading components and default-path editor migration compile | Passed | ✓ |
+| Debug unit tests (loading/editor polish) | `cd android && ./gradlew --no-daemon testDebugUnitTest --warning-mode all` | Unit coverage still passes after the loading/editor polish | Passed | ✓ |
+| Debug assemble (loading/editor polish) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Debug APK still packages after the loading/editor polish | Passed | ✓ |
 | Release assemble | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK builds successfully after SaltUI/Kotlin/Hilt upgrades | Passed | ✓ |
 | ADB availability | `adb devices` | At least one connected device for instrumentation/smoke | `172.26.65.155:44417` connected | ✓ |
 | Connected instrumentation | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite runs on the connected device | Passed, 10 tests on `PHP110 - 15` | ✓ |
 | JNI build | `bun run build:jni` | UniFFI Kotlin bindings and arm64 JNI libs regenerate successfully | Passed | ✓ |
 | Android smoke | `bun run smoke:android --device=172.26.65.155:44417 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` | Real-device playback and download smoke passes after latest UI changes | Passed, artifacts in `artifacts/smoke/2026-05-06T11-18-54.844Z` | ✓ |
 | Android smoke (latest rerun) | `bun run smoke:android --device=172.26.65.155:44417 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` | Real-device playback and download smoke still passes after the latest UI polish | Passed, artifacts in `artifacts/smoke/2026-05-06T11-33-59.132Z` | ✓ |
+| Connected instrumentation (current state rerun) | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite still passes after the loading/editor polish | Passed, 10 tests on `PHP110 - 15` | ✓ |
+| JNI build (current state rerun) | `bun run build:jni` | UniFFI Kotlin bindings and arm64 JNI libs still regenerate after the UI-only polish | Passed | ✓ |
+| Android smoke (current state rerun) | `bun run smoke:android --device=172.26.65.155:44417 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` | Real-device playback and download smoke still passes on the final UI state | Passed, artifacts in `artifacts/smoke/2026-05-06T12-26-50.968Z` | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -163,6 +175,7 @@
 | 2026-05-06 | Parallel debug verification caused Kotlin incremental cache conflicts | 1 | Stopped daemons, cleared the debug Kotlin cache, and reran verification sequentially with `--no-daemon` |
 | 2026-05-06 | Upgrading Hilt to `2.59.2` introduced an AGP 9 compatibility gate | 1 | Backed down to Hilt `2.58`, which keeps AGP 8 compatibility |
 | 2026-05-06 | Initial instrumentation probe failed with `No connected devices!` | 1 | Connected the recorded wireless adb device `172.26.65.155:44417` and reran successfully |
+| 2026-05-06 | Connected instrumentation stopped reaching idle after loading-state polish | 1 | Removed the infinite loading animations from the new SaltUI-style loading components so Compose tests could settle again |
 
 ## 5-Question Reboot Check
 | Question | Answer |
