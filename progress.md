@@ -90,6 +90,7 @@
   - Replaced the remaining Material3 modal bottom sheets in search actions and player queue management with a project-local SaltUI-styled bottom sheet dialog.
   - Removed the root `Scaffold` shell and switched the app root to system-bar insets plus a plain SaltUI-themed container.
   - Replaced the last two Material3 slider usages with a local `EaseSlider` so no raw Material3 interaction controls remain in the app UI layer.
+  - Captured a dark-mode, enlarged-font screenshot of the home shell to verify the SaltUI shell and bottom bar still fit after the final layout refactors.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/Loading.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/BottomSheetDialog.kt`
@@ -107,6 +108,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/Root.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/MiniPlayer.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/ThemeSection.kt`
+  - `artifacts/visual/dark-fontscale-home.png`
 
 ### Phase 5: Visual Regression, Smoke, and Release
 - **Status:** in_progress
@@ -180,6 +182,7 @@
 | Connected instrumentation (final slider polish) | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite still passes after the local slider replacement | Passed, 10 tests on `PHP110 - 15` | ✓ |
 | Android smoke (final slider polish) | `bun run smoke:android --device=172.26.65.155:44417 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` | Real-device playback and download smoke still passes after the local slider replacement | Passed, artifacts in `artifacts/smoke/2026-05-06T13-15-33.940Z` | ✓ |
 | Release assemble (final slider polish) | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK still builds after the local slider replacement | Passed | ✓ |
+| Dark mode + font scale screenshot | adb `cmd uimode night yes`, `settings put system font_scale 1.3`, relaunch app, capture screenshot | SaltUI shell still fits and remains legible in dark mode and larger fonts | Passed, artifact in `artifacts/visual/dark-fontscale-home.png` | ✓ |
 | Release assemble | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK builds successfully after SaltUI/Kotlin/Hilt upgrades | Passed | ✓ |
 | ADB availability | `adb devices` | At least one connected device for instrumentation/smoke | `172.26.65.155:44417` connected | ✓ |
 | Connected instrumentation | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite runs on the connected device | Passed, 10 tests on `PHP110 - 15` | ✓ |
