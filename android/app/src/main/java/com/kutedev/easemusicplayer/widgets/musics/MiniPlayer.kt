@@ -1,6 +1,7 @@
 package com.kutedev.easemusicplayer.widgets.musics
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -198,6 +200,11 @@ private fun MiniPlayerCore(
             MusicCover(
                 modifier = Modifier
                     .clip(RoundedCornerShape(EaseTheme.radius.sm))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
+                        shape = RoundedCornerShape(EaseTheme.radius.sm),
+                    )
                     .size(60.dp),
                 coverDataSourceKey = cover,
             )
@@ -224,13 +231,17 @@ private fun MiniPlayerCore(
             }
         }
         Row(
-            modifier = Modifier.wrapContentWidth(),
+            modifier = Modifier
+                .wrapContentWidth()
+                .clip(RoundedCornerShape(EaseTheme.radius.control))
+                .background(EaseTheme.surfaces.secondary)
+                .padding(horizontal = EaseTheme.spacing.xxs),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (!isPlaying) {
                 EaseIconButton(
                     sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
+                    buttonType = EaseIconButtonType.Primary,
                     disabled = loading,
                     painter = painterResource(R.drawable.icon_play),
                     onClick = onPlay,
@@ -238,7 +249,7 @@ private fun MiniPlayerCore(
             } else {
                 EaseIconButton(
                     sizeType = EaseIconButtonSize.Medium,
-                    buttonType = EaseIconButtonType.Default,
+                    buttonType = EaseIconButtonType.Primary,
                     painter = painterResource(R.drawable.icon_pause),
                     onClick = onPause,
                 )
@@ -252,7 +263,7 @@ private fun MiniPlayerCore(
             )
             EaseIconButton(
                 sizeType = EaseIconButtonSize.Medium,
-                buttonType = EaseIconButtonType.Default,
+                buttonType = EaseIconButtonType.Error,
                 painter = painterResource(R.drawable.icon_stop),
                 onClick = onStop,
             )
