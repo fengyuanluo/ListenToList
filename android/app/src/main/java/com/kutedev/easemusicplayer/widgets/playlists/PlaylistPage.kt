@@ -74,6 +74,9 @@ import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.EditPlaylistVM
 import com.kutedev.easemusicplayer.widgets.appbar.BottomBar
 import com.kutedev.easemusicplayer.widgets.appbar.BottomBarSpacer
+import com.moriafly.salt.ui.ItemOuterLargeTitle
+import com.moriafly.salt.ui.ItemOuterTip
+import com.moriafly.salt.ui.UnstableSaltUiApi
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -100,9 +103,7 @@ private fun RemovePlaylistDialog(
             playlistVM.closeRemoveModal()
         }
     ) {
-        Text(
-            text = "${stringResource(id = R.string.playlist_remove_dialog_text)} “${playlistAbstr.meta.title}”"
-        )
+        ItemOuterTip(text = "${stringResource(id = R.string.playlist_remove_dialog_text)} “${playlistAbstr.meta.title}”")
     }
 }
 
@@ -235,6 +236,7 @@ private fun PlaylistHeader(
     }
 }
 
+@OptIn(UnstableSaltUiApi::class)
 @Composable
 private fun EmptyPlaylist(
     onImport: () -> Unit,
@@ -249,15 +251,18 @@ private fun EmptyPlaylist(
             modifier = Modifier
                 .clip(RoundedCornerShape(EaseTheme.radius.card))
                 .background(EaseTheme.surfaces.secondary)
-                .padding(EaseTheme.spacing.dialogPadding),
+                .padding(
+                    horizontal = EaseTheme.spacing.dialogPadding,
+                    vertical = EaseTheme.spacing.xl,
+                ),
         ) {
             Image(
                 painter = painterResource(id = R.drawable.empty_playlist),
                 contentDescription = null,
             )
-            Box(modifier = Modifier.height(11.dp))
-            Text(
-                text = stringResource(id = R.string.playlist_empty_list)
+            ItemOuterLargeTitle(
+                text = stringResource(id = R.string.playlist_context_menu_import),
+                sub = stringResource(id = R.string.playlist_empty_list),
             )
             Box(modifier = Modifier.height(12.dp))
             EaseTextButton(

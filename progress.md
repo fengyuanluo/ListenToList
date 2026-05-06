@@ -47,6 +47,7 @@
   - Migrated `LogPage` list rows and preview dialog shell onto SaltUI item/dialog patterns.
   - Replaced the remaining search and selection overflow menus in storage search/browser flows with SaltUI `PopupMenu` interactions.
   - Migrated the main search result row and directory entry row closer to SaltUI `Item` semantics for the core browse/search flows.
+  - Polished `PlaylistPage` empty-state and destructive-confirmation surfaces toward SaltUI large-title / outer-tip semantics.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -70,6 +71,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/LogPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/StorageSearchPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/SearchWidgets.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/PlaylistPage.kt`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -100,6 +102,8 @@
 | Debug assemble (search popups) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Search/browser popup menus still package to debug APK | Passed | ✓ |
 | Debug Kotlin compile (browse/search rows) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Search result and directory entry row migration compiles | Passed | ✓ |
 | Debug assemble (browse/search rows) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Search result and directory entry row migration still packages to debug APK | Passed | ✓ |
+| Debug Kotlin compile (playlist details) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Playlist detail empty-state and confirmation migration compiles | Passed | ✓ |
+| Debug assemble (playlist details) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Playlist detail empty-state and confirmation migration still packages to debug APK | Passed | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
