@@ -46,6 +46,7 @@
   - Refined `StorageBrowserPage` blocking error and search-empty states so directory browsing matches the SaltUI state-card style.
   - Migrated `LogPage` list rows and preview dialog shell onto SaltUI item/dialog patterns.
   - Replaced the remaining search and selection overflow menus in storage search/browser flows with SaltUI `PopupMenu` interactions.
+  - Migrated the main search result row and directory entry row closer to SaltUI `Item` semantics for the core browse/search flows.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -68,6 +69,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/devices/StorageBrowserPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/LogPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/StorageSearchPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/SearchWidgets.kt`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -96,6 +98,8 @@
 | Debug assemble (log page) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Log page SaltUI list/dialog migration still packages to debug APK | Passed | ✓ |
 | Debug Kotlin compile (search popups) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Search/browser popup menus compile on SaltUI popup primitives | Passed | ✓ |
 | Debug assemble (search popups) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Search/browser popup menus still package to debug APK | Passed | ✓ |
+| Debug Kotlin compile (browse/search rows) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Search result and directory entry row migration compiles | Passed | ✓ |
+| Debug assemble (browse/search rows) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Search result and directory entry row migration still packages to debug APK | Passed | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

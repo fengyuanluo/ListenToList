@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -29,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +45,8 @@ import uniffi.ease_client_backend.StorageSearchScope
 import uniffi.ease_client_backend.StorageEntryType
 import uniffi.ease_client_backend.StorageSearchEntry as BackendStorageSearchEntry
 import androidx.compose.foundation.ExperimentalFoundationApi
+import com.moriafly.salt.ui.Item
+import com.moriafly.salt.ui.ItemArrowType
 
 data class StorageSearchActionItem(
     val label: String,
@@ -157,56 +157,20 @@ fun StorageSearchResultRow(
         StorageEntryType.IMAGE -> R.drawable.icon_image
         else -> R.drawable.icon_file
     }
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(EaseTheme.radius.card))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onLongClick()
-                },
-            )
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(EaseTheme.radius.compact))
-                .background(EaseTheme.surfaces.secondary)
-        ) {
-            Icon(
-                painter = painterResource(id = iconId),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = entry.name,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = subtitle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = EaseTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    Item(
+        onClick = {},
+        text = entry.name,
+        sub = subtitle,
+        iconPainter = androidx.compose.ui.res.painterResource(id = iconId),
+        arrowType = ItemArrowType.None,
+        modifier = modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                onLongClick()
+            },
+        ),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

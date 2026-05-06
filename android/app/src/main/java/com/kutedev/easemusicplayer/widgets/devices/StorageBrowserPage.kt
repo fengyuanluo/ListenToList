@@ -76,6 +76,8 @@ import com.kutedev.easemusicplayer.widgets.search.StorageSearchLoadingRow
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchResultRow
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchScopeSelector
 import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
+import com.moriafly.salt.ui.Item
+import com.moriafly.salt.ui.ItemArrowType
 import com.moriafly.salt.ui.ItemOuterLargeTitle
 import com.moriafly.salt.ui.UnstableSaltUiApi
 import com.moriafly.salt.ui.popup.PopupMenu
@@ -257,37 +259,18 @@ private fun StorageBrowserEntry(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = rowModifier
-            .padding(0.dp, 10.dp)
             .fillMaxWidth()
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1.0F)
-        ) {
-            Icon(
-                painter = painterResource(id = iconId),
-                contentDescription = null,
-                modifier = Modifier.size(iconSize)
+        Box(modifier = Modifier.weight(1f)) {
+            Item(
+                onClick = {},
+                text = entry.name,
+                sub = sizeText.takeIf { it.isNotBlank() },
+                iconPainter = painterResource(id = iconId),
+                arrowType = ItemArrowType.None,
             )
-            Column {
-                Text(
-                    text = entry.name,
-                    style = EaseTheme.typography.cardTitle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (sizeText.isNotBlank()) {
-                    Text(
-                        text = sizeText,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                        ,
-                        style = EaseTheme.typography.bodySmall,
-                    )
-                }
-            }
         }
-        Box(modifier = Modifier.width(14.dp))
+        Box(modifier = Modifier.width(8.dp))
         Box(modifier = Modifier.size(if (selectMode) checkboxSize else 0.dp)) {
             if (selectMode) {
                 EaseCheckbox(
