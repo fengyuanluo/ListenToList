@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +40,7 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseSlider
 import com.kutedev.easemusicplayer.components.EaseLinearProgressBar
 import com.kutedev.easemusicplayer.components.MusicCover
 import com.kutedev.easemusicplayer.viewmodels.PlayerVM
@@ -118,11 +117,11 @@ internal fun MiniPlayerSeekBar(
                 trackColor = EaseTheme.surfaces.secondary,
             )
         }
-        Slider(
+        EaseSlider(
             value = sliderValue.coerceIn(0f, maxValue),
             onValueChange = { nextValue ->
                 if (totalDurationMS?.takeIf { it > 0uL } == null) {
-                    return@Slider
+                    return@EaseSlider
                 }
                 dragging = true
                 val resolvedPositionMs = resolveSeekPositionFromSliderValue(
@@ -138,7 +137,7 @@ internal fun MiniPlayerSeekBar(
                 if (totalDurationMS?.takeIf { it > 0uL } == null) {
                     dragging = false
                     optimisticPositionMs = null
-                    return@Slider
+                    return@EaseSlider
                 }
                 val resolvedPositionMs = optimisticPositionMs
                     ?: resolveSeekPositionFromSliderValue(
@@ -150,17 +149,13 @@ internal fun MiniPlayerSeekBar(
             },
             valueRange = 0f..maxValue,
             enabled = totalDurationMS?.takeIf { it > 0uL } != null,
-            colors = SliderDefaults.colors(
-                thumbColor = Color.Transparent,
-                activeTrackColor = Color.Transparent,
-                inactiveTrackColor = Color.Transparent,
-                disabledThumbColor = Color.Transparent,
-                disabledActiveTrackColor = Color.Transparent,
-                disabledInactiveTrackColor = Color.Transparent,
-            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(MINI_PLAYER_SEEK_BAR_TEST_TAG),
+            trackColor = Color.Transparent,
+            activeTrackColor = Color.Transparent,
+            thumbColor = Color.Transparent,
+            thumbSize = 1.dp,
         )
     }
 }

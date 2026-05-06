@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
+import com.kutedev.easemusicplayer.components.EaseSlider
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
@@ -87,7 +86,16 @@ private fun GradientSlider(
     modifier: Modifier = Modifier,
     thumbColor: Color = MaterialTheme.colorScheme.primary,
 ) {
-    Box(modifier = modifier) {
+    EaseSlider(
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = valueRange,
+        modifier = modifier,
+        trackColor = Color.Transparent,
+        activeTrackColor = Color.Transparent,
+        thumbColor = thumbColor,
+        thumbSize = 18.dp,
+    ) { _ ->
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -99,17 +107,6 @@ private fun GradientSlider(
                 cornerRadius = CornerRadius(12f, 12f)
             )
         }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            colors = SliderDefaults.colors(
-                activeTrackColor = Color.Transparent,
-                inactiveTrackColor = Color.Transparent,
-                thumbColor = thumbColor,
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 
