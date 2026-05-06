@@ -24,8 +24,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -80,6 +78,8 @@ import com.kutedev.easemusicplayer.widgets.search.StorageSearchScopeSelector
 import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
 import com.moriafly.salt.ui.ItemOuterLargeTitle
 import com.moriafly.salt.ui.UnstableSaltUiApi
+import com.moriafly.salt.ui.popup.PopupMenu
+import com.moriafly.salt.ui.popup.PopupMenuItem
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -557,6 +557,7 @@ private fun StorageBrowserEntries(
     }
 }
 
+@OptIn(UnstableSaltUiApi::class)
 @Composable
 fun StorageBrowserContent(
     title: String,
@@ -674,30 +675,30 @@ fun StorageBrowserContent(
                                 onClick = { selectionActionsExpanded = true },
                                 modifier = Modifier.testTag("storage_browser_selection_actions")
                             )
-                            DropdownMenu(
+                            PopupMenu(
                                 expanded = selectionActionsExpanded,
                                 onDismissRequest = { selectionActionsExpanded = false },
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text(text = stringResource(id = R.string.common_download)) },
+                                PopupMenuItem(
                                     onClick = {
                                         selectionActionsExpanded = false
                                         onDownloadSelected()
-                                    }
+                                    },
+                                    text = stringResource(id = R.string.common_download),
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(text = stringResource(id = R.string.common_add_to_playlist)) },
+                                PopupMenuItem(
                                     onClick = {
                                         selectionActionsExpanded = false
                                         onAddSelectedToPlaylist()
-                                    }
+                                    },
+                                    text = stringResource(id = R.string.common_add_to_playlist),
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(text = stringResource(id = R.string.common_add_to_queue)) },
+                                PopupMenuItem(
                                     onClick = {
                                         selectionActionsExpanded = false
                                         onAddSelectedToQueue()
-                                    }
+                                    },
+                                    text = stringResource(id = R.string.common_add_to_queue),
                                 )
                             }
                         }

@@ -24,8 +24,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,6 +66,8 @@ import com.kutedev.easemusicplayer.viewmodels.toStorageEntry
 import com.kutedev.easemusicplayer.widgets.playlists.CreatePlaylistsDialog
 import com.moriafly.salt.ui.ItemOuterLargeTitle
 import com.moriafly.salt.ui.UnstableSaltUiApi
+import com.moriafly.salt.ui.popup.PopupMenu
+import com.moriafly.salt.ui.popup.PopupMenuItem
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_backend.StorageEntryType
@@ -97,6 +97,7 @@ private fun storageSearchDisplayName(storage: Storage): String {
     }.getOrNull()?.takeIf { it.isNotBlank() } ?: storage.addr
 }
 
+@OptIn(UnstableSaltUiApi::class)
 @Composable
 private fun SearchTopBar(
     query: String,
@@ -142,19 +143,18 @@ private fun SearchTopBar(
                 onClick = { filterExpanded = true },
                 disabled = !canFilter,
             )
-            DropdownMenu(
+            PopupMenu(
                 expanded = filterExpanded,
                 onDismissRequest = { filterExpanded = false },
             ) {
                 StorageSearchScope.values().forEach { targetScope ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(text = stringResource(id = targetScope.labelRes()))
-                        },
+                    PopupMenuItem(
                         onClick = {
                             filterExpanded = false
                             onScopeChange(targetScope)
-                        }
+                        },
+                        text = stringResource(id = targetScope.labelRes()),
+                        selected = targetScope == scope,
                     )
                 }
             }
