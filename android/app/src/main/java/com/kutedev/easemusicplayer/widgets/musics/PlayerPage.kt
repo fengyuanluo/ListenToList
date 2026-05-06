@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -1743,31 +1742,56 @@ private fun MusicLyricPreview() {
             .width(400.dp)
             .height(600.dp)
     ) {
-        Row {
-            Button(
+        Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
+            EaseTextButton(
+                text = "-",
+                type = EaseTextButtonType.Default,
+                size = EaseTextButtonSize.Small,
                 onClick = {
                     if (lyricIndex > 0) {
                         lyricIndex -= 1
                     }
-                }
-            ) {
-                Text(text = "-")
-            }
-            Button(
+                },
+            )
+            EaseTextButton(
+                text = "+",
+                type = EaseTextButtonType.Default,
+                size = EaseTextButtonSize.Small,
                 onClick = {
                     if (lyricIndex < lyricLines.size - 1) {
                         lyricIndex += 1
                     }
-                }
-            ) {
-                Text(text = "+")
-            }
+                },
+            )
         }
-        Row {
-            Button(onClick = { lyricLoadedState = LyricLoadState.MISSING }) { Text("MISSING") }
-            Button(onClick = { lyricLoadedState = LyricLoadState.LOADING }) { Text("LOADING") }
-            Button(onClick = { lyricLoadedState = LyricLoadState.LOADED }) { Text("LOADED") }
-            Button(onClick = { lyricLoadedState = LyricLoadState.FAILED }) { Text("FAILED") }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
+            modifier = Modifier.padding(top = EaseTheme.spacing.xs),
+        ) {
+            EaseTextButton(
+                text = "MISSING",
+                type = EaseTextButtonType.Default,
+                size = EaseTextButtonSize.Small,
+                onClick = { lyricLoadedState = LyricLoadState.MISSING },
+            )
+            EaseTextButton(
+                text = "LOADING",
+                type = EaseTextButtonType.Default,
+                size = EaseTextButtonSize.Small,
+                onClick = { lyricLoadedState = LyricLoadState.LOADING },
+            )
+            EaseTextButton(
+                text = "LOADED",
+                type = EaseTextButtonType.PrimaryVariant,
+                size = EaseTextButtonSize.Small,
+                onClick = { lyricLoadedState = LyricLoadState.LOADED },
+            )
+            EaseTextButton(
+                text = "FAILED",
+                type = EaseTextButtonType.Default,
+                size = EaseTextButtonSize.Small,
+                onClick = { lyricLoadedState = LyricLoadState.FAILED },
+            )
         }
         Box(
             modifier = Modifier

@@ -3,6 +3,7 @@ package com.kutedev.easemusicplayer.widgets.musics
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -24,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +53,9 @@ import com.kutedev.easemusicplayer.components.EaseCheckbox
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
+import com.kutedev.easemusicplayer.components.EaseTextButton
+import com.kutedev.easemusicplayer.components.EaseTextButtonSize
+import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.BrowserPathItem
@@ -198,6 +201,35 @@ private fun ImportEntry(
 }
 
 @Composable
+private fun ImportSelectionBadge(
+    selectedCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(EaseTheme.radius.control)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .clip(shape)
+            .background(EaseTheme.surfaces.secondary)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
+                shape = shape,
+            )
+            .padding(
+                horizontal = EaseTheme.spacing.md,
+                vertical = EaseTheme.spacing.xs,
+            )
+    ) {
+        Text(
+            text = selectedCount.toString(),
+            color = MaterialTheme.colorScheme.primary,
+            style = EaseTheme.typography.label.copy(fontWeight = FontWeight.SemiBold),
+        )
+    }
+}
+
+@Composable
 private fun ImportEntries(
     currentPath: String,
     splitPaths: List<BrowserPathItem>,
@@ -324,20 +356,25 @@ private fun ImportEntries(
             }
         }
         if (selectedCount > 0) {
-            FloatingActionButton(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.surface,
-                onClick = {
-                    navController.popBackStack()
-                    onFinish()
-                },
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .offset((-40).dp, (-40).dp)
+                    .padding(
+                        end = EaseTheme.spacing.xl + EaseTheme.spacing.sm,
+                        bottom = EaseTheme.spacing.xl + EaseTheme.spacing.sm,
+                    )
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.icon_yes),
-                    contentDescription = null,
+                ImportSelectionBadge(selectedCount = selectedCount)
+                EaseTextButton(
+                    text = stringResource(id = R.string.confirm_dialog_btn_ok),
+                    type = EaseTextButtonType.Primary,
+                    size = EaseTextButtonSize.Medium,
+                    onClick = {
+                        navController.popBackStack()
+                        onFinish()
+                    },
                 )
             }
         }
@@ -515,18 +552,16 @@ private fun ImportMusicsError(
         CurrentStorageStateType.TIMEOUT -> stringResource(id = R.string.import_musics_error_timeout_title)
         CurrentStorageStateType.UNKNOWN_ERROR -> stringResource(id = R.string.import_musics_error_unknown_title)
         CurrentStorageStateType.NEED_PERMISSION -> stringResource(id = R.string.import_musics_error_permission_title)
-        else -> {
-            throw RuntimeException("unsupported type")
-        }
+        CurrentStorageStateType.LOADING,
+        CurrentStorageStateType.OK -> error("unsupported type")
     }
     val desc = when (type) {
         CurrentStorageStateType.AUTHENTICATION_FAILED -> stringResource(id = R.string.import_musics_error_authentication_desc)
         CurrentStorageStateType.TIMEOUT -> stringResource(id = R.string.import_musics_error_timeout_desc)
         CurrentStorageStateType.UNKNOWN_ERROR -> stringResource(id = R.string.import_musics_error_unknown_desc)
         CurrentStorageStateType.NEED_PERMISSION -> stringResource(id = R.string.import_musics_error_permission_desc)
-        else -> {
-            throw RuntimeException("unsupported type")
-        }
+        CurrentStorageStateType.LOADING,
+        CurrentStorageStateType.OK -> error("unsupported type")
     }
 
     ImportMusicsWarningImpl(

@@ -84,6 +84,7 @@
 - Actions taken:
   - Started migrating user-visible shells and high-traffic surfaces: bottom bar, dashboard, settings entry pages, playlist home/detail shells, search state cards, browser state cards, popup menus, and compact mini player.
   - Kept existing route and playback semantics intact while moving visual language toward SaltUI.
+  - Replaced the last raw Material3 floating confirm buttons in `ImportPage` and `PlaylistsPage` with SaltUI-backed bottom action surfaces, and updated `PlayerPage` preview controls to use the same button system.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/appbar/BottomBar.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/dashboard/Page.kt`
@@ -92,6 +93,8 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/devices/StorageBrowserPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/*.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/MiniPlayer.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/ImportPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/PlayerPage.kt`
 
 ### Phase 5: Visual Regression, Smoke, and Release
 - **Status:** in_progress
@@ -99,6 +102,7 @@
   - Verified debug and release packaging after SaltUI/Kotlin/Hilt upgrades.
   - Brought a wireless adb device online and reran instrumentation and smoke on real hardware.
   - Verified JNI/FFI generation still works on the upgraded Android toolchain.
+  - Revalidated Kotlin compile, unit tests, and debug packaging after the import/playlist action-surface cleanup.
 - Files created/modified:
   - `artifacts/smoke/2026-05-06T11-18-54.844Z/*`
 
@@ -139,11 +143,15 @@
 | Debug assemble (mini player) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Mini player control-surface polish still packages to debug APK | Passed | ✓ |
 | Debug Kotlin compile (player controls) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Player transport/panel container polish compiles | Passed | ✓ |
 | Debug assemble (player controls) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Player transport/panel container polish still packages to debug APK | Passed | ✓ |
+| Debug Kotlin compile (import/playlists action surfaces) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin --warning-mode all` | Import and playlist confirmation-surface cleanup compiles | Passed | ✓ |
+| Debug unit tests (import/playlists action surfaces) | `cd android && ./gradlew --no-daemon testDebugUnitTest --warning-mode all` | Existing JVM/Robolectric coverage still passes after the action-surface cleanup | Passed | ✓ |
+| Debug assemble (import/playlists action surfaces) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Debug APK still packages after the action-surface cleanup | Passed | ✓ |
 | Release assemble | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK builds successfully after SaltUI/Kotlin/Hilt upgrades | Passed | ✓ |
 | ADB availability | `adb devices` | At least one connected device for instrumentation/smoke | `172.26.65.155:44417` connected | ✓ |
 | Connected instrumentation | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite runs on the connected device | Passed, 10 tests on `PHP110 - 15` | ✓ |
 | JNI build | `bun run build:jni` | UniFFI Kotlin bindings and arm64 JNI libs regenerate successfully | Passed | ✓ |
 | Android smoke | `bun run smoke:android --device=172.26.65.155:44417 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` | Real-device playback and download smoke passes after latest UI changes | Passed, artifacts in `artifacts/smoke/2026-05-06T11-18-54.844Z` | ✓ |
+| Android smoke (latest rerun) | `bun run smoke:android --device=172.26.65.155:44417 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` | Real-device playback and download smoke still passes after the latest UI polish | Passed, artifacts in `artifacts/smoke/2026-05-06T11-33-59.132Z` | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

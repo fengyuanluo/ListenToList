@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -261,21 +260,17 @@ fun PlaylistsSubpage(
         }
 
         if (playlistsMode == PlaylistsMode.Adjust) {
-            FloatingActionButton(
-                containerColor = MaterialTheme.colorScheme.primary,
+            EaseTextButton(
+                text = stringResource(id = R.string.confirm_dialog_btn_ok),
+                type = EaseTextButtonType.Primary,
+                size = EaseTextButtonSize.Medium,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(32.dp),
                 onClick = {
                     playlistsVM.setMode(PlaylistsMode.Normal)
                 },
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.icon_yes),
-                    tint = Color.White,
-                    contentDescription = null,
-                )
-            }
+            )
         }
     }
 }
