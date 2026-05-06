@@ -8,21 +8,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -31,7 +29,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -39,11 +37,14 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
-import com.kutedev.easemusicplayer.viewmodels.StoragesVM
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteAddDevices
 import com.kutedev.easemusicplayer.core.RouteStorageBrowser
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
+import com.kutedev.easemusicplayer.viewmodels.StoragesVM
+import com.moriafly.salt.ui.Item
+import com.moriafly.salt.ui.ItemArrowType
+import com.moriafly.salt.ui.ItemOuterTitle
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_schema.StorageType
 import java.time.LocalDate
@@ -66,16 +67,6 @@ private fun pickDailyQuote(): String {
 }
 
 @Composable
-private fun Title(title: String) {
-    Text(
-        text = title,
-        color = MaterialTheme.colorScheme.primary,
-        style = EaseTheme.typography.body,
-    )
-}
-
-
-@Composable
 private fun ColumnScope.DevicesBlock(
     storageItems: List<Storage>,
 ) {
@@ -84,93 +75,65 @@ private fun ColumnScope.DevicesBlock(
     Column(
         modifier = Modifier
             .weight(1f)
-            .padding(paddingX, paddingY)
+            .padding(horizontal = paddingX, vertical = paddingY),
+        verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
     ) {
         if (storageItems.isEmpty()) {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(72.dp)
-                    .clip(RoundedCornerShape(EaseTheme.radius.card))
+                    .clip(EaseTheme.radius.cardShape())
                     .background(EaseTheme.surfaces.secondary)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
+                        EaseTheme.radius.cardShape(),
+                    )
                     .clickable {
                         navController.navigate(RouteAddDevices((-1).toString()))
                     }
+                    .padding(EaseTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.align(Alignment.Center)
-                ) {
-                    Icon(
-                        modifier = Modifier.size(12.dp),
-                        painter = painterResource(id = R.drawable.icon_plus),
-                        contentDescription = null
-                    )
-                    Box(modifier = Modifier.size(4.dp))
-                    Text(
-                        text = stringResource(id = R.string.dashboard_devices_add),
-                        textAlign = TextAlign.Center
-                    )
-                }
+                Text(
+                    text = stringResource(id = R.string.dashboard_devices_add),
+                    style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(id = R.string.dashboard_devices),
+                    style = EaseTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             return
         }
-        for (item in storageItems) {
+        storageItems.forEach { item ->
+            val title = item.alias.ifBlank { item.addr }
+            val subTitle = item.addr
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(0.dp, 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val title = item.alias.ifBlank {
-                    item.addr
-                }
-                val subTitle = item.addr
-
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
+                Box(modifier = Modifier.weight(1f)) {
+                    Item(
+                        onClick = {
                             navController.navigate(RouteStorageBrowser(item.id.value.toString()))
                         },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(modifier = Modifier.height(48.dp))
-                    Icon(
-                        modifier = Modifier.size(32.dp),
-                        painter = painterResource(id = R.drawable.icon_cloud),
-                        contentDescription = null
+                        text = title,
+                        sub = subTitle.takeIf { it.isNotBlank() },
+                        iconPainter = painterResource(id = R.drawable.icon_cloud),
+                        arrowType = ItemArrowType.None,
                     )
-                    Box(
-                        modifier = Modifier
-                            .width(20.dp)
-                    )
-                    Column {
-                        Text(
-                            text = title,
-                            style = EaseTheme.typography.body,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (subTitle.isNotBlank()) {
-                            Text(
-                                text = subTitle,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = EaseTheme.typography.bodySmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
                 }
-                Box(modifier = Modifier.width(12.dp))
+                Box(modifier = Modifier.width(EaseTheme.spacing.xs))
                 EaseIconButton(
                     sizeType = EaseIconButtonSize.Small,
                     buttonType = EaseIconButtonType.Default,
                     painter = painterResource(id = R.drawable.icon_setting),
                     onClick = {
                         navController.navigate(RouteAddDevices(item.id.value.toString()))
-                    }
+                    },
                 )
             }
         }
@@ -180,7 +143,7 @@ private fun ColumnScope.DevicesBlock(
 @Composable
 private fun QuoteBlock() {
     val quote = remember { pickDailyQuote() }
-    val shape = RoundedCornerShape(EaseTheme.radius.card)
+    val shape = EaseTheme.radius.cardShape()
     val blockAlpha = 0.9f
     val backgroundColor = EaseTheme.surfaces.secondary
     val borderColor = MaterialTheme.colorScheme.outlineVariant
@@ -193,7 +156,7 @@ private fun QuoteBlock() {
             .background(backgroundColor)
             .border(1.dp, borderColor, shape)
             .alpha(blockAlpha)
-            .padding(horizontal = EaseTheme.spacing.lg, vertical = EaseTheme.spacing.sm)
+            .padding(horizontal = EaseTheme.spacing.lg, vertical = EaseTheme.spacing.sm),
     ) {
         Text(
             text = quote,
@@ -219,18 +182,25 @@ fun DashboardSubpage(
         modifier = Modifier
             .fillMaxSize()
             .background(EaseTheme.surfaces.screen)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState()),
     ) {
         Box(modifier = Modifier.height(24.dp))
         QuoteBlock()
-        Box(modifier = Modifier.height(32.dp))
+        Box(modifier = Modifier.height(24.dp))
         Row(
             modifier = Modifier
-                .padding(paddingX, 4.dp)
+                .padding(horizontal = paddingX)
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Title(title = stringResource(id = R.string.dashboard_devices))
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                ItemOuterTitle(text = stringResource(id = R.string.dashboard_devices))
+            }
             if (storageItems.isNotEmpty()) {
                 EaseIconButton(
                     sizeType = EaseIconButtonSize.Small,
@@ -238,10 +208,13 @@ fun DashboardSubpage(
                     painter = painterResource(id = R.drawable.icon_plus),
                     onClick = {
                         navController.navigate(RouteAddDevices((-1).toString()))
-                    }
+                    },
                 )
             }
         }
         DevicesBlock(storageItems)
     }
 }
+
+private fun com.kutedev.easemusicplayer.ui.theme.EaseRadius.cardShape() =
+    androidx.compose.foundation.shape.RoundedCornerShape(card)
