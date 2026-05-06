@@ -52,22 +52,13 @@ import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.ui.theme.ThemePresets
 import com.kutedev.easemusicplayer.singleton.PlaylistDisplayMode
 import com.kutedev.easemusicplayer.viewmodels.ThemeVM
+import com.moriafly.salt.ui.ItemOuterTip
+import com.moriafly.salt.ui.ItemOuterTitle
 import kotlin.math.roundToInt
 
 @Composable
 private fun SectionTitle(title: String) {
-    Column {
-        Text(
-            text = title,
-            style = EaseTheme.typography.body,
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant)
-        )
-    }
+    ItemOuterTitle(text = title)
 }
 
 @Composable
@@ -176,11 +167,7 @@ fun ThemeSection(
             SectionTitle(title = stringResource(id = R.string.setting_theme_title))
             Spacer(modifier = Modifier.height(12.dp))
         }
-        Text(
-            text = stringResource(id = R.string.setting_theme_preset),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-        )
+        ItemOuterTitle(text = stringResource(id = R.string.setting_theme_preset))
         Spacer(modifier = Modifier.height(8.dp))
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -196,11 +183,7 @@ fun ThemeSection(
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = stringResource(id = R.string.setting_theme_palette),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-        )
+        ItemOuterTitle(text = stringResource(id = R.string.setting_theme_palette))
         Spacer(modifier = Modifier.height(8.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -216,18 +199,10 @@ fun ThemeSection(
             val hex = remember(previewColor) {
                 String.format("#%06X", 0xFFFFFF and previewColor.toArgb())
             }
-            Text(
-                text = "${stringResource(id = R.string.setting_theme_preview)} $hex",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = EaseTheme.typography.bodySmall,
-            )
+            ItemOuterTip(text = "${stringResource(id = R.string.setting_theme_preview)} $hex")
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "${stringResource(id = R.string.setting_theme_hue)} ${hue.roundToInt()} deg",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-        )
+        ItemOuterTitle(text = "${stringResource(id = R.string.setting_theme_hue)} ${hue.roundToInt()} deg")
         GradientSlider(
             value = hue,
             onValueChange = { nextHue ->
@@ -238,11 +213,7 @@ fun ThemeSection(
             gradientColors = hueGradient,
             modifier = Modifier.padding(vertical = 4.dp)
         )
-        Text(
-            text = "${stringResource(id = R.string.setting_theme_saturation)} ${(saturation * 100).roundToInt()}%",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-        )
+        ItemOuterTitle(text = "${stringResource(id = R.string.setting_theme_saturation)} ${(saturation * 100).roundToInt()}%")
         GradientSlider(
             value = saturation,
             onValueChange = { nextSaturation ->
@@ -257,11 +228,7 @@ fun ThemeSection(
             modifier = Modifier.padding(vertical = 4.dp),
             thumbColor = previewColor,
         )
-        Text(
-            text = "${stringResource(id = R.string.setting_theme_brightness)} ${(value * 100).roundToInt()}%",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-        )
+        ItemOuterTitle(text = "${stringResource(id = R.string.setting_theme_brightness)} ${(value * 100).roundToInt()}%")
         GradientSlider(
             value = value,
             onValueChange = { nextValue ->
@@ -277,11 +244,7 @@ fun ThemeSection(
             thumbColor = previewColor,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = stringResource(id = R.string.setting_theme_background),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-        )
+        ItemOuterTitle(text = stringResource(id = R.string.setting_theme_background))
         Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
@@ -323,11 +286,7 @@ fun ThemeSection(
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = stringResource(id = R.string.setting_theme_home_playlist),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
-        )
+        ItemOuterTitle(text = stringResource(id = R.string.setting_theme_home_playlist))
         Spacer(modifier = Modifier.height(8.dp))
         FormSwitch(
             label = stringResource(id = R.string.setting_theme_home_playlist_list_mode),
@@ -342,11 +301,7 @@ fun ThemeSection(
                 )
             },
         )
-        Text(
-            text = stringResource(id = R.string.setting_theme_home_playlist_list_mode_hint),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.micro,
-        )
+        ItemOuterTip(text = stringResource(id = R.string.setting_theme_home_playlist_list_mode_hint))
         Spacer(modifier = Modifier.height(16.dp))
     }
 }

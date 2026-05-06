@@ -6,13 +6,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
+import com.moriafly.salt.ui.ItemOuterTip
 
 private val paddingX = SettingPaddingX
 
@@ -26,12 +25,7 @@ fun ThemeSettingsPage() {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = paddingX)
         ) {
-            Text(
-                modifier = Modifier.padding(top = EaseTheme.spacing.xs),
-                text = stringResource(id = R.string.setting_theme_entry_desc),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = EaseTheme.typography.body,
-            )
+            ItemOuterTip(text = stringResource(id = R.string.setting_theme_entry_desc))
             Box(modifier = Modifier.height(EaseTheme.spacing.md))
             ThemeSection(showTitle = false)
             Box(modifier = Modifier.height(EaseTheme.spacing.xl))

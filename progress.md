@@ -38,6 +38,7 @@
   - Migrated the home bottom bar shell to SaltUI `BottomBar` / `BottomBarItem` while preserving the mini-player overlay and page-switch behavior.
   - Migrated the settings home surface and settings subpage header scaffold onto SaltUI `Item`, `ItemOuterTitle`, and `TitleBar` primitives.
   - Migrated `DashboardSubpage` storage entry surfaces toward SaltUI list-item semantics while keeping existing storage navigation and settings entry actions.
+  - Polished the theme settings page with SaltUI outer titles and tip text to reduce the remaining Material3-heavy shell feel.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -50,6 +51,8 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/Common.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/Page.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/dashboard/Page.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/ThemeSection.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/ThemeSettingsPage.kt`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -62,6 +65,8 @@
 | Debug assemble (settings shell) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Settings shell/page migration still packages to debug APK | Passed | ✓ |
 | Debug Kotlin compile (dashboard) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Dashboard core page migration compiles | Passed | ✓ |
 | Debug assemble (dashboard) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Dashboard core page migration still packages to debug APK | Passed | ✓ |
+| Debug Kotlin compile (theme settings) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Theme settings page polish compiles | Passed | ✓ |
+| Debug assemble (theme settings) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Theme settings page polish still packages to debug APK | Passed | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
