@@ -78,6 +78,8 @@ import com.kutedev.easemusicplayer.widgets.search.StorageSearchLoadingRow
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchResultRow
 import com.kutedev.easemusicplayer.widgets.search.StorageSearchScopeSelector
 import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
+import com.moriafly.salt.ui.ItemOuterLargeTitle
+import com.moriafly.salt.ui.UnstableSaltUiApi
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -129,6 +131,7 @@ private fun StorageBrowserSkeleton() {
     }
 }
 
+@OptIn(UnstableSaltUiApi::class)
 @Composable
 private fun StorageBrowserError(
     type: CurrentStorageStateType,
@@ -189,16 +192,10 @@ private fun StorageBrowserError(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
-            Text(
+            ItemOuterLargeTitle(
                 text = title,
-                color = MaterialTheme.colorScheme.error,
-                style = EaseTheme.typography.cardTitle,
-            )
-            Text(
-                text = desc,
-                modifier = Modifier.widthIn(0.dp, 240.dp)
-                ,
-                style = EaseTheme.typography.body,
+                sub = desc,
+                modifier = Modifier.widthIn(0.dp, 240.dp),
             )
             Box(modifier = Modifier.height(12.dp))
             EaseTextButton(
@@ -349,6 +346,7 @@ private fun StorageBrowserSearchHeader(
     }
 }
 
+@OptIn(UnstableSaltUiApi::class)
 @Composable
 private fun StorageBrowserSearchResults(
     searchState: StorageSearchListUiState,
@@ -379,22 +377,15 @@ private fun StorageBrowserSearchResults(
 
         !searchState.hasResults -> {
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .padding(horizontal = 32.dp)
                     .clip(RoundedCornerShape(EaseTheme.radius.card))
                     .background(EaseTheme.surfaces.secondary)
-                    .padding(EaseTheme.spacing.lg)
+                    .padding(EaseTheme.spacing.sm)
             ) {
-                Text(
+                ItemOuterLargeTitle(
                     text = stringResource(id = R.string.storage_search_empty_title),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
-                )
-                Text(
-                    text = stringResource(id = R.string.storage_search_empty_desc),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = EaseTheme.typography.bodySmall,
+                    sub = stringResource(id = R.string.storage_search_empty_desc),
                 )
             }
         }

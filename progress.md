@@ -43,6 +43,7 @@
   - Refined the playlist home surface empty state and top control row so the first home page entry aligns better with SaltUI shell conventions.
   - Migrated `LrcApiSettingsPage` and `DebugMorePage` content rows and helper text further into SaltUI item/outer-tip patterns.
   - Refined `StorageSearchPage` message states so idle, empty, and no-instance cards use SaltUI large-title semantics.
+  - Refined `StorageBrowserPage` blocking error and search-empty states so directory browsing matches the SaltUI state-card style.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -62,6 +63,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/LrcApiSettingsPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/DebugMorePage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/StorageSearchPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/devices/StorageBrowserPage.kt`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -84,6 +86,8 @@
 | Debug assemble (settings content) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | LrcApi and debug settings content migration still packages to debug APK | Passed | ✓ |
 | Debug Kotlin compile (search states) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Storage search state-card migration compiles | Passed | ✓ |
 | Debug assemble (search states) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Storage search state-card migration still packages to debug APK | Passed | ✓ |
+| Debug Kotlin compile (browser states) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Storage browser state-card migration compiles | Passed | ✓ |
+| Debug assemble (browser states) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Storage browser state-card migration still packages to debug APK | Passed | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
