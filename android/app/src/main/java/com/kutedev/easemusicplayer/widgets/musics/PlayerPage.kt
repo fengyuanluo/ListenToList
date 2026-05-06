@@ -6,6 +6,7 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -1073,6 +1074,14 @@ private fun TransportControls(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(24.dp),
         modifier = modifier
+            .clip(RoundedCornerShape(EaseTheme.radius.hero))
+            .background(EaseTheme.surfaces.secondary)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f),
+                shape = RoundedCornerShape(EaseTheme.radius.hero),
+            )
+            .padding(horizontal = EaseTheme.spacing.lg, vertical = EaseTheme.spacing.sm),
     ) {
         EaseIconButton(
             sizeType = EaseIconButtonSize.Large,
@@ -1147,7 +1156,16 @@ private fun MusicPanel(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(EaseTheme.radius.card))
+            .background(EaseTheme.surfaces.secondary)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f),
+                shape = RoundedCornerShape(EaseTheme.radius.card),
+            )
+            .padding(horizontal = EaseTheme.spacing.md, vertical = EaseTheme.spacing.sm)
     ) {
         EaseIconButton(
             sizeType = EaseIconButtonSize.MediumLarge,

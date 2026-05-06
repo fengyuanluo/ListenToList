@@ -50,6 +50,7 @@
   - Polished `PlaylistPage` empty-state and destructive-confirmation surfaces toward SaltUI large-title / outer-tip semantics.
   - Refined playlist grid/list item containers so the home playlist surface has consistent SaltUI-like card borders and spacing.
   - Polished `MiniPlayer` control emphasis and surface layering so the compact player better matches the SaltUI visual direction.
+  - Polished `PlayerPage` transport and panel control containers so the main player controls follow the SaltUI surface hierarchy more closely.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -76,6 +77,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/PlaylistPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/PlaylistsPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/MiniPlayer.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/PlayerPage.kt`
 
 ### Phase 4: Navigation Shell & Core Pages
 - **Status:** in_progress
@@ -135,6 +137,8 @@
 | Debug assemble (playlist cards) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Playlist home card/list container polish still packages to debug APK | Passed | ✓ |
 | Debug Kotlin compile (mini player) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Mini player control-surface polish compiles | Passed | ✓ |
 | Debug assemble (mini player) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Mini player control-surface polish still packages to debug APK | Passed | ✓ |
+| Debug Kotlin compile (player controls) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Player transport/panel container polish compiles | Passed | ✓ |
+| Debug assemble (player controls) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Player transport/panel container polish still packages to debug APK | Passed | ✓ |
 | Release assemble | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK builds successfully after SaltUI/Kotlin/Hilt upgrades | Passed | ✓ |
 | ADB availability | `adb devices` | At least one connected device for instrumentation/smoke | `172.26.65.155:44417` connected | ✓ |
 | Connected instrumentation | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite runs on the connected device | Passed, 10 tests on `PHP110 - 15` | ✓ |
