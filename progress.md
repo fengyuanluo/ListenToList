@@ -48,6 +48,7 @@
   - Replaced the remaining search and selection overflow menus in storage search/browser flows with SaltUI `PopupMenu` interactions.
   - Migrated the main search result row and directory entry row closer to SaltUI `Item` semantics for the core browse/search flows.
   - Polished `PlaylistPage` empty-state and destructive-confirmation surfaces toward SaltUI large-title / outer-tip semantics.
+  - Refined playlist grid/list item containers so the home playlist surface has consistent SaltUI-like card borders and spacing.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -72,6 +73,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/StorageSearchPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/SearchWidgets.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/PlaylistPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/PlaylistsPage.kt`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -104,6 +106,10 @@
 | Debug assemble (browse/search rows) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Search result and directory entry row migration still packages to debug APK | Passed | ✓ |
 | Debug Kotlin compile (playlist details) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Playlist detail empty-state and confirmation migration compiles | Passed | ✓ |
 | Debug assemble (playlist details) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Playlist detail empty-state and confirmation migration still packages to debug APK | Passed | ✓ |
+| Debug Kotlin compile (playlist cards) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Playlist home card/list container polish compiles | Passed | ✓ |
+| Debug assemble (playlist cards) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Playlist home card/list container polish still packages to debug APK | Passed | ✓ |
+| Release assemble | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK builds successfully after SaltUI/Kotlin/Hilt upgrades | Passed | ✓ |
+| ADB availability | `adb devices` | At least one connected device for instrumentation/smoke | No devices attached | blocked |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

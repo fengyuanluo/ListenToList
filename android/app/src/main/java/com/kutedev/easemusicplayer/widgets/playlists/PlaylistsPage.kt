@@ -3,6 +3,7 @@ package com.kutedev.easemusicplayer.widgets.playlists
 import EaseImage
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -378,7 +379,10 @@ private fun ReorderableCollectionItemScope.PlaylistGridItem(
         )
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .clip(shape)
+                .background(EaseTheme.surfaces.secondary)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.Start,
         ) {
@@ -452,6 +456,11 @@ private fun ReorderableCollectionItemScope.PlaylistListItem(
             .then(dragModifier)
             .clip(shape)
             .background(EaseTheme.surfaces.secondary)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
+                shape = shape,
+            )
             .then(
                 if (mode == PlaylistsMode.Adjust) {
                     Modifier
@@ -500,6 +509,11 @@ private fun ReorderableCollectionItemScope.PlaylistListItem(
                     .size(36.dp)
                     .clip(RoundedCornerShape(EaseTheme.radius.control))
                     .background(EaseTheme.surfaces.card)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
+                        shape = RoundedCornerShape(EaseTheme.radius.control),
+                    )
                     .draggableHandle(
                         onDragStopped = { playlistsVM.commitMove() },
                     )
