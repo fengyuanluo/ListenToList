@@ -6,10 +6,12 @@ import androidx.compose.animation.slideIn
 import androidx.compose.animation.slideOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,6 +69,7 @@ fun Root() {
         val themeVM: ThemeVM = hiltViewModel()
         val themeSettings by themeVM.settings.collectAsState()
         val layoutDirection = LocalLayoutDirection.current
+        val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
 
         EaseMusicPlayerTheme(themeSettings = themeSettings) {
             val surfaces = EaseTheme.surfaces
@@ -89,131 +92,126 @@ fun Root() {
                             .background(surfaces.backdropScrim)
                     )
                 }
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = Color.Transparent,
-                ) { scaffoldPadding ->
-                    Column(
-                        modifier = Modifier
-                            .padding(
-                                start = scaffoldPadding.calculateLeftPadding(layoutDirection),
-                                end = scaffoldPadding.calculateRightPadding(layoutDirection),
-                                top = scaffoldPadding.calculateTopPadding(),
-                            )
-                            .fillMaxSize()
+                Column(
+                    modifier = Modifier
+                        .padding(
+                            start = systemBarsPadding.calculateLeftPadding(layoutDirection),
+                            end = systemBarsPadding.calculateRightPadding(layoutDirection),
+                            top = systemBarsPadding.calculateTopPadding(),
+                        )
+                        .fillMaxSize()
+                ) {
+                    Box(
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Box(
-                            modifier = Modifier.weight(1f)
+                        NavHost(
+                            modifier = Modifier
+                                .fillMaxSize(),
+                            navController = controller,
+                            startDestination = RouteHome(),
+                            enterTransition = {
+                                slideIn(
+                                    animationSpec = tween(300),
+                                    initialOffset = { fullSize ->
+                                        IntOffset(fullSize.width, 0)
+                                    })
+                            },
+                            exitTransition = {
+                                slideOut(
+                                    animationSpec = tween(300),
+                                    targetOffset = { fullSize ->
+                                        IntOffset(-fullSize.width, 0)
+                                    })
+                            },
+                            popEnterTransition = {
+                                slideIn(
+                                    animationSpec = tween(300),
+                                    initialOffset = { fullSize ->
+                                        IntOffset(-fullSize.width, 0)
+                                    })
+                            },
+                            popExitTransition = {
+                                slideOut(
+                                    animationSpec = tween(300),
+                                    targetOffset = { fullSize ->
+                                        IntOffset(fullSize.width, 0)
+                                    })
+                            },
                         ) {
-                            NavHost(
-                                modifier = Modifier
-                                    .fillMaxSize(),
-                                navController = controller,
-                                startDestination = RouteHome(),
-                                enterTransition = {
-                                    slideIn(
-                                        animationSpec = tween(300),
-                                        initialOffset = { fullSize ->
-                                            IntOffset(fullSize.width, 0)
-                                        })
-                                },
-                                exitTransition = {
-                                    slideOut(
-                                        animationSpec = tween(300),
-                                        targetOffset = { fullSize ->
-                                            IntOffset(-fullSize.width, 0)
-                                        })
-                                },
-                                popEnterTransition = {
-                                    slideIn(
-                                        animationSpec = tween(300),
-                                        initialOffset = { fullSize ->
-                                            IntOffset(-fullSize.width, 0)
-                                        })
-                                },
-                                popExitTransition = {
-                                    slideOut(
-                                        animationSpec = tween(300),
-                                        targetOffset = { fullSize ->
-                                            IntOffset(fullSize.width, 0)
-                                        })
-                                },
+                            composable(RouteHome()) {
+                                HomePage(
+                                    scaffoldPadding = systemBarsPadding,
+                                )
+                                CreatePlaylistsDialog()
+                                TimeToPauseModal()
+                            }
+                            composable(
+                                RouteAddDevices("{id}"),
+                                arguments = listOf(navArgument("id") { type = NavType.LongType })
                             ) {
-                                composable(RouteHome()) {
-                                    HomePage(
-                                        scaffoldPadding = scaffoldPadding,
-                                    )
-                                    CreatePlaylistsDialog()
-                                    TimeToPauseModal()
-                                }
-                                composable(
-                                    RouteAddDevices("{id}"),
-                                    arguments = listOf(navArgument("id") { type = NavType.LongType })
-                                ) {
-                                    EditStoragesPage()
-                                }
-                                composable(
-                                    RouteStorageBrowser("{id}", "{path}", rawPath = true),
-                                    arguments = listOf(
-                                        navArgument("id") { type = NavType.LongType },
-                                        navArgument("path") {
-                                            type = NavType.StringType
-                                            nullable = true
-                                            defaultValue = null
-                                        },
-                                    )
-                                ) {
-                                    StorageBrowserPage()
-                                }
-                                composable(
-                                    RouteStorageSearch("{query}", rawQuery = true),
-                                    arguments = listOf(
-                                        navArgument("query") {
-                                            type = NavType.StringType
-                                            defaultValue = ""
-                                        }
-                                    )
-                                ) {
-                                    StorageSearchPage()
-                                }
-                                composable(
-                                    RoutePlaylist("{id}"),
-                                    arguments = listOf(navArgument("id") { type = NavType.LongType })
-                                ) {
-                                    PlaylistPage(
-                                        scaffoldPadding = scaffoldPadding,
-                                    )
-                                    EditPlaylistsDialog()
-                                }
-                                composable(
-                                    RouteImport("{type}"),
-                                    arguments = listOf(navArgument("type") { type = NavType.StringType } )
-                                ){
-                                    ImportMusicsPage()
-                                }
-                                composable(RouteMusicPlayer()) {
-                                    MusicPlayerPage()
-                                    TimeToPauseModal()
-                                }
-                                composable(RouteLog()) {
-                                    LogPage()
-                                }
-                                composable(RouteDebugMore()) {
-                                    DebugMorePage()
-                                }
-                                composable(RouteThemeSettings()) {
-                                    ThemeSettingsPage()
-                                }
-                                composable(RouteLrcApiSettings()) {
-                                    LrcApiSettingsPage()
-                                }
-                                composable(RouteDownloadManager()) {
-                                    DownloadManagerPage()
-                                }
+                                EditStoragesPage()
+                            }
+                            composable(
+                                RouteStorageBrowser("{id}", "{path}", rawPath = true),
+                                arguments = listOf(
+                                    navArgument("id") { type = NavType.LongType },
+                                    navArgument("path") {
+                                        type = NavType.StringType
+                                        nullable = true
+                                        defaultValue = null
+                                    },
+                                )
+                            ) {
+                                StorageBrowserPage()
+                            }
+                            composable(
+                                RouteStorageSearch("{query}", rawQuery = true),
+                                arguments = listOf(
+                                    navArgument("query") {
+                                        type = NavType.StringType
+                                        defaultValue = ""
+                                    }
+                                )
+                            ) {
+                                StorageSearchPage()
+                            }
+                            composable(
+                                RoutePlaylist("{id}"),
+                                arguments = listOf(navArgument("id") { type = NavType.LongType })
+                            ) {
+                                PlaylistPage(
+                                    scaffoldPadding = systemBarsPadding,
+                                )
+                                EditPlaylistsDialog()
+                            }
+                            composable(
+                                RouteImport("{type}"),
+                                arguments = listOf(navArgument("type") { type = NavType.StringType } )
+                            ){
+                                ImportMusicsPage()
+                            }
+                            composable(RouteMusicPlayer()) {
+                                MusicPlayerPage()
+                                TimeToPauseModal()
+                            }
+                            composable(RouteLog()) {
+                                LogPage()
+                            }
+                            composable(RouteDebugMore()) {
+                                DebugMorePage()
+                            }
+                            composable(RouteThemeSettings()) {
+                                ThemeSettingsPage()
+                            }
+                            composable(RouteLrcApiSettings()) {
+                                LrcApiSettingsPage()
+                            }
+                            composable(RouteDownloadManager()) {
+                                DownloadManagerPage()
                             }
                         }
-                        ToastFrame()
                     }
+                    ToastFrame()
                 }
             }
         }

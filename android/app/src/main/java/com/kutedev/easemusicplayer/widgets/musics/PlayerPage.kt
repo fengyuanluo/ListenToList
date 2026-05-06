@@ -29,10 +29,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,6 +76,7 @@ import com.kutedev.easemusicplayer.components.EaseIconButton
 import com.kutedev.easemusicplayer.components.EaseIconButtonSize
 import com.kutedev.easemusicplayer.components.EaseIconButtonType
 import com.kutedev.easemusicplayer.components.EaseIconButtonColors
+import com.kutedev.easemusicplayer.components.EaseBottomSheetDialog
 import com.kutedev.easemusicplayer.components.EaseFlatSwitch
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
@@ -1340,7 +1339,6 @@ private fun ReorderableCollectionItemScope.PlaybackQueueRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlaybackQueueSheet(
     queue: PlaybackQueueSnapshot,
@@ -1378,7 +1376,7 @@ private fun PlaybackQueueSheet(
         }
     }
 
-    ModalBottomSheet(
+    EaseBottomSheetDialog(
         onDismissRequest = onDismiss,
         containerColor = EaseTheme.surfaces.dialog,
     ) {

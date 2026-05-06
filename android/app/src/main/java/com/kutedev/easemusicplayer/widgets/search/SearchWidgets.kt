@@ -17,9 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EasePulsingDot
+import com.kutedev.easemusicplayer.components.EaseBottomSheetDialog
 import com.kutedev.easemusicplayer.components.EaseTextButton
 import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
@@ -173,7 +172,6 @@ fun StorageSearchResultRow(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StorageSearchActionSheet(
     title: String,
@@ -181,7 +179,7 @@ fun StorageSearchActionSheet(
     items: List<StorageSearchActionItem>,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    EaseBottomSheetDialog(
         onDismissRequest = onDismiss,
         containerColor = EaseTheme.surfaces.dialog,
     ) {

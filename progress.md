@@ -87,8 +87,11 @@
   - Replaced the last raw Material3 floating confirm buttons in `ImportPage` and `PlaylistsPage` with SaltUI-backed bottom action surfaces, and updated `PlayerPage` preview controls to use the same button system.
   - Added a SaltUI-styled loading component layer and used it to replace remaining Material3 progress indicators in import, storage browse/edit, search loading, and mini-player surfaces.
   - Replaced the default-path editor in `EditStorage` with SaltUI `ItemOuterEdit` / `ItemOuterTip` primitives so the storage editor no longer depends on the raw Material3 text field there.
+  - Replaced the remaining Material3 modal bottom sheets in search actions and player queue management with a project-local SaltUI-styled bottom sheet dialog.
+  - Removed the root `Scaffold` shell and switched the app root to system-bar insets plus a plain SaltUI-themed container.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/Loading.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/BottomSheetDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/appbar/BottomBar.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/dashboard/Page.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/*.kt`
@@ -99,6 +102,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/ImportPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/PlayerPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/devices/EditStorage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/Root.kt`
 
 ### Phase 5: Visual Regression, Smoke, and Release
 - **Status:** in_progress
@@ -109,8 +113,10 @@
   - Revalidated Kotlin compile, unit tests, and debug packaging after the import/playlist action-surface cleanup.
   - Reworked the remaining loading surfaces to avoid infinite animations so Compose instrumentation can reach idle again.
   - Re-ran JNI generation, unit tests, debug packaging, connected instrumentation, release packaging, and smoke on the current final state.
+  - Replaced the remaining modal bottom sheets and the root scaffold so the app shell is now fully SaltUI-themed apart from the slider primitives that SaltUI does not expose publicly to the app layer.
 - Files created/modified:
   - `artifacts/smoke/2026-05-06T12-26-50.968Z/*`
+  - `artifacts/smoke/2026-05-06T12-52-53.620Z/*`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -155,6 +161,13 @@
 | Debug Kotlin compile (loading/editor polish) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin --warning-mode all` | Loading components and default-path editor migration compile | Passed | ✓ |
 | Debug unit tests (loading/editor polish) | `cd android && ./gradlew --no-daemon testDebugUnitTest --warning-mode all` | Unit coverage still passes after the loading/editor polish | Passed | ✓ |
 | Debug assemble (loading/editor polish) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Debug APK still packages after the loading/editor polish | Passed | ✓ |
+| Debug Kotlin compile (sheet/root polish) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin --warning-mode all` | Bottom sheet dialog and root shell migration compile | Passed | ✓ |
+| Debug unit tests (sheet/root polish) | `cd android && ./gradlew --no-daemon testDebugUnitTest --warning-mode all` | Unit coverage still passes after the bottom sheet/root polish | Passed | ✓ |
+| Debug assemble (sheet/root polish) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Debug APK still packages after the bottom sheet/root polish | Passed | ✓ |
+| Connected instrumentation (sheet/root polish) | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite still passes after the bottom sheet/root polish | Passed, 10 tests on `PHP110 - 15` | ✓ |
+| JNI build (sheet/root polish) | `bun run build:jni` | UniFFI Kotlin bindings and arm64 JNI libs still regenerate after the final UI-only polish | Passed | ✓ |
+| Android smoke (sheet/root polish) | `bun run smoke:android --device=172.26.65.155:44417 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` | Real-device playback and download smoke still passes after the final UI-only polish | Passed, artifacts in `artifacts/smoke/2026-05-06T12-52-53.620Z` | ✓ |
+| Release assemble (sheet/root polish) | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK still builds after the final UI-only polish | Passed | ✓ |
 | Release assemble | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK builds successfully after SaltUI/Kotlin/Hilt upgrades | Passed | ✓ |
 | ADB availability | `adb devices` | At least one connected device for instrumentation/smoke | `172.26.65.155:44417` connected | ✓ |
 | Connected instrumentation | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite runs on the connected device | Passed, 10 tests on `PHP110 - 15` | ✓ |
@@ -176,6 +189,7 @@
 | 2026-05-06 | Upgrading Hilt to `2.59.2` introduced an AGP 9 compatibility gate | 1 | Backed down to Hilt `2.58`, which keeps AGP 8 compatibility |
 | 2026-05-06 | Initial instrumentation probe failed with `No connected devices!` | 1 | Connected the recorded wireless adb device `172.26.65.155:44417` and reran successfully |
 | 2026-05-06 | Connected instrumentation stopped reaching idle after loading-state polish | 1 | Removed the infinite loading animations from the new SaltUI-style loading components so Compose tests could settle again |
+| 2026-05-06 | `Root.kt` failed to compile after swapping out Scaffold with system-bar insets | 1 | Imported the `WindowInsets.systemBars` extension and rebuilt the root container with a plain SaltUI-themed column |
 
 ## 5-Question Reboot Check
 | Question | Answer |
