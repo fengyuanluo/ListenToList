@@ -69,6 +69,8 @@ import com.kutedev.easemusicplayer.viewmodels.CreatePlaylistVM
 import com.kutedev.easemusicplayer.viewmodels.PlaylistsMode
 import com.kutedev.easemusicplayer.viewmodels.PlaylistsVM
 import com.kutedev.easemusicplayer.viewmodels.durationStr
+import com.moriafly.salt.ui.ItemOuterLargeTitle
+import com.moriafly.salt.ui.UnstableSaltUiApi
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ScrollMoveMode
@@ -133,6 +135,7 @@ private fun PlaylistCover(
     }
 }
 
+@OptIn(UnstableSaltUiApi::class)
 @Composable
 fun PlaylistsSubpage(
     playlistsVM: PlaylistsVM = hiltViewModel(),
@@ -169,14 +172,19 @@ fun PlaylistsSubpage(
                     modifier = Modifier
                         .clip(RoundedCornerShape(EaseTheme.radius.card))
                         .background(EaseTheme.surfaces.secondary)
-                        .padding(EaseTheme.spacing.dialogPadding),
+                        .padding(
+                            horizontal = EaseTheme.spacing.dialogPadding,
+                            vertical = EaseTheme.spacing.xl,
+                        ),
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.empty_playlists),
                         contentDescription = null,
                     )
-                    Box(modifier = Modifier.height(EaseTheme.spacing.lg))
-                    Text(text = stringResource(id = R.string.playlist_empty))
+                    ItemOuterLargeTitle(
+                        text = stringResource(id = R.string.playlist_empty_action),
+                        sub = stringResource(id = R.string.playlist_empty),
+                    )
                     Box(modifier = Modifier.height(EaseTheme.spacing.sm))
                     EaseTextButton(
                         text = stringResource(id = R.string.playlist_empty_action),
@@ -213,8 +221,15 @@ fun PlaylistsSubpage(
                         bottom = EaseTheme.spacing.xs,
                     )
                     .fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Text(
+                    text = stringResource(id = R.string.bottom_bar_playlist),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = EaseTheme.typography.sectionTitle,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
                 EaseIconButton(
                     sizeType = EaseIconButtonSize.Medium,
                     buttonType = EaseIconButtonType.Default,
@@ -229,6 +244,7 @@ fun PlaylistsSubpage(
                     disabled = playlistsMode == PlaylistsMode.Adjust,
                     onClick = { editPlaylistVM.openModal() },
                 )
+                }
             }
 
             when (displayMode) {
