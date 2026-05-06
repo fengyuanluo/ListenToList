@@ -1,32 +1,16 @@
 package com.kutedev.easemusicplayer.widgets.settings
 
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.core.LocalNavController
 import com.kutedev.easemusicplayer.core.RouteDebugMore
@@ -35,83 +19,13 @@ import com.kutedev.easemusicplayer.core.RouteLrcApiSettings
 import com.kutedev.easemusicplayer.core.RouteLog
 import com.kutedev.easemusicplayer.core.RouteThemeSettings
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
-
+import com.moriafly.salt.ui.Item
+import com.moriafly.salt.ui.ItemArrowType
+import com.moriafly.salt.ui.ItemOuterSpacer
+import com.moriafly.salt.ui.ItemOuterTitle
 
 private val paddingX = SettingPaddingX
 
-
-fun getAppVersion(
-    context: android.content.Context,
-): String {
-    val packageManager = context.packageManager
-    val packageName = context.packageName
-    val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
-    } else {
-        packageManager.getPackageInfo(packageName, 0)
-    }
-    return packageInfo.versionName ?: "<unknown>"
-}
-
-@Composable
-private fun Title(title: String) {
-    Column {
-        Text(
-            text = title,
-            style = EaseTheme.typography.body,
-        )
-        Box(
-           modifier = Modifier
-               .fillMaxWidth()
-               .height(1.dp)
-               .background(MaterialTheme.colorScheme.onSurfaceVariant)
-        )
-    }
-}
-
-@Composable
-private fun Item(
-    iconPainter: Painter,
-    title: String,
-    content: String?,
-    onClick: (() -> Unit)?
-) {
-    val clickableModifier = if (onClick != null) {
-        Modifier.clickable { onClick() }
-    } else {
-        Modifier
-    }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(clickableModifier)
-    ) {
-        Box(modifier = Modifier.height(56.dp))
-        Icon(
-            painter = iconPainter,
-            contentDescription = title,
-            modifier = Modifier
-                .size(24.dp)
-        )
-        Box(
-            modifier = Modifier.width(12.dp)
-        )
-        Column {
-            Text(
-                text = title,
-                style = EaseTheme.typography.body,
-            )
-            if (content != null) {
-                Text(
-                    text = content,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = EaseTheme.typography.bodySmall,
-                )
-            }
-        }
-    }
-}
 @Composable
 fun SettingSubpage() {
     val context = LocalContext.current
@@ -122,66 +36,58 @@ fun SettingSubpage() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(EaseTheme.surfaces.screen)
-            .padding(paddingX, paddingX)
-            .verticalScroll(rememberScrollState())
+            .padding(horizontal = paddingX)
+            .verticalScroll(rememberScrollState()),
     ) {
-        Title(title = stringResource(id = R.string.setting_theme_entry_title))
+        ItemOuterSpacer()
+        ItemOuterTitle(text = stringResource(id = R.string.setting_theme_entry_title))
         Item(
+            onClick = { navController.navigate(RouteThemeSettings()) },
+            text = stringResource(id = R.string.setting_theme_entry_title),
             iconPainter = painterResource(R.drawable.icon_adjust),
-            title = stringResource(id = R.string.setting_theme_entry_title),
-            content = stringResource(id = R.string.setting_theme_entry_desc),
-            onClick = {
-                navController.navigate(RouteThemeSettings())
-            }
+            sub = stringResource(id = R.string.setting_theme_entry_desc),
         )
         Item(
+            onClick = { navController.navigate(RouteLrcApiSettings()) },
+            text = stringResource(id = R.string.setting_lrcapi_entry_title),
             iconPainter = painterResource(R.drawable.icon_lyrics),
-            title = stringResource(id = R.string.setting_lrcapi_entry_title),
-            content = stringResource(id = R.string.setting_lrcapi_entry_desc),
-            onClick = {
-                navController.navigate(RouteLrcApiSettings())
-            }
+            sub = stringResource(id = R.string.setting_lrcapi_entry_desc),
         )
         Item(
+            onClick = { navController.navigate(RouteDownloadManager()) },
+            text = stringResource(id = R.string.setting_downloads_title),
             iconPainter = painterResource(R.drawable.icon_download),
-            title = stringResource(id = R.string.setting_downloads_title),
-            content = stringResource(id = R.string.setting_downloads_desc),
-            onClick = {
-                navController.navigate(RouteDownloadManager())
-            }
+            sub = stringResource(id = R.string.setting_downloads_desc),
         )
-        Title(title = stringResource(id = R.string.setting_debug))
+        ItemOuterSpacer()
+        ItemOuterTitle(text = stringResource(id = R.string.setting_debug))
         Item(
+            onClick = { navController.navigate(RouteLog()) },
+            text = stringResource(id = R.string.setting_log),
             iconPainter = painterResource(R.drawable.icon_log),
-            title = stringResource(id = R.string.setting_log),
-            content = null,
-            onClick = {
-                navController.navigate(RouteLog())
-            }
+            arrowType = ItemArrowType.Arrow,
         )
         Item(
+            onClick = { navController.navigate(RouteDebugMore()) },
+            text = stringResource(id = R.string.setting_more),
             iconPainter = painterResource(R.drawable.icon_vertialcal_more),
-            title = stringResource(id = R.string.setting_more),
-            content = null,
-            onClick = {
-                navController.navigate(RouteDebugMore())
-            }
+            arrowType = ItemArrowType.Arrow,
         )
-        Title(title = stringResource(id = R.string.setting_about))
+        ItemOuterSpacer()
+        ItemOuterTitle(text = stringResource(id = R.string.setting_about))
         Item(
+            onClick = { uriHandler.openUri(gitUrl) },
+            text = stringResource(id = R.string.setting_git_repo),
             iconPainter = painterResource(R.drawable.icon_github),
-            title = stringResource(id = R.string.setting_git_repo),
-            content = gitUrl,
-            onClick = {
-                uriHandler.openUri(gitUrl)
-            }
+            sub = gitUrl,
         )
         Item(
+            onClick = {},
+            text = stringResource(id = R.string.setting_version),
             iconPainter = painterResource(R.drawable.icon_info),
-            title = stringResource(id = R.string.setting_version),
-            content = getAppVersion(context),
-            onClick = null
+            sub = getAppVersion(context),
+            arrowType = ItemArrowType.None,
         )
+        ItemOuterSpacer()
     }
 }
