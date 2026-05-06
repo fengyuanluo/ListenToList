@@ -4,7 +4,7 @@
 将 ListenToList 的 Android UI 按 `docs/BUGs/SaltUI` 的顺序完整迁移到 SaltUI，先完成版本兼容、主题桥接、基础组件和页面壳，再逐页替换核心页面，最后完成视觉回归、device smoke、release 验收与逐步提交。
 
 ## Current Phase
-Phase 3
+Phase 4
 
 ## Phases
 
@@ -32,13 +32,13 @@ Phase 3
 - [ ] Migrate app shell, bars, scaffolds, and page containers
 - [ ] Migrate home, playlists, storage, search, player, settings surfaces
 - [ ] Unify empty / error / image asset policy
-- **Status:** pending
+- **Status:** in_progress
 
 ### Phase 5: Visual Regression, Smoke, and Release
 - [ ] Run and fix unit, debug, instrumentation, smoke, and release verification
 - [ ] Capture evidence and update progress/findings
 - [ ] Make staged commits for each verified milestone
-- **Status:** pending
+- **Status:** in_progress
 
 ## Key Questions
 1. What exact SaltUI version and Compose/Kotlin baseline are required by the current upstream release?
@@ -53,6 +53,7 @@ Phase 3
 | Upgrade AndroidX Compose BOM to the SaltUI-compatible 1.11.0 line before adding SaltUI | SaltUI Android metadata resolves to JetBrains Compose 1.11.0-beta02, which maps to AndroidX Compose 1.11.0 |
 | Keep KSP on the latest 2.3.7 line | Maven metadata shows 2.3.7 is the newest KSP line available for the Kotlin 2.3 series |
 | Keep existing `Ease*` APIs as compatibility wrappers while replacing their visual implementation with SaltUI | Lets the app adopt SaltUI without forcing simultaneous call-site rewrites across every page |
+| Use sequential `--no-daemon` verification for heavy Kotlin/Android tasks | Avoids the incremental cache conflicts seen when debug verification tasks were run in parallel |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

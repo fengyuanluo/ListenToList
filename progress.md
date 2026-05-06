@@ -77,6 +77,29 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/PlaylistsPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/MiniPlayer.kt`
 
+### Phase 4: Navigation Shell & Core Pages
+- **Status:** in_progress
+- Actions taken:
+  - Started migrating user-visible shells and high-traffic surfaces: bottom bar, dashboard, settings entry pages, playlist home/detail shells, search state cards, browser state cards, popup menus, and compact mini player.
+  - Kept existing route and playback semantics intact while moving visual language toward SaltUI.
+- Files created/modified:
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/appbar/BottomBar.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/dashboard/Page.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/*.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/*.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/devices/StorageBrowserPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/*.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/musics/MiniPlayer.kt`
+
+### Phase 5: Visual Regression, Smoke, and Release
+- **Status:** in_progress
+- Actions taken:
+  - Verified debug and release packaging after SaltUI/Kotlin/Hilt upgrades.
+  - Brought a wireless adb device online and reran instrumentation and smoke on real hardware.
+  - Verified JNI/FFI generation still works on the upgraded Android toolchain.
+- Files created/modified:
+  - `artifacts/smoke/2026-05-06T11-18-54.844Z/*`
+
 ## Test Results
 | Test | Input | Expected | Actual | Status |
 |------|-------|----------|--------|--------|
@@ -113,7 +136,10 @@
 | Debug Kotlin compile (mini player) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Mini player control-surface polish compiles | Passed | ✓ |
 | Debug assemble (mini player) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Mini player control-surface polish still packages to debug APK | Passed | ✓ |
 | Release assemble | `cd android && ./gradlew --no-daemon :app:assembleRelease --warning-mode all` | Release APK builds successfully after SaltUI/Kotlin/Hilt upgrades | Passed | ✓ |
-| ADB availability | `adb devices` | At least one connected device for instrumentation/smoke | No devices attached | blocked |
+| ADB availability | `adb devices` | At least one connected device for instrumentation/smoke | `172.26.65.155:44417` connected | ✓ |
+| Connected instrumentation | `cd android && ./gradlew --no-daemon connectedDebugAndroidTest --warning-mode all` | Existing androidTest suite runs on the connected device | Passed, 10 tests on `PHP110 - 15` | ✓ |
+| JNI build | `bun run build:jni` | UniFFI Kotlin bindings and arm64 JNI libs regenerate successfully | Passed | ✓ |
+| Android smoke | `bun run smoke:android --device=172.26.65.155:44417 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` | Real-device playback and download smoke passes after latest UI changes | Passed, artifacts in `artifacts/smoke/2026-05-06T11-18-54.844Z` | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -124,12 +150,13 @@
 | 2026-05-06 | `DocumentFile` symbols and `onNewIntent` signature failed under upgraded toolchain | 1 | Added `androidx.documentfile` dependency and updated `MainActivity.onNewIntent` to non-null `Intent` |
 | 2026-05-06 | Parallel debug verification caused Kotlin incremental cache conflicts | 1 | Stopped daemons, cleared the debug Kotlin cache, and reran verification sequentially with `--no-daemon` |
 | 2026-05-06 | Upgrading Hilt to `2.59.2` introduced an AGP 9 compatibility gate | 1 | Backed down to Hilt `2.58`, which keeps AGP 8 compatibility |
+| 2026-05-06 | Initial instrumentation probe failed with `No connected devices!` | 1 | Connected the recorded wireless adb device `172.26.65.155:44417` and reran successfully |
 
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 3 |
-| Where am I going? | Finish foundation components, then shell/pages migration, then verification and commits |
+| Where am I? | Phase 4 / Phase 5 |
+| Where am I going? | Finish remaining heavy pages, then rerun the full verification matrix on the final UI state |
 | What's the goal? | Migrate the Android UI to SaltUI and verify it end to end |
-| What have I learned? | SaltUI requires a full version-line alignment and can be introduced safely through wrapper-layer replacement |
-| What have I done? | Upgraded the Android toolchain, bridged the root theme, and migrated the first batch of high-reuse wrappers |
+| What have I learned? | SaltUI migration is stable on the upgraded toolchain and the real-device verification path is available in this environment |
+| What have I done? | Migrated multiple shells/core surfaces, validated debug+release builds, and passed instrumentation, JNI, and smoke checks |
