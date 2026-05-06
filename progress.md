@@ -41,6 +41,7 @@
   - Polished the theme settings page with SaltUI outer titles and tip text to reduce the remaining Material3-heavy shell feel.
   - Switched `DownloadManagerPage` management dialogs onto SaltUI dialog containers while preserving existing task actions and directory controls.
   - Refined the playlist home surface empty state and top control row so the first home page entry aligns better with SaltUI shell conventions.
+  - Migrated `LrcApiSettingsPage` and `DebugMorePage` content rows and helper text further into SaltUI item/outer-tip patterns.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -57,6 +58,8 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/ThemeSettingsPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/DownloadManagerPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/playlists/PlaylistsPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/LrcApiSettingsPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/DebugMorePage.kt`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -75,6 +78,8 @@
 | Debug assemble (settings dialogs) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Download manager dialog shell migration still packages to debug APK | Passed | ✓ |
 | Debug Kotlin compile (playlist home shell) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Playlist home shell polish compiles | Passed | ✓ |
 | Debug assemble (playlist home shell) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Playlist home shell polish still packages to debug APK | Passed | ✓ |
+| Debug Kotlin compile (settings content) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | LrcApi and debug settings content migration compiles | Passed | ✓ |
+| Debug assemble (settings content) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | LrcApi and debug settings content migration still packages to debug APK | Passed | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

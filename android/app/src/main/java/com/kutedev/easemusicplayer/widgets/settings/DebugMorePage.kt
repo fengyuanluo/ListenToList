@@ -3,17 +3,14 @@ package com.kutedev.easemusicplayer.widgets.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -22,29 +19,7 @@ import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.ConfirmDialog
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.DebugMoreVM
-
-private val paddingX = SettingPaddingX
-
-
-@Composable
-private fun Item(
-    title: String,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-    ) {
-        Box(modifier = Modifier.height(56.dp))
-        Text(
-            modifier = Modifier.padding(horizontal = paddingX),
-            text = title,
-            style = EaseTheme.typography.body,
-        )
-    }
-}
+import com.moriafly.salt.ui.Item
 
 @Composable
 fun DebugMorePage(
@@ -69,44 +44,44 @@ fun DebugMorePage(
         Column(modifier = contentModifier) {
             Box(modifier = Modifier.height(EaseTheme.spacing.xs))
             Item(
-                title = rustErrorTitle,
+                text = rustErrorTitle,
                 onClick = {
                     requestConfirm(rustErrorTitle) {
                         debugMoreVM.triggerRustError()
                     }
-                }
+                },
             )
             Item(
-                title = rustAsyncErrorTitle,
+                text = rustAsyncErrorTitle,
                 onClick = {
                     requestConfirm(rustAsyncErrorTitle) {
                         debugMoreVM.triggerRustAsyncError()
                     }
-                }
+                },
             )
             Item(
-                title = rustPanicTitle,
+                text = rustPanicTitle,
                 onClick = {
                     requestConfirm(rustPanicTitle) {
                         debugMoreVM.triggerRustPanic()
                     }
-                }
+                },
             )
             Item(
-                title = kotlinErrorTitle,
+                text = kotlinErrorTitle,
                 onClick = {
                     requestConfirm(kotlinErrorTitle) {
                         debugMoreVM.triggerKotlinError()
                     }
-                }
+                },
             )
             Item(
-                title = kotlinAsyncErrorTitle,
+                text = kotlinAsyncErrorTitle,
                 onClick = {
                     requestConfirm(kotlinAsyncErrorTitle) {
                         debugMoreVM.triggerKotlinAsyncError()
                     }
-                }
+                },
             )
         }
     }

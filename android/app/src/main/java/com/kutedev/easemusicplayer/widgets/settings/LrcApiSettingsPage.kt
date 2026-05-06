@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,6 +24,7 @@ import com.kutedev.easemusicplayer.components.FormText
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.singleton.LrcApiSettings
 import com.kutedev.easemusicplayer.viewmodels.LrcApiSettingsVM
+import com.moriafly.salt.ui.ItemOuterTip
 
 private val paddingX = SettingPaddingX
 
@@ -52,12 +51,7 @@ fun LrcApiSettingsPage(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = paddingX)
         ) {
-            Text(
-                modifier = Modifier.padding(top = EaseTheme.spacing.xs),
-                text = stringResource(id = R.string.setting_lrcapi_page_desc),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = EaseTheme.typography.body,
-            )
+            ItemOuterTip(text = stringResource(id = R.string.setting_lrcapi_page_desc))
             Box(modifier = Modifier.height(EaseTheme.spacing.md))
             FormSwitch(
                 label = stringResource(id = R.string.setting_lrcapi_enabled),
@@ -70,12 +64,7 @@ fun LrcApiSettingsPage(
                 value = draftBaseUrl,
                 onChange = { draftBaseUrl = it },
             )
-            Text(
-                text = stringResource(id = R.string.setting_lrcapi_base_url_hint),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = EaseTheme.typography.micro,
-                modifier = Modifier.padding(top = EaseTheme.spacing.xxs),
-            )
+            ItemOuterTip(text = stringResource(id = R.string.setting_lrcapi_base_url_hint))
             Box(modifier = Modifier.height(EaseTheme.spacing.sm))
             FormText(
                 label = stringResource(id = R.string.setting_lrcapi_auth_key),
@@ -84,12 +73,7 @@ fun LrcApiSettingsPage(
                 isPassword = true,
             )
             if (hasUnsavedChanges) {
-                Text(
-                    text = stringResource(id = R.string.setting_lrcapi_unsaved_hint),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = EaseTheme.typography.micro,
-                    modifier = Modifier.padding(top = EaseTheme.spacing.xs),
-                )
+                ItemOuterTip(text = stringResource(id = R.string.setting_lrcapi_unsaved_hint))
             }
             Box(modifier = Modifier.height(EaseTheme.spacing.md))
             EaseTextButton(
