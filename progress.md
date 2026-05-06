@@ -44,6 +44,7 @@
   - Migrated `LrcApiSettingsPage` and `DebugMorePage` content rows and helper text further into SaltUI item/outer-tip patterns.
   - Refined `StorageSearchPage` message states so idle, empty, and no-instance cards use SaltUI large-title semantics.
   - Refined `StorageBrowserPage` blocking error and search-empty states so directory browsing matches the SaltUI state-card style.
+  - Migrated `LogPage` list rows and preview dialog shell onto SaltUI item/dialog patterns.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -64,6 +65,7 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/DebugMorePage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/search/StorageSearchPage.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/devices/StorageBrowserPage.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/settings/LogPage.kt`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -88,6 +90,8 @@
 | Debug assemble (search states) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Storage search state-card migration still packages to debug APK | Passed | ✓ |
 | Debug Kotlin compile (browser states) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Storage browser state-card migration compiles | Passed | ✓ |
 | Debug assemble (browser states) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Storage browser state-card migration still packages to debug APK | Passed | ✓ |
+| Debug Kotlin compile (log page) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Log page SaltUI list/dialog migration compiles | Passed | ✓ |
+| Debug assemble (log page) | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Log page SaltUI list/dialog migration still packages to debug APK | Passed | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

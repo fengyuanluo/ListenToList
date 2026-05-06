@@ -3,7 +3,6 @@ package com.kutedev.easemusicplayer.widgets.settings
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +36,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
@@ -46,6 +44,10 @@ import com.kutedev.easemusicplayer.components.EaseTextButtonSize
 import com.kutedev.easemusicplayer.components.EaseTextButtonType
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.viewmodels.LogVM
+import com.moriafly.salt.ui.Item
+import com.moriafly.salt.ui.ItemOuterTip
+import com.moriafly.salt.ui.dialog.BasicDialog
+import com.moriafly.salt.ui.dialog.DialogTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -137,49 +139,25 @@ fun LogPage(
         title = stringResource(id = R.string.log_title),
     ) { contentModifier ->
         Column(modifier = contentModifier) {
-            Text(
-                modifier = Modifier.padding(horizontal = paddingX, vertical = EaseTheme.spacing.xs),
-                text = pluralStringResource(id = R.plurals.log_desc, count = logs.size, logs.size),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = EaseTheme.typography.body,
-            )
+            ItemOuterTip(text = pluralStringResource(id = R.plurals.log_desc, count = logs.size, logs.size))
             Box(modifier = Modifier.height(EaseTheme.spacing.sm))
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = EaseTheme.spacing.xl),
             ) {
                 items(logs) { log ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                previewLog = log
-                            }
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(horizontal = paddingX, vertical = 8.dp)
-                                .fillMaxWidth()
-                        ) {
-                            Text(
-                                text = log.name,
-                                fontFamily = FontFamily.Monospace,
-                            )
-                            Text(
-                                text = log.path,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                style = EaseTheme.typography.caption,
-                            )
-                        }
-                    }
+                    Item(
+                        onClick = { previewLog = log },
+                        text = log.name,
+                        sub = log.path,
+                    )
                 }
             }
         }
     }
 
     if (previewLog != null) {
-        Dialog(onDismissRequest = { previewLog = null }) {
+        BasicDialog(onDismissRequest = { previewLog = null }) {
             Column(
                 modifier = Modifier
                     .clip(RoundedCornerShape(EaseTheme.radius.card))
@@ -188,27 +166,16 @@ fun LogPage(
                     .verticalScroll(rememberScrollState())
                     .padding(EaseTheme.spacing.lg),
             ) {
-                Text(
-                    text = stringResource(id = R.string.log_preview_title),
-                    style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
-                )
+                DialogTitle(text = stringResource(id = R.string.log_preview_title))
                 Text(
                     text = previewLog?.name.orEmpty(),
                     fontFamily = FontFamily.Monospace,
                     style = EaseTheme.typography.bodySmall,
                 )
-                Text(
-                    text = previewLog?.path.orEmpty(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = EaseTheme.typography.caption,
-                )
+                ItemOuterTip(text = previewLog?.path.orEmpty())
                 Box(modifier = Modifier.height(12.dp))
                 if (previewError != null) {
-                    Text(
-                        text = previewError ?: "",
-                        color = MaterialTheme.colorScheme.error,
-                        style = EaseTheme.typography.bodySmall,
-                    )
+                    ItemOuterTip(text = previewError ?: "")
                 } else {
                     Text(
                         text = previewContent,
@@ -217,11 +184,7 @@ fun LogPage(
                     )
                     if (previewTruncated) {
                         Box(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(id = R.string.log_preview_truncated),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = EaseTheme.typography.caption,
-                        )
+                        ItemOuterTip(text = stringResource(id = R.string.log_preview_truncated))
                     }
                 }
                 Box(modifier = Modifier.height(12.dp))
