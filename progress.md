@@ -35,6 +35,7 @@
 - Actions taken:
   - Migrated `ConfirmDialog`, `EaseContextMenu`, and `Form*` wrappers onto SaltUI dialog, popup, switcher, and edit primitives.
   - Migrated `EaseCheckbox`, `EaseFlatSwitch`, `EaseTextButton`, and `EaseSearchField` to SaltUI-backed implementations while preserving existing wrapper APIs for callers.
+  - Migrated the home bottom bar shell to SaltUI `BottomBar` / `BottomBarItem` while preserving the mini-player overlay and page-switch behavior.
 - Files created/modified:
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
@@ -43,12 +44,14 @@
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/FlatSwitch.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/TextButton.kt`
   - `android/app/src/main/java/com/kutedev/easemusicplayer/components/EaseSearchField.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/widgets/appbar/BottomBar.kt`
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
 |------|-------|----------|--------|--------|
 | Gradle parse | `cd android && ./gradlew help` | Build scripts resolve after Kotlin/Compose upgrade | Passed | ✓ |
 | Debug Kotlin compile | `cd android && ./gradlew :app:compileDebugKotlin` | App compiles on SaltUI-aligned toolchain | Passed after fixing DSL/API/dependency blockers | ✓ |
+| Debug Kotlin compile (shell update) | `cd android && ./gradlew --no-daemon :app:compileDebugKotlin` | Bottom bar shell compiles with SaltUI bottom bar | Passed | ✓ |
 | Debug assemble | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Debug APK builds successfully | Passed | ✓ |
 
 ## Error Log
@@ -59,6 +62,7 @@
 | 2026-05-06 | `checkDebugAarMetadata` failed because SaltUI dependency line requires compileSdk 36 | 1 | Raised `compileSdk` and `targetSdk` to 36 |
 | 2026-05-06 | `DocumentFile` symbols and `onNewIntent` signature failed under upgraded toolchain | 1 | Added `androidx.documentfile` dependency and updated `MainActivity.onNewIntent` to non-null `Intent` |
 | 2026-05-06 | Parallel debug verification caused Kotlin incremental cache conflicts | 1 | Stopped daemons, cleared the debug Kotlin cache, and reran verification sequentially with `--no-daemon` |
+| 2026-05-06 | Upgrading Hilt to `2.59.2` introduced an AGP 9 compatibility gate | 1 | Backed down to Hilt `2.58`, which keeps AGP 8 compatibility |
 
 ## 5-Question Reboot Check
 | Question | Answer |
