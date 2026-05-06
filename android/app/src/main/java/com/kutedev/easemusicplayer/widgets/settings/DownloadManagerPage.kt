@@ -32,7 +32,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.kutedev.easemusicplayer.R
 import com.kutedev.easemusicplayer.components.EaseCheckbox
@@ -48,6 +47,9 @@ import com.kutedev.easemusicplayer.singleton.DownloadTaskStatus
 import com.kutedev.easemusicplayer.ui.theme.EaseTheme
 import com.kutedev.easemusicplayer.utils.StorageBrowserUtils
 import com.kutedev.easemusicplayer.viewmodels.DownloadManagerVM
+import com.moriafly.salt.ui.ItemOuterTip
+import com.moriafly.salt.ui.dialog.BasicDialog
+import com.moriafly.salt.ui.dialog.DialogTitle
 
 private val paddingX = SettingPaddingX
 private val taskShape = RoundedCornerShape(EaseTheme.radius.compact)
@@ -265,7 +267,7 @@ private fun DownloadDirectoryDialog(
         return
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    BasicDialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(EaseTheme.radius.card))
@@ -273,10 +275,7 @@ private fun DownloadDirectoryDialog(
                 .padding(EaseTheme.spacing.dialogPadding),
             verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
         ) {
-            Text(
-                text = stringResource(id = R.string.download_settings_title),
-                style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
-            )
+            DialogTitle(text = stringResource(id = R.string.download_settings_title))
             DownloadDirectorySummary(state = directoryState, maxLines = 4)
             Row(horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs)) {
                 EaseTextButton(
@@ -320,7 +319,7 @@ private fun DeleteDownloadDialog(
         return
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    BasicDialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(EaseTheme.radius.card))
@@ -328,17 +327,8 @@ private fun DeleteDownloadDialog(
                 .padding(EaseTheme.spacing.dialogPadding),
             verticalArrangement = Arrangement.spacedBy(EaseTheme.spacing.sm),
         ) {
-            Text(
-                text = stringResource(id = R.string.download_delete_title),
-                color = MaterialTheme.colorScheme.error,
-                style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
-            )
-            Text(
-                text = task.title,
-                style = EaseTheme.typography.body,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            DialogTitle(text = stringResource(id = R.string.download_delete_title))
+            ItemOuterTip(text = task.title)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(EaseTheme.spacing.xs),
