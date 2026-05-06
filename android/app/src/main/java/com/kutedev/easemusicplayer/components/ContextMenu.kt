@@ -1,51 +1,42 @@
 package com.kutedev.easemusicplayer.components
 
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import com.kutedev.easemusicplayer.R
-import java.util.Timer
-import kotlin.concurrent.schedule
+import com.moriafly.salt.ui.SaltTheme
+import com.moriafly.salt.ui.UnstableSaltUiApi
+import com.moriafly.salt.ui.popup.PopupMenu
+import com.moriafly.salt.ui.popup.PopupMenuItem
 
 data class EaseContextMenuItem(
     val stringId: Int,
     val onClick: () -> Unit,
-    val isError: Boolean = false
-) {
-}
+    val isError: Boolean = false,
+)
 
+@OptIn(UnstableSaltUiApi::class)
 @Composable
 fun EaseContextMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
-    items: List<EaseContextMenuItem>
+    items: List<EaseContextMenuItem>,
 ) {
-    DropdownMenu(
+    PopupMenu(
         expanded = expanded,
-        onDismissRequest = onDismissRequest
+        onDismissRequest = onDismissRequest,
     ) {
-        for (item in items) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = stringResource(id = item.stringId),
-                        color = if (!item.isError) { Color.Unspecified } else { MaterialTheme.colorScheme.error }
-                    )
-                },
+        items.forEach { item ->
+            PopupMenuItem(
                 onClick = {
-                    Timer("Close ContextMenu", false).schedule(160) {
-                        onDismissRequest()
-                    }
+                    onDismissRequest()
                     item.onClick()
-                }
+                },
+                text = stringResource(id = item.stringId),
+                iconColor = if (item.isError) {
+                    SaltTheme.colors.highlight
+                } else {
+                    Color.Unspecified
+                },
             )
         }
     }

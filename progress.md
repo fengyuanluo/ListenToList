@@ -1,226 +1,70 @@
 # Progress Log
 
-## 2026-05-05
-- Continued playback-chain fix ledger from `docs/BUGs/playback-chain-deep-review.md`.
-- Confirmed worktree was clean and branch was ahead of origin by P0-1 commit `212dcbc`.
-- Reviewed P0-2 source path: `PlaybackService.onPlayerError()`, `recoverFromPlaybackError()`, `MusicPlaybackDataSource`, `PlaybackDiagnostics`, debug smoke route models.
-- Added `PlaybackErrorRecovery.kt` with testable recoverable playback error classification for weak-network and HTTP IO failures.
-- Rewired `PlaybackService` to use the recoverable classifier, invalidate the current `PlaybackSourceResolverCache` entry, and continue through existing queue recovery instead of clearing the session on transient IO errors.
-- Extended `PlaybackDiagnostics` and debug smoke route records with `routeRefreshCount`, `recoverySkipCount`, `lastPlaybackErrorCode`, and `lastPlaybackErrorName`.
-- Added `PlaybackErrorRecoveryTest` and `PlaybackDiagnosticsTest`.
-- First combined targeted test failed because `PlaybackDiagnosticsTest` constructed `PlaybackException` under plain JVM and hit unmocked `SystemClock.elapsedRealtime`.
-- Fixed `PlaybackDiagnosticsTest` by running it with Robolectric.
-- Targeted P0-2 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
-- Broad Android validation passed for P0-2: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed: `git diff --check`.
-- Committed P0-2 as `c9fedca fix: recover from transient playback io failures`.
-- Started P1-1 from `docs/BUGs/playback-chain-deep-review.md`.
-- Reviewed storage mutation paths: `StorageRepository.updateRefreshToken()`, `StorageRepository.upsertStorage()`, `StorageRepository.remove()`, `EditStorageVM.finish()`, `EditStorageVM.remove()`, and `MainActivity` OAuth redirect handling.
-- Patched `StorageRepository` to call `PlaybackSourceResolverCache.invalidateAll()` after successful OAuth token refresh, storage upsert, and storage removal.
-- Added resolver-cache `invalidateAll()` regression coverage to `MusicPlaybackDataSourceTest`.
-- Targeted P1-1 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
-- Broad Android validation passed for P1-1: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P1-1: `git diff --check`.
-- Committed P1-1 as `711fe01 fix: invalidate playback resolver cache on storage changes`.
-- Started combined P1-2/P1-3 cache-key repair because both issues share the same prefetch/playback key mismatch root cause.
-- Patched `PlaybackDataUri` with stable `music:<id>` playback cache key helpers.
-- Patched `MusicPlaybackDataSource` to set `music:<id>` for direct HTTP, local file, downloaded file, content URI, and stream fallback delegate specs.
-- Patched `MusicPlayerUtil` to set `MediaItem.customCacheKey` to `music:<id>`.
-- Added shared `PlaybackPrefetchSpec` and rewired `PlaybackPrefetcher` / `FolderPrefetcher` to use the same key for precheck metadata and `DataSpec.key`.
-- First P1-2/P1-3 targeted compile attempt failed after helper extraction because `DataSpec` imports were removed while private helper signatures still referenced it.
-- Restored the `DataSpec` imports and reran validation successfully.
-- Targeted P1-2/P1-3 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackDataUriTest' --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --tests 'com.kutedev.easemusicplayer.core.PlaybackPrefetchSpecTest' --warning-mode all`.
-- Broad Android validation passed for P1-2/P1-3: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P1-2/P1-3: `git diff --check`.
-- Committed P1-2/P1-3 as `399d4e6 fix: unify playback cache keys`.
-- Started P1-4 from `docs/BUGs/playback-chain-deep-review.md`.
-- Reviewed UI consumers of `previousMusic` / `nextMusic`, `PlayerRepository` mode-derived flows, `buildPlaybackQueuePlan()`, `PlaybackRuntimeKernel.seekAdjacentMediaItem()`, and MiniPlayer / PlayerPage controls.
-- Chose the product-consistent fix: `SINGLE_LOOP` repeats only the current track, so UI adjacent candidates should be disabled like `SINGLE`; `onCompleteMusic` remains current track for automatic repeat.
-- Patched `PlayerRepository.previousMusic` / `nextMusic` to return null for `SINGLE_LOOP`.
-- Added `PlayerRepositoryTest.singleLoopDisablesAdjacentUiCandidatesButKeepsCompletionRepeatCandidate`.
-- Targeted P1-4 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.PlayerRepositoryTest' --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --warning-mode all`.
-- Broad Android validation passed for P1-4: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P1-4: `git diff --check`.
-- Committed P1-4 as `6b061ac fix: align single loop adjacent controls`.
-- Started P1-5 from `docs/BUGs/playback-chain-deep-review.md`.
-- Reviewed `syncQueueForPlayMode()`, `buildPlaybackQueuePlan()`, `PlaybackRuntimeKernel.seekAdjacentMediaItem()`, and existing queue-edit in-place logic.
-- Patched `syncQueueForPlayMode()` to attempt in-place Media3 timeline updates when the current item can be preserved, instead of always stop/clear/prepare on play-mode changes.
-- Added `buildPlaybackTimelineInPlaceUpdate()` helper plus `PlaybackTimelineInPlaceUpdate` model.
-- Added `MusicPlayerUtilTest` coverage for list<->single-loop in-place timeline updates and fallback rejection.
-- First implementation pass needed an additional helper because the raw Media3 rebuild path still handled all mode changes; the new helper now isolates the preserve-current-item case.
-- Targeted P1-5 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlayerUtilTest' --warning-mode all`.
-- Broad Android validation passed for P1-5: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P1-5: `git diff --check`.
-- Committed P1-5 as `b0b8749 fix: reduce play mode queue rebuilds`.
-- Started P2-1 from `docs/BUGs/playback-chain-deep-review.md`.
-- Patched completed offline playback resolution to validate resolved file/content length against recorded `totalBytes` or `bytesDownloaded` before returning a local playback source.
-- Added `DownloadRepositoryTest` coverage for short file and short content URI fallback-to-online behavior.
-- Targeted P2-1 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
-- Broad Android validation passed for P2-1: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P2-1: `git diff --check`.
-- Committed P2-1 as `467098f fix: validate completed download playback size`.
-- Started P2-2 from `docs/BUGs/playback-chain-deep-review.md`.
-- Reviewed `DownloadWorker`, `DownloadRepository`, Rust `AssetStream`, `StreamFile.size()`, and OpenList/WebDAV/OneDrive range download implementations.
-- Confirmed existing UniFFI only exposes size-level stream identity for the active offset; stronger etag/mtime/provider revision would require backend/FFI expansion.
-- Patched resumed downloads to compare `existingBytes + AssetStream.size()` with recorded `totalBytes`; mismatches now reset the `.part` file or SAF temp document and restart download from offset 0.
-- Added `DownloadResumeAction` and `decideDownloadResumeAction()` so append/restart/reject decisions are covered by JVM tests.
-- Targeted P2-2 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
-- Broad Android validation passed for P2-2: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P2-2: `git diff --check`.
-- Committed P2-2 as `4ee67bb fix: restart stale resumed downloads`.
-- Started P2-3 from `docs/BUGs/playback-chain-deep-review.md`.
-- Reviewed `MusicPlaybackDataSource`, `PlaybackErrorRecovery`, `PlaybackCache`, and `PlaylistRepository` for direct HTTP timeout/retry and metadata/cache-health scope.
-- Patched direct HTTP playback to set explicit connect/read timeouts and retry transient open failures once, while preserving 401/403/404 resolver-refresh semantics.
-- Added `shouldRetryDirectHttpOpen()` plus unit coverage for transient server, 404, and open/read-stage retry boundaries.
-- Targeted P2-3 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.MusicPlaybackDataSourceTest' --warning-mode all`.
-- Broad Android validation passed for P2-3: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P2-3: `git diff --check`.
-- Committed P2-3 as `944ca54 fix: harden direct http playback retries`.
-- Started P2-4 from `docs/BUGs/playback-chain-deep-review.md`.
-- Reviewed `PlaybackCache`, `PlaybackDiagnostics`, debug smoke route models, and Media3 `CacheDataSource.EventListener` API.
-- Patched read/write cache factories to record `onCacheIgnored()` events into `PlaybackDiagnostics`.
-- Added cache bypass count and last reason to diagnostics snapshots and debug smoke route history.
-- Targeted P2-4 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
-- Debug compile validation passed for P2-4: `cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
-- Broad Android validation passed for P2-4: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P2-4: `git diff --check`.
-- Committed P2-4 as `94e7131 fix: expose playback cache bypass diagnostics`.
-- Started P2-5 from `docs/BUGs/playback-chain-deep-review.md`.
-- Reviewed `PlaylistRepository` metadata queue, `PlayerRepository.loading`, metadata player error/timeout handling, and debug smoke diagnostics output.
-- Patched metadata queue loading timeout to record diagnostics and skip that metadata task instead of continuing into extra remote metadata work.
-- Patched metadata player error/timeout handling to record metadata failure details in `PlaybackDiagnostics` and expose them through debug smoke route history.
-- Targeted P2-5 validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackDiagnosticsTest' --warning-mode all`.
-- Debug compile validation passed for P2-5: `cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
-- Broad Android validation passed for P2-5: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Whitespace validation passed for P2-5: `git diff --check`.
-- Continued from active thread goal.
-- Checked git status: clean `master`, synchronized with `origin/master`.
-- Confirmed only root `AGENTS.md` governs this workspace.
-- Read existing `docs/BUGs/issue_status.md`, `docs/BUGs/completion_audit.md`, `task_plan.md`, `findings.md`, and `progress.md`.
-- Confirmed previous BUG batch was already committed and closed by its own audit.
-- Archived previous BUG batch into `docs/BUGs/archive/2026-05-05-fix-ledger/`.
-- Created active `docs/BUGs/README.md`.
-- Replaced stale non-device-only plan files with the current objective's task center.
-- Created `docs/BUGs/2026-05-05-deep-review/` with `task_center.md` and the first app-shell review document.
-- Reviewed `MainActivity`, `AndroidManifest.xml`, `Root`, `PermissionRepository`, `StorageRepository`, `EditStorageVM`, and OneDrive OAuth URL generation.
-- Documented AS1: cold-created OAuth callback Activity dropped OneDrive auth code.
-- Patched AS1 by sharing validated OAuth intent handling between `onCreate()` and `onNewIntent()`.
-- Added `MainActivityIntentTest` for OAuth redirect code extraction.
-- First targeted test run failed because plain JVM tests cannot execute Android `Intent`/`Uri` methods; changed `MainActivityIntentTest` to Robolectric.
-- Targeted AS1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.MainActivityIntentTest' --warning-mode all`.
-- Whitespace check passed: `git diff --check`.
-- Broad Android gate passed: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Committed archive and AS1 fix as `ec4eb4b fix: handle cold oauth redirects`.
-- Post-commit status: clean `master`, ahead of `origin/master` by 1.
-- ADB found real device `172.20.65.10:45749` online.
-- First smoke attempt with `172.20.65.10:45749` hung after starting mock playback server and before writing this run's local WAV artifacts; terminated stale smoke/mock processes.
-- ADB preflight succeeded: `reverse --list`, `mkdir`, `push`, `am start`, and `pidof`.
-- Second smoke attempt with explicit `--port=18091` hung at the same point.
-- Manual `adb reverse tcp:18091 tcp:18091` succeeded while the smoke process was stuck, so the actionable issue is missing timeout/progress instrumentation in `scripts/smoke-android.ts`, not a proven playback route failure.
-- Documented SG1 in `docs/BUGs/2026-05-05-deep-review/02-validation-smoke-tooling.md` and task center.
-- Patched `scripts/smoke-android.ts` with command timeouts and `runner-events.log` step logging.
-- `git diff --check` passed after smoke script patch.
-- `bunx tsc --noEmit` failed on existing Bun/tsconfig incompatibilities, so it is not a valid gate for this script in the current repo configuration.
-- Third smoke attempt with new step logging showed the exact hang point: `launchMockPlaybackServer()` after `启动 mock playback server`; `runner-events.log` was written but no later step appeared.
-- Confirmed mock server was listening on port `18092`; patched health polling to use `AbortSignal.timeout(1000)` and to kill/throw on startup timeout without reading never-ending child stdout/stderr.
-- Reproduced the health-check failure outside the script: both `curl` and Bun `fetch` attempted `127.0.0.1` through `http_proxy`, causing local `/healthz` timeout.
-- Patched mock readiness detection to use a direct `node:net` TCP port probe, bypassing proxy-sensitive HTTP fetch behavior.
-- Real-device smoke passed after SG1 fix: `bun run smoke:android --device=172.20.65.10:45749 --port=18095 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
-- Smoke artifacts: `artifacts/smoke/2026-05-05T05-52-04.802Z/`.
-- Verified smoke scenarios: Local `LOCAL_FILE`, OpenList `DIRECT_HTTP`, WebDAV `DIRECT_HTTP`, download prepare, and offline downloaded playback `DOWNLOADED_FILE`.
-- Started theme/UI layout review.
-- Documented UI1: bottom spacer reserved 124dp for mini-player chrome while rendered mini-player height is 104dp.
-- Patched bottom chrome space calculation to use shared local constants and added `BottomBarSpaceTest`.
-- Targeted UI1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.widgets.appbar.BottomBarSpaceTest' --warning-mode all`.
-- Broad Android gate passed after UI1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Committed UI1 as `7def8d0 fix: align bottom chrome spacing`.
-- Started import/metadata/lyrics/LrcApi review.
-- Documented ML1: LrcApi cached cover results kept `coverStatus=LOADED` while dropping cover bytes, preventing cache-hit cover persistence.
-- Patched `LrcApiCachedResult` to preserve cover bytes and added `LrcApiCacheModelsTest`.
-- Targeted ML1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.LrcApiCacheModelsTest' --warning-mode all`.
-- Broad Android gate passed after ML1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Committed ML1 as `1f02fae fix: preserve cached lrcapi covers`.
-- Started code-conflict/dead-code/script truth-source review.
-- Documented CD1: `scripts/base.ts` exported a stale `CLIENT_ROOT` pointing at nonexistent `rust-libs/ease-client`.
-- Removed the stale `CLIENT_ROOT` export.
-- Validated CD1: `rg CLIENT_ROOT scripts` has no hits, `bun run doctor:android-env` passed, and `git diff --check` passed.
-- Committed CD1 as `98725d2 fix: remove stale rust client path`.
-- Started release/CI/signing workflow review.
-- Reviewed `.github/workflows/release.yml`, `package.json`, `scripts/build-apk.ts`, `android/app/build.gradle.kts`, `.gitignore`, and local ignored signing-file boundaries.
-- Documented RC1: missing or malformed release signing secrets failed through low-signal Brotli/Gradle errors because `scripts/build-apk.ts` used non-null assertions before validation.
-- Patched `scripts/build-apk.ts` to validate `ANDROID_SIGN_JKS` and `ANDROID_SIGN_PASSWORD` before writing signing files and to wrap keystore decode failures with the expected secret format.
-- Validated RC1 missing-secret path: `env -u ANDROID_SIGN_JKS -u ANDROID_SIGN_PASSWORD bun run ./scripts/build-apk.ts` fails immediately with `ANDROID_SIGN_PASSWORD is required for release APK signing`.
-- Validated RC1 malformed-secret path: `env ANDROID_SIGN_PASSWORD=test ANDROID_SIGN_JKS=not-a-valid-secret bun run ./scripts/build-apk.ts` fails with `Failed to decode ANDROID_SIGN_JKS. Expected a brotli-compressed keystore encoded as base64.`
-- `git diff --check` passed after RC1.
-- Committed RC1 as `f08a93e fix: validate release signing inputs`.
-- Started performance/memory review.
-- Reviewed `AssetRepository`, `EaseImage`, `ThemeBackgroundImage`, cover usage points, playback cache/prefetch, and download worker streaming paths.
-- Documented PM1: cover and theme background images decoded at source size instead of display-constrained size, creating avoidable peak bitmap allocations.
-- Patched `AssetRepository`, `AssetVM`, `EaseImage`, and `ThemeBackgroundImage` to use target-size-aware bitmap sampling and size-sensitive bitmap cache keys.
-- Added `AssetRepositoryTest` coverage for bitmap sample-size selection.
-- Targeted PM1 test passed: `./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.AssetRepositoryTest' --warning-mode all`; this run also executed `:app:compileDebugKotlin`.
-- `git diff --check` passed after PM1.
-- Broad Android gate passed after PM1: `./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Committed PM1 as `25b3758 fix: downsample decoded artwork images`.
-- Wrote final completion audit to `docs/BUGs/2026-05-05-deep-review/completion_audit.md`.
-- Continued playback-chain deep review on the active doc.
-- Rechecked `docs/BUGs/playback-chain-deep-review.md` and confirmed P3-1 was still an actionable gap while P3-2 was a documentation-level test-matrix observation.
-- Added `FolderPrefetchPolicy.kt` as a pure play-mode gate for folder prefetch decisions.
-- Patched `StorageBrowserVM.playFromFolder()` to skip folder prefetch when the current play mode is `SINGLE` or `SINGLE_LOOP`.
-- Added `FolderPrefetchPolicyTest` to cover the play-mode matrix.
-- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
-- Broad Android validation passed after the P3-1 gate: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- `git diff --check` passed after the P3-1 patch.
-- Updated `docs/BUGs/playback-chain-deep-review.md` to mark P3-1 as completed and narrow P3-2 to the remaining observation gap.
-- Continued P3-2 by converting the folder prefetch buffering gap into a startup gate.
-- Patched `shouldPrefetchFolder()` to require both list-mode playback and `isPlaybackLoading == false`.
-- Updated `StorageBrowserVM.playFromFolder()` to pass `playerRepository.loading.value` into the folder prefetch policy.
-- Extended `FolderPrefetchPolicyTest` with loading/buffering coverage.
-- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
-- Broad validation attempt initially failed because I incorrectly ran targeted test and `assembleDebug` in parallel; concurrent Gradle/Kotlin/Hilt tasks raced on generated `build/tmp/kotlin-classes` and `build/generated/hilt` files. This is a validation-runner error, not accepted evidence against the source patch.
-- Stopped the Gradle daemon and reran broad validation sequentially.
-- Sequential broad validation passed: `cd android && ./gradlew :app:assembleDebug --warning-mode all`.
-- Continued P3-2 by implementing startup network-type gating for folder prefetch.
-- Added `ACCESS_NETWORK_STATE` to the main manifest so Android can read active network metering state.
-- Patched `StorageBrowserVM.playFromFolder()` to pass `ConnectivityManager.isActiveNetworkMetered` into `shouldPrefetchFolder()`, failing closed when connectivity is unavailable.
-- Extended `FolderPrefetchPolicyTest` with metered-network coverage.
-- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.FolderPrefetchPolicyTest' --warning-mode all`.
-- Broad Android validation passed: `cd android && ./gradlew :app:assembleDebug --warning-mode all`.
-- Release manifest validation passed: `cd android && ./gradlew :app:processReleaseMainManifest --warning-mode all`.
-- Continued P3-2 smoke closure by extending debug-session command support with `READ_STATE`, playback position, queue-entry, and route-history output.
-- Extended `scripts/smoke-android.ts` to query play-mode state around the new switch-preservation smoke and to assert that mode cycling does not reset `currentMusicId`, `currentQueueEntryId`, or playback diagnostics.
-- Stabilized smoke fixtures by clearing `/sdcard/Music/ListenToListSmoke` before each run, lengthening mock/local WAV fixtures to 20 seconds, and switching the route-preservation scenarios to stable first-track targets.
-- First P3-2 smoke attempt after fixture stabilization failed because host-side `requiredSourceTags: ["next-prefetch"]` was too strict for the current observable contract; Android debug smoke now reports missing required tags as an app-side assertion failure, and the host script no longer requires `next-prefetch` when route and metadata assertions already prove the scenario.
-- Second smoke attempt showed OpenList `test-openlist.wav` was tail after backend ordering, so no next metadata existed; restored `test-openlist-next.wav` / `test-webdav-next.wav` as the deterministic non-tail targets.
-- Final P3-2 real-device smoke passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18100 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`; artifacts at `artifacts/smoke/2026-05-05T11-30-00.417Z/`.
-- Verified `playmode-switch-preserve.json`: play mode cycled `LIST -> LIST_LOOP -> SINGLE -> SINGLE_LOOP -> LIST`, `currentMusicId=3` and `currentQueueEntryId=playlist:2:3` stayed unchanged, position advanced from 718ms to 5652ms, and `DIRECT_HTTP` playback diagnostics stayed present.
-- Continued P3-2 by adding a direct HTTP stalled-read recovery smoke scenario.
-- Extended debug smoke assertions with `expectRecoveryToNext`, `recoveryWaitTimeoutMs`, `minRouteRefreshCount`, and `minRecoverySkipCount`.
-- Added `/unstable` OpenList mock files and an `openlist-read-failure-recovery` scenario to `scripts/smoke-android.ts`.
-- First read-failure fixture used a truncated body with a larger declared length; real-device smoke failed because Media3 treated the short WAV as playable and naturally advanced without route refresh / recovery skip diagnostics.
-- Replaced the fixture with a stalled response that returns direct HTTP headers and keeps the body open so the client hits its read timeout.
-- Second real-device run hit the debug receiver timeout; logcat showed `PLAYBACK_ROUTE_RETRY` repeated on the same stalled item, revealing that Media3's default progressive load error retry policy delayed `onPlayerError()`.
-- Added `PlaybackLoadErrorPolicy` and wired it into the main playback `ProgressiveMediaSource.Factory` so recoverable IO/HTTP load failures fail fast to the existing playback error recovery path.
-- Added `PlaybackErrorRecoveryTest` coverage for load timeout / server error fail-fast boundaries.
-- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --warning-mode all`.
-- Debug compile validation passed: `cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --warning-mode all`.
-- Assemble validation passed: `cd android && ./gradlew :app:assembleDebug --warning-mode all`.
-- Real-device smoke passed: `bun run smoke:android --device=172.20.65.10:45749 --port=18103 --apk=android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`; artifacts at `artifacts/smoke/2026-05-05T11-53-33.530Z/`.
-- Verified `openlist-read-failure-recovery.result.json`: stalled source `musicId=7` recorded `ERROR_CODE_IO_NETWORK_CONNECTION_FAILED`, `routeRefreshCount=1`, `recoverySkipCount=1`, then recovered to `musicId=8` with `DIRECT_HTTP`.
-- Updated `docs/BUGs/playback-chain-deep-review.md` to mark direct HTTP stalled-read recovery smoke covered and leave download resume under remote-file-change as the remaining P3-2 gap.
-- Resumed the requested playback-chain deep review from the existing handoff and re-read current playback, resolver, cache, prefetch, queue, metadata, session, and download implementation paths.
-- Confirmed most high-priority route/cache/metadata/prefetch/play-mode issues were already documented and many were implemented; no new source edits were made in this pass.
-- Added two residual review findings to `docs/BUGs/playback-chain-deep-review.md`: unknown-size resumed downloads still cannot prove source identity before append, and single-entry / single-mode recoverable playback errors currently stop instead of retrying the current track after descriptor refresh.
-- Updated `findings.md` with the same residual review findings for future continuation.
-- Started fixing the unknown-size resumed-download residual gap from `docs/BUGs/playback-chain-deep-review.md`.
-- Patched `DownloadWorker.decideDownloadResumeAction()` so existing partial downloads with no persisted `sizeHint` restart from zero instead of appending unverifiable temp bytes.
-- Added `DownloadRepositoryTest.decideDownloadResumeAction_restartsUnknownSizePartialDownloads`.
-- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
-- Broad Android validation passed: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
-- Committed P2-2 residual fix as `5dafee7 fix: restart unknown-size resumed downloads`.
-- Started fixing the P3-2 single-entry / single-mode weak-network recovery semantics gap.
-- Patched recoverable playback error handling so, when no adjacent recovery candidate exists and the current queue entry is still valid, playback retries the current item once after descriptor cache invalidation.
-- Added `PlaybackRuntimeKernel.playResolvedQueue(seedRecovery = false)` for same-item recovery retry so the existing recovery token is preserved and a second failure does not loop indefinitely.
-- Added `PlaybackErrorRecoveryTest.shouldRetryCurrentAfterRecoverableError_onlyAllowsOneRetryWithoutCandidate`.
-- Targeted validation passed: `cd android && ./gradlew testDebugUnitTest --tests 'com.kutedev.easemusicplayer.core.PlaybackErrorRecoveryTest' --tests 'com.kutedev.easemusicplayer.singleton.DownloadRepositoryTest' --warning-mode all`.
-- Broad Android validation passed: `cd android && ./gradlew testDebugUnitTest :app:assembleDebug --warning-mode all`.
+## Session: 2026-05-06
+
+### Phase 1: Requirements & Discovery
+- **Status:** complete
+- **Started:** 2026-05-06
+- Actions taken:
+  - Read all `docs/BUGs/SaltUI` task files.
+  - Inspected current Android theme, root entry point, page shell, and app Gradle files.
+  - Inspected SaltUI upstream README and version compatibility table.
+  - Recreated the missing planning files in the workspace.
+  - Built the requirement-to-artifact checklist and froze the SaltUI / Kotlin / Compose compatibility baseline.
+- Files created/modified:
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+### Phase 2: Compatibility & Theme Bridge
+- **Status:** complete
+- Actions taken:
+  - Upgraded Android Gradle baseline to Kotlin `2.3.20`, KSP `2.3.7`, Compose BOM `2026.04.01`, `compileSdk`/`targetSdk` 36, and added `salt-ui-android:2.9.0-beta02`.
+  - Added Google Play-safe `dependenciesInfo` exclusions required by SaltUI.
+  - Fixed upgrade blockers in `MainActivity` and added the missing `androidx.documentfile` dependency so the app compiles on the upgraded toolchain.
+  - Bridged `EaseMusicPlayerTheme` into `SaltTheme` while keeping Material3 color scheme, current primary-color behavior, and backdrop semantics.
+- Files created/modified:
+  - `android/gradle/libs.versions.toml`
+  - `android/build.gradle.kts`
+  - `android/app/build.gradle.kts`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/MainActivity.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/ui/theme/Theme.kt`
+
+### Phase 3: Foundation Components
+- **Status:** in_progress
+- Actions taken:
+  - Migrated `ConfirmDialog`, `EaseContextMenu`, and `Form*` wrappers onto SaltUI dialog, popup, switcher, and edit primitives.
+  - Migrated `EaseCheckbox`, `EaseFlatSwitch`, `EaseTextButton`, and `EaseSearchField` to SaltUI-backed implementations while preserving existing wrapper APIs for callers.
+- Files created/modified:
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ConfirmDialog.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/ContextMenu.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/Form.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/Checkbox.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/FlatSwitch.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/TextButton.kt`
+  - `android/app/src/main/java/com/kutedev/easemusicplayer/components/EaseSearchField.kt`
+
+## Test Results
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Gradle parse | `cd android && ./gradlew help` | Build scripts resolve after Kotlin/Compose upgrade | Passed | ✓ |
+| Debug Kotlin compile | `cd android && ./gradlew :app:compileDebugKotlin` | App compiles on SaltUI-aligned toolchain | Passed after fixing DSL/API/dependency blockers | ✓ |
+| Debug assemble | `cd android && ./gradlew --no-daemon :app:assembleDebug --warning-mode all` | Debug APK builds successfully | Passed | ✓ |
+
+## Error Log
+| Timestamp | Error | Attempt | Resolution |
+|-----------|-------|---------|------------|
+| 2026-05-06 | `sed` could not read missing planning files | 1 | Recreated the files |
+| 2026-05-06 | Kotlin DSL rejected old `jvmTarget = "21"` usage | 1 | Moved JVM target config to the Kotlin `compilerOptions` DSL |
+| 2026-05-06 | `checkDebugAarMetadata` failed because SaltUI dependency line requires compileSdk 36 | 1 | Raised `compileSdk` and `targetSdk` to 36 |
+| 2026-05-06 | `DocumentFile` symbols and `onNewIntent` signature failed under upgraded toolchain | 1 | Added `androidx.documentfile` dependency and updated `MainActivity.onNewIntent` to non-null `Intent` |
+| 2026-05-06 | Parallel debug verification caused Kotlin incremental cache conflicts | 1 | Stopped daemons, cleared the debug Kotlin cache, and reran verification sequentially with `--no-daemon` |
+
+## 5-Question Reboot Check
+| Question | Answer |
+|----------|--------|
+| Where am I? | Phase 3 |
+| Where am I going? | Finish foundation components, then shell/pages migration, then verification and commits |
+| What's the goal? | Migrate the Android UI to SaltUI and verify it end to end |
+| What have I learned? | SaltUI requires a full version-line alignment and can be introduced safely through wrapper-layer replacement |
+| What have I done? | Upgraded the Android toolchain, bridged the root theme, and migrated the first batch of high-reuse wrappers |

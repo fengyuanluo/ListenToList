@@ -1,5 +1,6 @@
 import java.io.FileInputStream
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
@@ -7,7 +8,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.compose.compiler)
-    kotlin("plugin.serialization") version "2.0.0"
+    kotlin("plugin.serialization") version "2.3.20"
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
     id("jacoco")
@@ -22,7 +23,12 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.kutedev.easemusicplayer"
-    compileSdk = 35
+    compileSdk = 36
+
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 
     lint {
         abortOnError = false
@@ -31,8 +37,7 @@ android {
     defaultConfig {
         applicationId = "com.kutedev.easemusicplayer"
         minSdk = 29
-        //noinspection OldTargetApi
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "0.3.0"
 
@@ -75,14 +80,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
-    kotlinOptions {
-        jvmTarget = "21"
-    }
     buildFeatures {
         compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
     }
     packaging {
         resources {
@@ -105,18 +104,25 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_21)
+    }
+}
+
 jacoco {
     toolVersion = "0.8.11"
 }
 
 dependencies {
-    val nav_version = "2.8.3"
+    val nav_version = "2.9.8"
     val media3_version = "1.5.0"
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
+    implementation("io.github.moriafly:salt-ui-android:2.9.0-beta02")
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
@@ -136,6 +142,7 @@ dependencies {
     implementation("androidx.media3:media3-database:$media3_version")
     implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.documentfile)
     implementation(libs.reorderable)
     testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")
@@ -146,9 +153,9 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    implementation("com.google.dagger:hilt-android:2.56.2")
-    ksp("com.google.dagger:hilt-android-compiler:2.56.2")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation("com.google.dagger:hilt-android:2.58")
+    ksp("com.google.dagger:hilt-android-compiler:2.58")
+    implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
 }
 
 tasks.register<JacocoReport>("jacocoTestReport") {

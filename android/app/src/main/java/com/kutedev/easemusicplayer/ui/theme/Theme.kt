@@ -1,5 +1,6 @@
 package com.kutedev.easemusicplayer.ui.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -11,7 +12,16 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
+import com.moriafly.salt.ui.SaltConfigs
+import com.moriafly.salt.ui.SaltDynamicColors
+import com.moriafly.salt.ui.SaltShapes
+import com.moriafly.salt.ui.darkSaltColors
+import com.moriafly.salt.ui.lightSaltColors
+import com.moriafly.salt.ui.saltDimens
+import com.moriafly.salt.ui.saltTextStyles
+import com.moriafly.salt.ui.SaltTheme
 
 private fun adjustLightness(color: Color, delta: Float): Color {
     val hsl = FloatArray(3)
@@ -22,6 +32,42 @@ private fun adjustLightness(color: Color, delta: Float): Color {
 
 private fun blend(base: Color, overlay: Color, amount: Float): Color {
     return Color(ColorUtils.blendARGB(base.toArgb(), overlay.toArgb(), amount.coerceIn(0f, 1f)))
+}
+
+private fun buildSaltDynamicColors(
+    lightScheme: ColorScheme,
+    darkScheme: ColorScheme,
+): SaltDynamicColors {
+    return SaltDynamicColors(
+        light = lightSaltColors(
+            highlight = lightScheme.primary,
+            text = lightScheme.onSurface,
+            subText = lightScheme.onSurfaceVariant,
+            background = lightScheme.background,
+            subBackground = lightScheme.surface,
+            popup = lightScheme.surface,
+            stroke = lightScheme.outlineVariant,
+            onHighlight = lightScheme.onPrimary,
+        ),
+        dark = darkSaltColors(
+            highlight = darkScheme.primary,
+            text = darkScheme.onSurface,
+            subText = darkScheme.onSurfaceVariant,
+            background = darkScheme.background,
+            subBackground = darkScheme.surface,
+            popup = darkScheme.surface,
+            stroke = darkScheme.outlineVariant,
+            onHighlight = darkScheme.onPrimary,
+        ),
+    )
+}
+
+private fun buildSaltShapes(): SaltShapes {
+    return SaltShapes(
+        small = RoundedCornerShape(AppEaseRadius.xs),
+        medium = RoundedCornerShape(AppEaseRadius.card),
+        large = RoundedCornerShape(AppEaseRadius.xl),
+    )
 }
 
 private fun buildColorScheme(primary: Color, darkTheme: Boolean): ColorScheme {
@@ -120,20 +166,46 @@ fun EaseMusicPlayerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = buildColorScheme(themeSettings.primaryColor, darkTheme)
+    val lightColorScheme = buildColorScheme(themeSettings.primaryColor, false)
+    val darkColorScheme = buildColorScheme(themeSettings.primaryColor, true)
+    val colorScheme = if (darkTheme) darkColorScheme else lightColorScheme
     val surfaces = buildSurfaceTokens(
         colorScheme = colorScheme,
         darkTheme = darkTheme,
         hasBackdrop = !themeSettings.backgroundImageUri.isNullOrBlank(),
     )
+    val saltDynamicColors = buildSaltDynamicColors(
+        lightScheme = lightColorScheme,
+        darkScheme = darkColorScheme,
+    )
 
     CompositionLocalProvider(
         LocalEaseSurfaces provides surfaces,
     ) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = Typography,
-            content = content,
-        )
+        SaltTheme(
+            configs = SaltConfigs.default(isDarkTheme = darkTheme),
+            dynamicColors = saltDynamicColors,
+            textStyles = saltTextStyles(
+                main = AppEaseTypography.body,
+                sub = AppEaseTypography.bodySmall,
+                paragraph = AppEaseTypography.cardTitle,
+                largeTitle = AppEaseTypography.heroTitle,
+            ),
+            dimens = saltDimens(
+                item = 56.dp,
+                itemIcon = 24.dp,
+                corner = AppEaseRadius.card,
+                dialogCorner = AppEaseRadius.xl,
+                padding = AppEaseSpacing.md,
+                subPadding = AppEaseSpacing.sm,
+            ),
+            shapes = buildSaltShapes(),
+        ) {
+            MaterialTheme(
+                colorScheme = colorScheme,
+                typography = Typography,
+                content = content,
+            )
+        }
     }
 }
