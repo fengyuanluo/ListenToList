@@ -66,6 +66,8 @@ import com.kutedev.easemusicplayer.viewmodels.entryTyp
 import com.kutedev.easemusicplayer.viewmodels.labelRes
 import com.kutedev.easemusicplayer.viewmodels.toStorageEntry
 import com.kutedev.easemusicplayer.widgets.playlists.CreatePlaylistsDialog
+import com.moriafly.salt.ui.ItemOuterLargeTitle
+import com.moriafly.salt.ui.UnstableSaltUiApi
 import kotlinx.coroutines.launch
 import uniffi.ease_client_backend.Storage
 import uniffi.ease_client_backend.StorageEntryType
@@ -215,6 +217,7 @@ private fun InstanceTabs(
     }
 }
 
+@OptIn(UnstableSaltUiApi::class)
 @Composable
 private fun SearchPageMessage(
     title: String,
@@ -227,17 +230,11 @@ private fun SearchPageMessage(
             .fillMaxWidth()
             .clip(RoundedCornerShape(EaseTheme.radius.card))
             .background(EaseTheme.surfaces.secondary)
-            .padding(EaseTheme.spacing.lg)
+            .padding(EaseTheme.spacing.sm)
     ) {
-        Text(
+        ItemOuterLargeTitle(
             text = title,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = EaseTheme.typography.cardTitle.copy(fontWeight = FontWeight.SemiBold),
-        )
-        Text(
-            text = desc,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = EaseTheme.typography.bodySmall,
+            sub = desc,
         )
     }
 }
